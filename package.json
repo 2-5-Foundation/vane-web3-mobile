@@ -1,5 +1,5 @@
 {
-  "name": "vane-web3-mobile",
+  "name": "vaneweb3",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,9 +9,24 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@dynamic-labs/ethereum": "^4.6.1",
+    "@dynamic-labs/sdk-react-core": "^4.6.1",
+    "@dynamic-labs/solana": "^4.6.1",
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-select": "^2.1.6",
+    "@radix-ui/react-slot": "^1.1.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "next": "15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.1.6"
+    "tailwind-merge": "^3.0.1",
+    "tailwindcss-animate": "^1.0.7",
+    "viem": "^2.23.2",
+    "web-push": "^3.6.7",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "typescript": "^5",
