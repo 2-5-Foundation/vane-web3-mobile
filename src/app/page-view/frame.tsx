@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/app/lib/useStore'
 import type { NavigationState } from '@/app/lib/useStore'
