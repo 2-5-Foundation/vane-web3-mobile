@@ -1,6 +1,6 @@
 'use server'
  
-import webpush from '../types/web-push'
+import webpush from '@/types/web-push'
  
 webpush.setVapidDetails(
   '<mailto:your-email@example.com>',
