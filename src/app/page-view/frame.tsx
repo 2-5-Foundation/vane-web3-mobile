@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Sheet, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useStore } from '@/app/lib/useStore'
 import type { NavigationState } from '@/app/lib/useStore'
-import { Smartphone, ArrowRight } from "lucide-react"
+import { Smartphone } from "lucide-react"
 import Image from 'next/image'
 
 

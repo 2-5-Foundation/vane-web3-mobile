@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle2, XCircle} from "lucide-react"
+import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react"
 
 interface TransactionDetails {
   fromAddress: string;
@@ -58,6 +58,11 @@ export default function SenderPending() {
     console.log("Transaction confirmed")
   }
 
+  const handleRefresh = () => {
+    // Add refresh logic here
+    console.log("Refreshing transaction status...")
+  }
+
   return (
     <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
       <CardContent className="p-3 space-y-3">
@@ -88,10 +93,20 @@ export default function SenderPending() {
           </div>
         </div>
 
-        {/* Status */}
-        <div className={`flex items-center gap-2 ${currentStatus.color}`}>
-          {currentStatus.icon}
-          <span className="text-sm">{currentStatus.text}</span>
+        {/* Status with Refresh Button */}
+        <div className="flex items-center justify-between">
+          <div className={`flex items-center gap-2 ${currentStatus.color}`}>
+            {currentStatus.icon}
+            <span className="text-sm">{currentStatus.text}</span>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={handleRefresh}
+            className="h-8 w-8 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10"
+            >
+            <RefreshCw className="h-3 w-3" />
+          </Button>
         </div>
 
         {/* Action Buttons */}

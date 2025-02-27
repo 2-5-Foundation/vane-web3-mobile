@@ -1,7 +1,6 @@
 "use client"
 
 import { useStore } from '@/app/lib/useStore'
-import { Frame } from './page-view/frame'
 import Profile from './page-view/profile'
 import Wallets from './page-view/wallets'
 import Transfer from './page-view/transfer'
@@ -26,8 +25,6 @@ export default function Home() {
   }
 
   return (
-    <Frame>
-      {renderView()}
-    </Frame>
+      renderView()
   )
 }
