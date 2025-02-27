@@ -1,11 +1,20 @@
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import ReceiverPending from './page-component/receiver-pending'
+import { useState } from "react"
 
 export default function Receive() {
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
   const handleRefresh = () => {
+    setIsRefreshing(true)
     // Add refresh logic here
-    console.log("Refreshing receive page...")
+    console.log("Refreshing transaction status...")
+    
+    // Reset the animation after 1 second
+    setTimeout(() => {
+      setIsRefreshing(false)
+    }, 1000)
   }
 
   return (
@@ -18,8 +27,8 @@ export default function Receive() {
           onClick={handleRefresh}
           className="h-8 w-8 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10"
         >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
       </div>
 
       <div className="space-y-2 max-h-[calc(100vh-8rem)] overflow-y-auto pb-12">

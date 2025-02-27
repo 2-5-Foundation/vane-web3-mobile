@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react"
+import { useState } from "react"
 
 interface TransactionDetails {
   fromAddress: string;
@@ -14,6 +15,8 @@ interface TransactionDetails {
 }
 
 export default function SenderPending() {
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
   const transaction: TransactionDetails = {
     fromAddress: "0x7834...2951",
     codeword: "BlueHorizon",
@@ -59,8 +62,14 @@ export default function SenderPending() {
   }
 
   const handleRefresh = () => {
+    setIsRefreshing(true)
     // Add refresh logic here
     console.log("Refreshing transaction status...")
+    
+    // Reset the animation after 1 second
+    setTimeout(() => {
+      setIsRefreshing(false)
+    }, 1000)
   }
 
   return (
@@ -103,9 +112,10 @@ export default function SenderPending() {
             variant="ghost" 
             size="icon"
             onClick={handleRefresh}
-            className="h-8 w-8 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10"
-            >
-            <RefreshCw className="h-3 w-3" />
+            className="h-8 w-8 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10 transition-transform"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
 
