@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { Sheet, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useStore } from '@/app/lib/useStore'
 import type { NavigationState } from '@/app/lib/useStore'
+import { Smartphone, ArrowRight } from "lucide-react"
 import Image from 'next/image'
-import { Card, CardContent } from "@/components/ui/card"
-import { Smartphone } from "lucide-react"
+
 
 type NavItem = {
   name: string
@@ -60,35 +61,46 @@ const navItems: NavItem[] = [
   },
 ]
 
+const DesktopMessage = () => (
+  <div className="fixed inset-0 bg-[#0D1313] flex items-center justify-center p-4">
+    <Card className="bg-[#0D1B1B] py-5 border-[#4A5853]/20 max-w-md w-full">
+      <CardHeader className="space-y-4 flex flex-col items-center text-center pb-2">
+        <div className="w-12 h-12 rounded-full bg-[#7EDFCD]/10 flex items-center justify-center">
+          <Smartphone className="w-6 h-6 text-[#7EDFCD]" />
+        </div>
+        <div className="space-y-1.5">
+          <CardTitle className="text-2xl text-white">Mobile Only Application</CardTitle>
+          <CardDescription className="text-[#9EB2AD]">
+            This application is optimized for mobile devices. Please access it from your smartphone for the best experience.
+          </CardDescription>
+        </div>
+      </CardHeader>
+     
+    </Card>
+  </div>
+)
+
 export function Frame({ children }: { children: React.ReactNode }) {
   const { currentView, setCurrentView } = useStore()
   const [isOpen, setIsOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(true)
 
   useEffect(() => {
-    setIsMobile(window.innerWidth <= 768)
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640) // sm breakpoint
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  if (!isMobile) {
+    return <DesktopMessage />
+  }
 
   // Separate transfer button for special styling
   const transferButton = navItems.find(item => item.isTransfer)
   const regularNavItems = navItems.filter(item => !item.isTransfer)
-
-  if (!isMobile) {
-    return (
-      <div className="min-h-screen bg-[#0D1313] flex items-center justify-center p-4">
-        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="p-2 rounded-lg bg-[#7EDFCD]/10">
-              <Smartphone className="w-5 h-5 text-[#7EDFCD]" />
-            </div>
-            <p className="text-[#9EB2AD]">
-              Please access this application from your mobile device.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-[#0D1313]">
