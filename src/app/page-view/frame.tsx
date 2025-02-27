@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sheet, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/app/lib/useStore'
 import type { NavigationState } from '@/app/lib/useStore'
 import Image from 'next/image'
+import { Card, CardContent } from "@/components/ui/card"
+import { Smartphone } from "lucide-react"
 
 type NavItem = {
   name: string
@@ -14,15 +16,6 @@ type NavItem = {
 }
 
 const navItems: NavItem[] = [
-  {
-    name: 'Dashboard',
-    icon: (
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5zM14 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5zM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4zM14 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4z" 
-          stroke="currentColor" strokeWidth="2"/>
-      </svg>
-    ),
-  },
   {
     name: 'Wallet',
     icon: (
@@ -43,34 +36,59 @@ const navItems: NavItem[] = [
     isTransfer: true,
   },
   {
-    name: 'Profile',
+    name: 'Pending',
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" 
+        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" 
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
   {
-    name: 'Settings',
+    name: 'Profile',
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" 
-          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path 
+          d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" 
+          stroke="currentColor" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        />
       </svg>
     ),
   },
 ]
 
 export function Frame({ children }: { children: React.ReactNode }) {
+  const { currentView, setCurrentView } = useStore()
   const [isOpen, setIsOpen] = useState(false)
-  const currentView = useStore((state) => state.currentView);
-  const setCurrentView = useStore((state) => state.setCurrentView);
+  const [isMobile, setIsMobile] = useState(true)
 
-  // Filter out transfer button for special handling
-  const regularNavItems = navItems.filter(item => !item.isTransfer)
+  useEffect(() => {
+    setIsMobile(window.innerWidth <= 768)
+  }, [])
+
+  // Separate transfer button for special styling
   const transferButton = navItems.find(item => item.isTransfer)
+  const regularNavItems = navItems.filter(item => !item.isTransfer)
+
+  if (!isMobile) {
+    return (
+      <div className="min-h-screen bg-[#0D1313] flex items-center justify-center p-4">
+        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="p-2 rounded-lg bg-[#7EDFCD]/10">
+              <Smartphone className="w-5 h-5 text-[#7EDFCD]" />
+            </div>
+            <p className="text-[#9EB2AD]">
+              Please access this application from your mobile device.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#0D1313]">
@@ -91,7 +109,11 @@ export function Frame({ children }: { children: React.ReactNode }) {
           {/* Mobile menu button */}
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" className="md:hidden text-white">
+              <Button 
+                variant="ghost" 
+                className="md:hidden text-[#4A5853] hover:text-[#4A5853] hover:bg-transparent cursor-not-allowed" 
+                disabled
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
@@ -129,13 +151,13 @@ export function Frame({ children }: { children: React.ReactNode }) {
 
       {/* Footer Navigation */}
       <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-[#0D1313]/95 backdrop-blur-lg border-t border-[#4A5853]/20 md:hidden">
-        <div className="relative grid h-full grid-cols-5 mx-auto max-w-md px-2">
-          {/* First two items */}
-          {regularNavItems.slice(0, 2).map((item) => (
+        <div className="relative grid h-full grid-cols-4 mx-auto max-w-md px-6">
+          {/* First item */}
+          {regularNavItems.slice(0, 1).map((item) => (
             <button
               key={item.name}
               onClick={() => setCurrentView(item.name.toLowerCase() as NavigationState['currentView'])}
-              className={`flex flex-col items-center justify-center transition-all duration-200 px-2
+              className={`flex flex-col items-center justify-center transition-all duration-200
                 ${currentView === item.name.toLowerCase()
                   ? 'text-[#7EDFCD] translate-y-[-2px]' 
                   : 'text-[#4A5853] hover:text-[#7EDFCD]/80 active:translate-y-[-1px]'
@@ -154,7 +176,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
           {transferButton && (
             <button
               onClick={() => setCurrentView('transfers')}
-              className={`z-20 flex flex-col items-center justify-center transition-all duration-200 px-2
+              className={`z-20 flex flex-col items-center justify-center transition-all duration-200
                 ${currentView === 'transfers'
                   ? 'text-[#7EDFCD] translate-y-[-4px]' 
                   : 'text-[#4A5853] hover:text-[#7EDFCD]/80 active:translate-y-[-2px]'
@@ -172,11 +194,11 @@ export function Frame({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Last two items */}
-          {regularNavItems.slice(2).map((item) => (
+          {regularNavItems.slice(1).map((item) => (
             <button
               key={item.name}
               onClick={() => setCurrentView(item.name.toLowerCase() as NavigationState['currentView'])}
-              className={`flex flex-col items-center justify-center transition-all duration-200 px-2
+              className={`flex flex-col items-center justify-center transition-all duration-200
                 ${currentView === item.name.toLowerCase()
                   ? 'text-[#7EDFCD] translate-y-[-2px]' 
                   : 'text-[#4A5853] hover:text-[#7EDFCD]/80 active:translate-y-[-1px]'

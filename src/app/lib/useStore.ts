@@ -13,9 +13,9 @@ import { create } from 'zustand'
 
 
 export type NavigationState = {
-  currentView: 'dashboard' | 'wallet' | 'transfers' | 'profile' | 'settings'
-  setCurrentView: (view: NavigationState['currentView']) => void
-}
+  currentView: 'wallet' | 'transfers' | 'pending' | 'profile';
+  setCurrentView: (view: NavigationState['currentView']) => void;
+};
 
 export const useStore = create<NavigationState>((set) => ({
   currentView: 'transfers',
