@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
-
 const nextConfig: NextConfig = {
-  /* config options here */
+  transpilePackages: ['vane_lib'],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  images: {
+    unoptimized: true,
+  }
 };
-
 export default nextConfig;

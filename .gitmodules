@@ -1,0 +1,3 @@
+[submodule "vane_lib"]
+	path = vane_lib
+	url = https://github.com/2-5-Foundation/vane_lib.git

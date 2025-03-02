@@ -4,6 +4,17 @@ import "./globals.css";
 import { PWAProvider } from '@/app/page-view/pwa-provider'
 import { Frame } from '@/app/page-view/frame'
 
+// ----------- Wallet ----------------
+
+import {
+  DynamicContextProvider,
+  // DynamicWidget,
+} from "@dynamic-labs/sdk-react-core";
+import { BitcoinWalletConnectors } from "@dynamic-labs/bitcoin";
+import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
+import { SolanaWalletConnectors } from "@dynamic-labs/solana";
+
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -29,8 +40,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <DynamicContextProvider
+          settings={{
+            environmentId: "ea6b3f30-98c0-415c-b145-f497e4fb81f3",
+            walletConnectors: [BitcoinWalletConnectors, EthereumWalletConnectors, SolanaWalletConnectors],
+          }}
+        >
         <PWAProvider />
         <Frame>{children}</Frame>
+        </DynamicContextProvider>
       </body>
     </html>
   );

@@ -1,94 +1,95 @@
 "use client"
 
-import { useState } from "react"
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import Image from "next/image"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+
+interface TokenBalance {
+  symbol: string;
+  balance: string;
+  isSelected?: boolean;
+}
+
+interface WalletInfo {
+  name: string;
+  icon: string;
+  isConnected: boolean;
+  isSelected?: boolean;
+}
 
 export default function Wallets() {
-  const [hasWallet, setHasWallet] = useState<boolean | null>(null)
+  const { setShowAuthFlow } = useDynamicContext();
+  
+  // Mock data - replace with actual wallet data
+  const tokens: TokenBalance[] = [
+    { symbol: 'ETH', balance: '$1,250.00', isSelected: true },
+    { symbol: 'USDC', balance: '$750.00' },
+    { symbol: 'USDT', balance: '$2,300.00' }
+  ];
 
-  // Initial wallet choice screen
-  if (hasWallet === null) {
-    return (
-      <div className="pt-2 px-4 max-h-[60vh] space-y-3 max-w-sm mx-auto">
-        <h1 className="text-center text-xl font-medium text-white">Connect wallet</h1>
-        
-        <div className="space-y-3">
-          <Button 
-            onClick={() => setHasWallet(true)}
-            className="w-full h-10 bg-[#0D1B1B] hover:bg-[#0D1B1B]/90 text-white border border-[#4A5853]/20"
-          >
-            I have a wallet
-          </Button>
-          
-          <Button 
-            onClick={() => setHasWallet(false)}
-            className="w-full h-10 bg-[#7EDFCD] hover:bg-[#7EDFCD]/90 text-black"
-          >
-            Set up Account
-          </Button>
-        </div>
-      </div>
-    )
-  }
+  const wallets: WalletInfo[] = [
+    { name: 'Metamask', icon: '/metamask-logo.png', isConnected: true},
+  ];
 
-  // Existing wallet connection screen
-  if (hasWallet) {
-    return (
-      <div className="pt-2 px-4 max-h-[60vh] space-y-3 max-w-sm mx-auto">
-        <h1 className="text-center text-xl font-medium text-white">Connect wallet</h1>
-        
-        <div className="space-y-3">
-          <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-            <CardContent className="p-3">
-              <button className="w-full flex items-center justify-between p-2 h-8 rounded-lg hover:bg-[#4A5853]/10">
-                <div className="flex items-center gap-3">
-                  <Image 
-                    src="/metamask-logo.png" 
-                    alt="Metamask" 
-                    width={32} 
-                    height={32}
-                  />
-                  <span className="text-white">Metamask</span>
-                </div>
-                <span className="text-[#7EDFCD]">Connected</span>
-              </button>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-            <CardContent className="p-3">
-              <button className="w-full flex items-center justify-between p-2 h-8 rounded-lg hover:bg-[#4A5853]/10">
-                <div className="flex items-center gap-3">
-                  <Image 
-                    src="/phantom-logo.png" 
-                    alt="Phantom" 
-                    width={32} 
-                    height={32}
-                  />
-                  <span className="text-white">Phantom</span>
-                </div>
-                <span className="text-[#7EDFCD]">Connected</span>
-              </button>
-            </CardContent>
-          </Card>
-
-          <Button 
-            className="w-full h-10 bg-transparent border border-dashed border-[#4A5853]/40 text-[#4A5853] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40"
-          >
-            + Connect new wallet
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // Smart Account creation screen (to be implemented)
   return (
-    <div className="pt-2 px-4 max-h-[60vh] space-y-3 max-w-sm mx-auto">
-      <h1 className="text-center text-xl font-medium text-white">Create Smart Account</h1>
-      {/* Smart account creation UI will go here */}
+    <div className="pt-2 px-4 space-y-6 max-w-sm mx-auto">
+      {/* Select Wallet Section */}
+      <div className="space-y-3">
+        <h2 className="text-[#9EB2AD] text-sm">Select wallet</h2>
+        <div className="space-y-2">
+          {wallets.map((wallet) => (
+            <Card key={wallet.name} className="bg-[#0D1B1B] border-[#4A5853]/20">
+              <CardContent className="p-3">
+                <RadioGroup defaultValue={wallet.isSelected ? wallet.name : undefined}>
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem 
+                      value={wallet.name} 
+                      id={wallet.name}
+                      className="border-[#4A5853] data-[state=checked]:border-[#7EDFCD] data-[state=checked]:bg-[#7EDFCD]"
+                    />
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-3">
+                        <span className="text-white">{wallet.name}</span>
+                      </div>
+                      <span className="text-[#7EDFCD]">Connected</span>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          ))}
+
+          <Button 
+            onClick={() => setShowAuthFlow(true)}
+            className="w-full h-10 bg-transparent border border-dashed border-[#7EDFCD]/20 text-[#4A5853] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40"
+          >
+            + Add Wallet or Signup
+          </Button>
+        </div>
+      </div>
+
+      {/* Tokens Section */}
+      <div className="space-y-2">
+      <h2 className="text-[#9EB2AD] text-sm">Balances</h2>
+        {tokens.map((token) => (
+          <Card 
+            key={token.symbol} 
+            className={`bg-[#0D1B1B] border-[#4A5853]/20 ${token.isSelected ? 'ring-1 ring-[#7EDFCD]' : ''}`}
+          >
+            <CardContent className="p-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${token.isSelected ? 'bg-[#7EDFCD]' : 'bg-[#4A5853]'}`} />
+                  <span className="text-white">{token.symbol}</span>
+                </div>
+                <span className="text-white">{token.balance}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
-  )
+  );
 }
+

@@ -37,4 +37,11 @@ module.exports = {
         },
       ]
     },
+    webpack: (config, { isServer }) => {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'vane_lib': path.resolve(__dirname, 'vane_lib'),
+      }
+      return config
+    },
   }
