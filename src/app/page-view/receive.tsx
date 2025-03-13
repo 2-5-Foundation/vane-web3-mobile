@@ -1,16 +1,18 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import ReceiverPending from './page-component/receiver-pending'
 import { useState } from "react"
+import { useTransactionStore } from "../lib/useStore"
 
 export default function Receive() {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const fetchPendingTxUpdates = useTransactionStore(state => state.fetchPendingTxUpdates)
 
   const handleRefresh = () => {
     setIsRefreshing(true)
-    // Add refresh logic here
-    console.log("Refreshing transaction status...")
-    
+    fetchPendingTxUpdates()    
     // Reset the animation after 1 second
     setTimeout(() => {
       setIsRefreshing(false)

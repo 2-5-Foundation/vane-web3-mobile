@@ -1,11 +1,33 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import TransferForm from "../page-view/page-component/transfer-form"
 import TransferReceive from "./page-component/transfer-receive"
+import { useUserWallets } from '@dynamic-labs/sdk-react-core'
+
 
 export default function Transfer() {
   const [activeTab, setActiveTab] = useState<'transfer' | 'receive'>('transfer')
+  const [totalAmount, setTotalAmount] = useState<number>(0)
+  const userWallets = useUserWallets();
+
+  // calculate full amount
+  useEffect(() => {
+    // Define an async function inside useEffect
+    const calculateTotalAmount = async () => {
+      let total = 0;
+      
+      const balances = await Promise.all(
+        userWallets.map(wallet => wallet.getBalance())
+      );
+      
+      total = balances.reduce((sum, balance) => sum + parseFloat(balance), 0);
+      
+      setTotalAmount(total);
+    };
+
+    calculateTotalAmount();
+  }, [userWallets]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -38,7 +60,7 @@ export default function Transfer() {
         {/* Total Balance */}
         <div className="text-center space-y-0.5 mb-3">
           <p className="text-xs text-[#F5F5F5]">Total balance</p>
-          <h1 className="text-2xl font-bold text-[#FFFFFF]">$5,280.42</h1>
+          <h1 className="text-2xl font-bold text-[#FFFFFF]">${totalAmount}</h1>
         </div>
       </div>
 

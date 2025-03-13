@@ -3,16 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PWAProvider } from '@/app/page-view/pwa-provider'
 import { Frame } from '@/app/page-view/frame'
+import { Toaster } from 'sonner';
 
 // ----------- Wallet ----------------
-
-import {
-  DynamicContextProvider,
-  // DynamicWidget,
-} from "@dynamic-labs/sdk-react-core";
-import { BitcoinWalletConnectors } from "@dynamic-labs/bitcoin";
-import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
-import { SolanaWalletConnectors } from "@dynamic-labs/solana";
+import ClientAuthProvider from "./page-view/page-component/handleWalletAuth";
 
 
 const geistSans = Geist({
@@ -35,20 +29,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <DynamicContextProvider
-          settings={{
-            environmentId: "ea6b3f30-98c0-415c-b145-f497e4fb81f3",
-            walletConnectors: [BitcoinWalletConnectors, EthereumWalletConnectors, SolanaWalletConnectors],
-          }}
-        >
-        <PWAProvider />
-        <Frame>{children}</Frame>
-        </DynamicContextProvider>
+        <ClientAuthProvider> {/* ✅ Move logic to Client Component */}
+          <PWAProvider />
+          <Frame>{children}</Frame>
+        </ClientAuthProvider>
+        <Toaster position="top-right" />
       </body>
     </html>
   );
