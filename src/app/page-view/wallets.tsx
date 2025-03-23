@@ -3,58 +3,16 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useDynamicContext, useUserWallets } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useUserWallets, useTokenBalances } from "@dynamic-labs/sdk-react-core";
 import { useState } from "react";
 import { toast } from "sonner";
-
-interface TokenBalance {
-  symbol: string;
-  balance: string;
-  isSelected?: boolean;
-  walletAddresses: string[]; // Track which wallets hold this token
-}
-
-interface WalletInfo {
-  name: string;
-  address: string;
-  isConnected: boolean;
-  isSelected?: boolean;
-  tokens: TokenBalance[];
-}
+import Image from "next/image"
 
 export default function Wallets() {
   const { setShowAuthFlow } = useDynamicContext();
+  const { tokenBalances, isLoading, isError, error } = useTokenBalances();
   const userWallets = useUserWallets();
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
-
-  // Process wallets and combine token balances
-  const processedWallets: WalletInfo[] = userWallets.map(wallet => ({
-    name: wallet.connector?.name || 'Unknown',
-    address: wallet.address,
-    isConnected: true,
-    tokens: [
-      { symbol: 'ETH', balance: '0.00', walletAddresses: [wallet.address] },
-      { symbol: 'USDC', balance: '0.00', walletAddresses: [wallet.address] },
-      { symbol: 'USDT', balance: '0.00', walletAddresses: [wallet.address] }
-    ]
-  }));
-
-  // Combine token balances for matching tokens across wallets
-  const combinedTokens = processedWallets.reduce((acc: TokenBalance[], wallet) => {
-    wallet.tokens.forEach(token => {
-      const existingToken = acc.find(t => t.symbol === token.symbol);
-      if (existingToken) {
-        // Add wallet address to existing token
-        existingToken.walletAddresses.push(wallet.address);
-        // Sum balances (convert from string to number and back)
-        const total = (parseFloat(existingToken.balance) + parseFloat(token.balance)).toFixed(2);
-        existingToken.balance = total;
-      } else {
-        acc.push({ ...token });
-      }
-    });
-    return acc;
-  }, []);
 
   const handleWalletSelect = (address: string) => {
     setSelectedWallet(address);
@@ -64,9 +22,14 @@ export default function Wallets() {
     try {
       setShowAuthFlow(true);
     } catch (error) {
-      toast.error(`Failed wallet conection ${error}`);
+      toast.error(`Failed wallet connection: ${error}`);
     }
   };
+
+  if (isError) {
+    //@ts-expect-error - Error object structure from Dynamic SDK is not fully typed
+    toast.error(error.message);
+  }
 
   return (
     <div className="pt-2 px-4 space-y-6 max-w-sm mx-auto">
@@ -75,7 +38,7 @@ export default function Wallets() {
         <h2 className="text-[#9EB2AD] text-sm">Select wallet</h2>
         <div className="space-y-2">
           <RadioGroup value={selectedWallet || undefined} onValueChange={handleWalletSelect}>
-            {processedWallets.map((wallet) => (
+            {userWallets.map((wallet) => (
               <Card key={wallet.address} className="bg-[#0D1B1B] border-[#4A5853]/20">
                 <CardContent className="p-3">
                   <div className="flex items-center space-x-3">
@@ -86,10 +49,9 @@ export default function Wallets() {
                     />
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-3">
-                        <span className="text-white">{wallet.name}</span>
+                        <span className="text-white">{wallet.connector?.name || 'Unknown'}</span>
                         <span className="text-[#4A5853] text-xs">{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}</span>
                       </div>
-                      <span className="text-[#7EDFCD]">Connected</span>
                     </div>
                   </div>
                 </CardContent>
@@ -109,28 +71,37 @@ export default function Wallets() {
       {/* Tokens Section */}
       <div className="space-y-2">
         <h2 className="text-[#9EB2AD] text-sm">{selectedWallet && 'Balances'}</h2>
-        {(selectedWallet ? 
-          processedWallets.find(w => w.address === selectedWallet)?.tokens : 
-          combinedTokens
-        ).map((token) => (
-          <Card 
-            key={token.symbol} 
-            className="bg-[#0D1B1B] border-[#4A5853]/20"
-          >
-            <CardContent className="p-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#4A5853]" />
-                  <span className="text-white">{token.symbol}</span>
-                  <span className="text-[#4A5853] text-xs">
-                    {token.walletAddresses.length > 1 ? `${token.walletAddresses.length} wallets` : '1 wallet'}
-                  </span>
+        {isLoading ? (
+          <div className="text-center py-4 text-[#9EB2AD]">Loading balances...</div>
+        ) : (
+          tokenBalances.map((token) => (
+            <Card 
+              key={token.address || token.symbol}
+              className="bg-[#0D1B1B] border-[#4A5853]/20"
+            >
+              <CardContent className="p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {token.logoURI ? (
+                      <Image 
+                        src={token.logoURI} 
+                        alt={token.symbol} 
+                        width={20} 
+                        height={20} 
+                        className="w-5 h-5 rounded-full" 
+                      />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-[#4A5853]" />
+                    )}
+                    <span className="text-white">{token.symbol}</span>
+                    <span className="text-[#4A5853] text-xs">{token.name}</span>
+                  </div>
+                  <span className="text-white">{token.balance}</span>
                 </div>
-                <span className="text-white">${token.balance}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );

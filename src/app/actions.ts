@@ -3,7 +3,7 @@
 import webpush from '@/types/web-push'
  
 webpush.setVapidDetails(
-  '<mailto:your-email@example.com>',
+  '<mailto:MrishoLukamba@proton.me>',
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 )
@@ -33,7 +33,7 @@ export async function sendNotification(message: string) {
     await webpush.sendNotification(
       subscription,
       JSON.stringify({
-        title: 'Test Notification',
+        title: 'safety net for your crypto transfers',
         body: message,
         icon: '/icon.png',
       })

@@ -1,25 +1,27 @@
-import type { MetadataRoute } from 'next'
+import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Vane Web3',
-    short_name: 'VaneWeb3',
-    description: 'A safety net for your crypto transfers',
+    short_name: 'Vane',
+    description: 'Safety net for your crypto transfers',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#000000',
+    background_color: '#0B1B1C',
+    theme_color: '#0B1B1C',
     icons: [
       {
-        src: '/icon-192x192.png',
+        src: '/vane-logo.png',
         sizes: '192x192',
         type: 'image/png',
+        purpose: 'maskable'
       },
       {
-        src: '/icon-512x512.png',
+        src: '/vane-logo.png',
         sizes: '512x512',
         type: 'image/png',
-      },
-    ],
+        purpose: 'maskable'
+      }
+    ]
   }
 } 
