@@ -122,9 +122,10 @@ export function Frame({ children }: { children: React.ReactNode }) {
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button 
-                variant="ghost" 
-                className="md:hidden text-[#4A5853] hover:text-[#4A5853] hover:bg-transparent cursor-not-allowed" 
-                disabled
+                 variant="ghost" 
+                 style={{ display: 'none' }} // Vanilla CSS inline style
+                 className="text-[#4A5853] hover:text-[#4A5853] hover:bg-transparent cursor-not-allowed"
+                 disabled
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
