@@ -1,16 +1,16 @@
 "use client"
 
-import { Button } from "@/components/ui/button";
+//import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useDynamicContext, useUserWallets, useTokenBalances } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useUserWallets, useTokenBalances, IsBrowser, DynamicConnectButton, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
 import { useState } from "react";
-import { toast } from "sonner";
+// import { toast } from "sonner";
 import Image from "next/image"
 
 export default function Wallets() {
-  const { setShowAuthFlow } = useDynamicContext();
-  const { tokenBalances, isLoading, isError, error } = useTokenBalances();
+  const {  primaryWallet,handleLogOut } = useDynamicContext();
+  const { tokenBalances, isLoading} = useTokenBalances();
   const userWallets = useUserWallets();
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
 
@@ -18,31 +18,48 @@ export default function Wallets() {
     setSelectedWallet(address);
   };
 
-  const handleConnectWallet = () => {
-    try {
-      setShowAuthFlow(true);
-    } catch (error) {
-      toast.error(`Failed wallet connection: ${error}`);
-    }
-  };
+  useWalletConnectorEvent(
+    primaryWallet?.connector,
+    'accountChange',
+    ({ accounts }, connector) => {
+      console.group('accountChange');
+      console.log('accounts', accounts);
+      console.log('connector that emitted', connector);
+      console.groupEnd();
+    },
+  );
+  // const handleConnectWallet = (e: React.MouseEvent<HTMLButtonElement>) => {
+  //   e.preventDefault();
+  //   try {
+  //     // setShowAuthFlow(true);
+  //     console.log("Connecting wallet...");
+  //   } catch (error) {
+  //     // toast.error(`Failed wallet connection: ${error}`);
+  //     console.log(error);
+  //   }
+  // };
 
-  if (isError) {
-    //@ts-expect-error - Error object structure from Dynamic SDK is not fully typed
-    toast.error(error.message);
-  }
+  // if (isError) {
+  //   //@ts-expect-error - Error object structure from Dynamic SDK is not fully typed
+  //   //toast.error(error.message);
+  //   console.log(error.message);
+  // }
 
   return (
+    <IsBrowser>
     <div className="pt-2 px-4 space-y-6 max-w-sm mx-auto">
       {/* Select Wallet Section */}
       <div className="space-y-3">
-        <h2 className="text-[#9EB2AD] text-sm">Select wallet</h2>
         <div className="space-y-2">
           <RadioGroup value={selectedWallet || undefined} onValueChange={handleWalletSelect}>
+            
             {userWallets.map((wallet) => (
               <Card key={wallet.address} className="bg-[#0D1B1B] border-[#4A5853]/20">
                 <CardContent className="p-3">
                   <div className="flex items-center space-x-3">
                     <RadioGroupItem 
+                      defaultChecked
+                      onClick={() => handleLogOut()}
                       value={wallet.address}
                       id={wallet.address}
                       className="border-[#4A5853] data-[state=checked]:border-[#7EDFCD] data-[state=checked]:bg-[#7EDFCD]"
@@ -59,12 +76,14 @@ export default function Wallets() {
             ))}
           </RadioGroup>
 
+          <DynamicConnectButton buttonContainerClassName="w-full h-10 flex justify-center items-center bg-transparent border border-dashed border-[#7EDFCD]/20 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40">Add Wallet</DynamicConnectButton>
+{/* 
           <Button 
             onClick={handleConnectWallet}
             className="w-full h-10 bg-transparent border border-dashed border-[#7EDFCD]/20 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40"
           >
-            + Add Wallet or Signup
-          </Button>
+            + Add Wallet
+          </Button> */}
         </div>
       </div>
 
@@ -104,6 +123,7 @@ export default function Wallets() {
         )}
       </div>
     </div>
+    </IsBrowser>
   );
 }
 

@@ -4,28 +4,7 @@ import Airtable from 'airtable';
 import { config } from 'dotenv';
 import { keccak256, toHex } from 'viem'
 
-// ---------------------------------- Wallets tracking ----------------------------------
 
-// ---------------------------------- For native wallet users ----------------------------------
-// ---------------------------------- For non-native wallet users ----------------------------------
-
-
-
-
-
-
-
-// ---------------------------------- Settings config ----------------------------------
-// interface SettingsState {
-  
-// }
-
-// export const useSettingsStore = create<SettingsState>((set, get) => ({
-
-// }));
-
-
-// ---------------------------------- Ongoing transaction state ----------------------------------
 
 export interface TransferFormData {
   recipient: string;
@@ -36,12 +15,9 @@ export interface TransferFormData {
 
 config();
 
-const {
-    AIRTABLE_API_KEY,
-    AIRTABLE_BASE_ID,
-    AIRTABLE_TABLE_ID
-} = process.env;
-
+const apiKey = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY;
+const baseId = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
+const tableId = process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID;
 
 export interface TransactionState {
   transferFormData: TransferFormData;
@@ -209,16 +185,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   setWsUrl: async () => {
-    const maxRetries = 5;
+    const maxRetries = 10;
     const retryDelay = 2000; // 1 second
 
     const fetchRpcUrl = async (retryCount = 0): Promise<string> => {
       const key = keccak256(toHex('airtable_user_id'));
       const record_id = localStorage.getItem(key);
       const airtable = get().airtable;
+      console.log(`airtable id: ${record_id}`)
 
       return new Promise((resolve, reject) => {
-        airtable(AIRTABLE_TABLE_ID).find(record_id, (err, record) => {
+        airtable(tableId).find(record_id, (err, record) => {
+          
           if (err) {
             if (retryCount < maxRetries) {
               setTimeout(() => {
@@ -242,7 +220,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           } else if (fields.rpc) {
             resolve(fields.rpc);
           } else {
-            reject(new Error('RPC URL not found'));
+            reject(new Error('Rpc url not found'));
           }
         });
       });
@@ -258,14 +236,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
   // airtable
   setRegisterAirtable: () => {
-    const airtable = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
-    set({ airtable });
+    try {   
+      const airtable = new Airtable({ apiKey: apiKey }).base(baseId);
+      set({ airtable });
+      console.log("airtable setup successful", airtable);
+    } catch (error) {
+      console.log("Error setting up Airtable:", error);
+    }
   },
   registerUserAirtable: (address: string, network: string, email: string) => {
     get().setRegisterAirtable();
     const airtable = get().airtable;
 
-    airtable(AIRTABLE_TABLE_ID)?.create([
+    airtable(tableId)?.create([
       {
         "fields": {
           "accountId1": JSON.stringify({

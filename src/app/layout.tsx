@@ -36,7 +36,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        <ClientAuthProvider> {/* ✅ Move logic to Client Component */}
+        <ClientAuthProvider> 
           <PWAProvider />
           <Frame>{children}</Frame>
         </ClientAuthProvider>
