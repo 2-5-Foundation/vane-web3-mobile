@@ -9,6 +9,7 @@ import { useTransactionStore } from "@/app/lib/useStore"
 import { TxStateMachine, TxStateMachineManager } from "vane_lib"
 import { bytesToHex, hexToBytes } from 'viem';
 import { useInitializeWebSocket } from "@/app/lib/helper";
+import { toast } from "sonner"
 
 export default function SenderPending() {
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -42,16 +43,16 @@ export default function SenderPending() {
     }
   }
 
-  const handleRevert = (transaction: TxStateMachine) => {
+  const handleRevert = async (transaction: TxStateMachine) => {
     if (!isConfirmingRevert) {
       setIsConfirmingRevert(true)
-      // Reset confirmation state after 3 seconds
-      setTimeout(() => setIsConfirmingRevert(false), 3000)
+      await vaneClient?.revertTransaction(transaction)
+      setTimeout(() => setIsConfirmingRevert(false), 5000)
       return
     }
-    // Handle actual revert logic
     removeTransaction(transaction.txNonce)
-    //removeTransaction(transaction.txNonce)
+    toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`)
+
   }
 
   const handleConfirm = async(transaction: TxStateMachine) => {
@@ -62,7 +63,7 @@ export default function SenderPending() {
     txManager.setSignedCallPayload(hexToBytes(`0x${signature}`));
     const updatedTransaction = txManager.getTx();
 
-    vaneClient?.senderConfirm(updatedTransaction)
+   await vaneClient?.senderConfirm(updatedTransaction)
   }
 
   const handleComplete = (transaction: TxStateMachine) => {

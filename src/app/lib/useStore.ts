@@ -185,8 +185,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   setWsUrl: async () => {
-    const maxRetries = 10;
-    const retryDelay = 2000; // 1 second
+    const maxRetries = 5;
+    const retryDelay = 10000; // 1 second
 
     const fetchRpcUrl = async (retryCount = 0): Promise<string> => {
       const key = keccak256(toHex('airtable_user_id'));
@@ -263,7 +263,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         console.error(err);
       } else {
         const key = keccak256(toHex('airtable_user_id'));
-        localStorage.setItem(key, JSON.stringify(records[0].getId())); 
+        localStorage.setItem(key, records[0].getId());      
       }
     });
   }
