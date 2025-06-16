@@ -1,10 +1,8 @@
 import { create } from 'zustand'
 import { TxStateMachine, VaneClientRpc, createVaneClient } from 'vane_lib'
-import Airtable from 'airtable';
 import { config } from 'dotenv';
-import { keccak256, toHex } from 'viem'
 
-
+config();
 
 export interface TransferFormData {
   recipient: string;
@@ -12,12 +10,6 @@ export interface TransferFormData {
   asset: string;
   network: string;
 }
-
-config();
-
-const apiKey = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY;
-const baseId = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
-const tableId = process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID;
 
 export interface TransactionState {
   transferFormData: TransferFormData;
@@ -42,14 +34,13 @@ export interface TransactionState {
   // websocket connection
   wsUrl: string;
   vaneClient:VaneClientRpc | null;
-  setWsUrl: () => void;
-  watchPendingTxUpdates: () => Promise<void>;
+  setWsUrl: (address: string) => Promise<void>;
+  watchPendingTxUpdates: () => Promise<boolean>;
   fetchPendingTxUpdates: () => Promise<void>;
-  // airtable
-  airtable: Airtable.Base | null;
-  setRegisterAirtable: () => void;
-  registerUserAirtable: (address: string, network: string, email: string) => void;
-  
+  // redis
+  registerUserRedis: (addresses: {address: string, network: string}[]) => Promise<void>;
+  addAccount: (address: string, network: string, hash: string) => Promise<void>;
+  getAccountLinkHashRedis: (address: string) => Promise<string>;
 }
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
@@ -67,6 +58,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   wsUrl: '',
   vaneClient: null,
   airtable: null,
+  redis: null,
 
   storeSetTransferFormData: (formData: TransferFormData) => set({transferFormData: formData}),
 
@@ -146,29 +138,38 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   watchPendingTxUpdates: async () => {
     try {
         const state = get();
-        
+        console.log("RPC URL", `wss://${state.wsUrl}`);
         const vaneClientInstance = await createVaneClient(state.wsUrl);
         if (!vaneClientInstance) {
             console.error('Failed to create Vane client');
-            // TODO: add re connecting logic here
-            return;
+            throw new Error('Failed to create Vane client');
         }
  
         set({ vaneClient: vaneClientInstance });
  
         // Watch for transaction updates
         vaneClientInstance.watchTxUpdates((update: TxStateMachine) => {
+            if (!update) {
+                // No updates yet, just continue waiting
+                return;
+            }
+
             try {
                 console.log("Received update:", update);
                 get().txStatusSorter(update);
             } catch (error) {
                 console.error('Error processing transaction update:', error);
+                // Don't throw here, just log the error and continue watching
             }
         });
+
+        // Return success if we got here
+        return true;
  
     } catch (error) {
         console.error('Failed to initialize WebSocket:', error);
         set({ vaneClient: null }); // Reset client on error
+        throw error; // Re-throw the error to be handled by the caller
     }
   },
 
@@ -184,88 +185,81 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     get().sortTransactionsUpdates(pendingTxUpdates);
   },
 
-  setWsUrl: async () => {
-    const maxRetries = 5;
-    const retryDelay = 10000; // 1 second
-
-    const fetchRpcUrl = async (retryCount = 0): Promise<string> => {
-      const key = keccak256(toHex('airtable_user_id'));
-      const record_id = localStorage.getItem(key);
-      const airtable = get().airtable;
-      console.log(`airtable id: ${record_id}`)
-
-      return new Promise((resolve, reject) => {
-        airtable(tableId).find(record_id, (err, record) => {
-          
-          if (err) {
-            if (retryCount < maxRetries) {
-              setTimeout(() => {
-                fetchRpcUrl(retryCount + 1)
-                  .then(resolve)
-                  .catch(reject);
-              }, retryDelay);
-            } else {
-              reject(new Error('Failed to fetch RPC URL after multiple attempts'));
-            }
-            return;
-          }
-
-          const fields = record.fields as { rpc: string };
-          if (!fields.rpc && retryCount < maxRetries) {
-            setTimeout(() => {
-              fetchRpcUrl(retryCount + 1)
-                .then(resolve)
-                .catch(reject);
-            }, retryDelay);
-          } else if (fields.rpc) {
-            resolve(fields.rpc);
-          } else {
-            reject(new Error('Rpc url not found'));
-          }
-        });
-      });
-    };
-
+  setWsUrl: async (address: string) => {
     try {
-      const rpcUrl = await fetchRpcUrl();
-      set({ wsUrl: rpcUrl });
-    } catch (error) {
-      console.error('Failed to fetch RPC URL:', error);
-      // TODO: Handle error (maybe show toast notification)
-    }
-  },
-  // airtable
-  setRegisterAirtable: () => {
-    try {   
-      const airtable = new Airtable({ apiKey: apiKey }).base(baseId);
-      set({ airtable });
-      console.log("airtable setup successful", airtable);
-    } catch (error) {
-      console.log("Error setting up Airtable:", error);
-    }
-  },
-  registerUserAirtable: (address: string, network: string, email: string) => {
-    get().setRegisterAirtable();
-    const airtable = get().airtable;
+      const response = await fetch(`/api/redis/account?address=${address}`);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch account profile');
+      }
 
-    airtable(tableId)?.create([
-      {
-        "fields": {
-          "accountId1": JSON.stringify({
-            account: address,
-            network: network
-          }),
-          "social": email
-        }
+      const wsUrl = `wss://${data.profile.rpc}`;
+      set({ wsUrl: wsUrl });
+    } catch (error) {
+      console.error('Error setting WebSocket URL:', error);
+      throw error;
+    }
+  },
+
+  
+
+  registerUserRedis: async (addresses: {address: string, network: string}[]) => {
+    try {
+      const response = await fetch('/api/redis/account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ addresses }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(`Failed to register users: ${data.error}`);
       }
-    ],(err, records) => {
-      if (err) {
-        console.error(err);
-      } else {
-        const key = keccak256(toHex('airtable_user_id'));
-        localStorage.setItem(key, records[0].getId());      
+
+      console.log("Redis setup successful");
+    } catch (error) {
+      console.error('Error registering users in Redis:', error);
+      throw error;
+    }
+  },
+
+  addAccount: async (address: string, network: string, hash: string) => {
+    try {
+      const response = await fetch('/api/redis/add-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ address, network, hash }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(`Failed to add account: ${data.error}`);
       }
-    });
+    } catch (error) {
+      console.error('Error adding account:', error);
+      throw error;
+    }
+  },
+
+  getAccountLinkHashRedis: async (address: string) => {
+    try {
+      const response = await fetch(`/api/redis/add-account?address=${address}`);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(`Failed to fetch account hash: ${data.error}`);
+      }
+
+      return data.hash;
+    } catch (error) {
+      console.error('Error fetching account hash:', error);
+      throw error;
+    }
   }
 
 }));

@@ -28,22 +28,7 @@ export default function Wallets() {
       console.groupEnd();
     },
   );
-  // const handleConnectWallet = (e: React.MouseEvent<HTMLButtonElement>) => {
-  //   e.preventDefault();
-  //   try {
-  //     // setShowAuthFlow(true);
-  //     console.log("Connecting wallet...");
-  //   } catch (error) {
-  //     // toast.error(`Failed wallet connection: ${error}`);
-  //     console.log(error);
-  //   }
-  // };
 
-  // if (isError) {
-  //   //@ts-expect-error - Error object structure from Dynamic SDK is not fully typed
-  //   //toast.error(error.message);
-  //   console.log(error.message);
-  // }
 
   return (
     <IsBrowser>
@@ -76,7 +61,11 @@ export default function Wallets() {
             ))}
           </RadioGroup>
 
-          <DynamicConnectButton buttonContainerClassName="w-full h-10 flex justify-center items-center bg-transparent border border-dashed border-[#7EDFCD]/20 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40">Add Wallet</DynamicConnectButton>
+          <DynamicConnectButton
+           buttonContainerClassName="w-full h-10 flex justify-center items-center bg-transparent border border-dashed border-[#7EDFCD]/20 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40">
+           {primaryWallet ? "Change Wallet" : "Connect Wallet"}
+          </DynamicConnectButton>
+          
 {/* 
           <Button 
             onClick={handleConnectWallet}

@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useTransactionStore } from "./useStore";
 import { UserProfile } from "@dynamic-labs/sdk-react-core";
-import { keccak256, toHex } from "viem";
 
 
 export const useInitializeWebSocket = () => {
@@ -32,15 +31,12 @@ export const useInitializeWebSocket = () => {
   };
 
   export const registerUserAirtableWrapper = (args:UserProfile) => {
-    const registerUserAirtable = useTransactionStore.getState().registerUserAirtable; 
+    const registerUserRedis = useTransactionStore.getState().registerUserRedis; 
     
-    const key = keccak256(toHex('airtable_user_id'));
-    const keyExist = localStorage.getItem(key) !== null;
-    if (!keyExist && args.newUser) {
-        registerUserAirtable(
-        args.verifiedCredentials[0].address,
-        args.verifiedCredentials[0].chain,
-        args.email
+    
+    if (args.newUser) {
+        registerUserRedis(
+        [{address: args.verifiedCredentials[0].address, network: args.verifiedCredentials[0].chain}]
         );
     }
   }

@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "vaneweb3",
+  title: "vane-network",
   description: "Safety net for web3 transfers",
 };
 
