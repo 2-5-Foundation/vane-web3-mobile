@@ -90,6 +90,7 @@ export default function TransferForm() {
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="pt-2 px-3 space-y-3">
             {/* Recipient Field */}
+
             <div className="space-y-1">
               <Label className="text-sm text-[#9EB2AD]">Recipient</Label>
               <Input 
@@ -97,8 +98,18 @@ export default function TransferForm() {
                 value={formData.recipient}
                 onChange={handleTransferFormChange}
                 placeholder="0x.." 
-                className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] text-sm border-t-0 border-x-0 rounded-t-none"
+                className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] text-xs border-t-0 border-x-0 rounded-t-none font-mono"
               />
+            </div>
+
+            {/* Network Field */}
+            <div className="space-y-1">
+              <Label className="text-sm text-[#9EB2AD]">Network</Label>
+              <Select>
+                <SelectTrigger className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] text-sm font-mono">
+                  <SelectValue placeholder="Ethereum" />
+                </SelectTrigger>
+              </Select>
             </div>
 
             {/* Amount and Asset Fields */}
@@ -111,7 +122,7 @@ export default function TransferForm() {
                   value={formData.amount || ''}
                   onChange={handleTransferFormChange}
                   placeholder="0.00"
-                  className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] border-t-0 border-x-0 rounded-t-none"
+                  className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] border-t-0 border-x-0 rounded-t-none font-mono"
                 />
               </div>
               <div className="space-y-1">
@@ -121,7 +132,7 @@ export default function TransferForm() {
                   value={formData.asset}
                   onValueChange={handleAssetChange}
                 >
-                  <SelectTrigger className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] border-t-0 border-x-0 rounded-t-none">
+                  <SelectTrigger className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] border-t-0 border-x-0 rounded-t-none font-mono">
                     <SelectValue placeholder="ETH" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0B1B1C] border-[#4A5853]/20">
@@ -136,7 +147,7 @@ export default function TransferForm() {
             {/* Warning Message */}
             <div className="flex items-center gap-2 border border-[#424BDF] text-[#A0A6F5] bg-[#282A3D] p-2 rounded-lg">
               <AlertCircle className="h-4 w-4 text-[#424BDF]" />
-              <p className="text-xs">Recipient will need to confirm the transaction</p>
+              <p className="text-xs">Secure, requires confirmation from the receiver</p>
             </div>
 
             {/* Submit Button */}

@@ -4,6 +4,8 @@ import "./globals.css";
 import { PWAProvider } from '@/app/page-view/pwa-provider'
 import { Frame } from '@/app/page-view/frame'
 import { Toaster } from 'sonner';
+import { Analytics } from '@vercel/analytics/next';
+
 
 // ----------- Wallet ----------------
 import ClientAuthProvider from "./page-view/page-component/handleWalletAuth";
@@ -20,7 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "vane-network",
+  title: "vaneweb3",
   description: "Safety net for web3 transfers",
 };
 
@@ -38,7 +40,10 @@ export default function RootLayout({
       >
         <ClientAuthProvider> 
           <PWAProvider />
-          <Frame>{children}</Frame>
+          <Frame>
+            {children}
+            <Analytics />
+          </Frame>
         </ClientAuthProvider>
         <Toaster position="top-right" />
       </body>
