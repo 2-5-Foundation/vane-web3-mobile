@@ -51,7 +51,7 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
       </button>
       {/* Content */}
       <div className="w-full max-w-md mx-auto px-4 flex flex-col items-center pb-32 pt-[10vh] relative z-10">
-        <h2 className="relative text-xl sm:text-2xl md:text-3xl font-sans font-bold tracking-wider text-center mb-8 uppercase">
+        <h2 className="relative text-xl sm:text-1xl md:text-3xl font-sans font-bold tracking-wider text-center mb-8 uppercase">
             <span className="bg-gradient-to-r from-[#7EDFCD] to-[#5BC4B0] bg-clip-text text-transparent drop-shadow-lg">
                 we are protecting you from
             </span>
@@ -66,7 +66,13 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
               <div key={idx} className="min-w-[260px] max-w-[300px] rounded-lg shadow-md p-2 bg-transparent" dangerouslySetInnerHTML={{ __html: tweet.html }} />
             ))
           ) : (
-            <div className="text-[#7EDFCD]">No tweets loaded.</div>
+            // Skeleton loader while tweets are loading
+            [...Array(3)].map((_, idx) => (
+              <div
+                key={idx}
+                className="min-w-[260px] max-w-[300px] h-[180px] rounded-lg bg-[#222] animate-pulse"
+              />
+            ))
           )}
         </div>
         {/* How it works header and subhead */}

@@ -1,42 +1,49 @@
 'use client'
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTransactionStore } from "./useStore";
-import { UserProfile } from "@dynamic-labs/sdk-react-core";
-
 
 export const useInitializeWebSocket = () => {
     const wsUrl = useTransactionStore(state => state.wsUrl);
     const vaneClient = useTransactionStore(state => state.vaneClient);
+    const isWebSocketConnected = useTransactionStore(state => state.isWebSocketConnected);
     const watchPendingTxUpdates = useTransactionStore(state => state.watchPendingTxUpdates);
+    
+    // Use ref to track if we've already attempted connection
+    const hasAttemptedConnection = useRef(false);
   
     useEffect(() => {
-        if (!vaneClient && wsUrl) {
-            try {
-                watchPendingTxUpdates();
-            } catch (error) {
-                console.error("Failed to initialize WebSocket:", error);
-            }
+        // Only attempt connection if:
+        // 1. We have a WebSocket URL
+        // 2. We're not already connected
+        // 3. We haven't already attempted connection in this render cycle
+        if (wsUrl && !isWebSocketConnected && !hasAttemptedConnection.current) {
+            hasAttemptedConnection.current = true;
+            
+            console.log('Initializing WebSocket connection...');
+            watchPendingTxUpdates()
+                .then(() => {
+                    console.log('WebSocket initialized successfully');
+                })
+                .catch((error) => {
+                    console.error("Failed to initialize WebSocket:", error);
+                    // Reset the flag so we can try again if needed
+                    hasAttemptedConnection.current = false;
+                });
         }
-    }, [vaneClient, wsUrl, watchPendingTxUpdates]);
-  
-    // Cleanup function to close the WebSocket connection when the component unmounts
-    useEffect(() => {
-        return () => {
-            if (vaneClient) {
-                vaneClient.disconnect();
-            }
-        };
-    }, [vaneClient]);
-  };
+    }, [wsUrl, isWebSocketConnected, watchPendingTxUpdates]);
 
-  export const registerUserAirtableWrapper = (args:UserProfile) => {
-    const registerUserRedis = useTransactionStore.getState().registerUserRedis; 
+    // Reset connection flag when wsUrl changes (new account)
+    useEffect(() => {
+        hasAttemptedConnection.current = false;
+    }, [wsUrl]);
+  
+    // DON'T disconnect on unmount - let the connection persist
+    // This is the key difference from your original - we want Postman-like behavior
+    // where the connection stays alive throughout the session
     
-    
-    if (args.newUser) {
-        registerUserRedis(
-        [{address: args.verifiedCredentials[0].address, network: args.verifiedCredentials[0].chain}]
-        );
-    }
-  }
+    return {
+        isConnected: isWebSocketConnected,
+        hasClient: !!vaneClient
+    };
+}

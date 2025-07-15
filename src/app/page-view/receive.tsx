@@ -9,10 +9,13 @@ import { useTransactionStore } from "../lib/useStore"
 export default function Receive() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const fetchPendingTxUpdates = useTransactionStore(state => state.fetchPendingTxUpdates)
+  const recvPendingTransactions = useTransactionStore(state => state.recvTransactions)
+
 
   const handleRefresh = () => {
     setIsRefreshing(true)
-    fetchPendingTxUpdates()    
+    fetchPendingTxUpdates()   
+    console.log("recvPendingTransactions", recvPendingTransactions)
     // Reset the animation after 1 second
     setTimeout(() => {
       setIsRefreshing(false)

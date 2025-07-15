@@ -8,6 +8,7 @@ import type { NavigationState } from '@/app/lib/useStore'
 import { Smartphone } from "lucide-react"
 import Image from 'next/image'
 import LandingOverlay from './LandingOverlay'
+import { useRouter, usePathname } from 'next/navigation'
 
 
 type NavItem = {
@@ -85,6 +86,8 @@ export function Frame({ children }: { children: React.ReactNode }) {
   const [isMobile, setIsMobile] = useState(true)
   const [showLanding, setShowLanding] = useState(false)
   const [fetchedTweets, setFetchedTweets] = useState<{ html: string }[]>([])
+  const router = useRouter()
+  const pathname = usePathname()
 
   const tweetLinks = useMemo(() => [
     "https://twitter.com/autismcapital/status/1786415766394527979?s=46",
@@ -158,7 +161,10 @@ export function Frame({ children }: { children: React.ReactNode }) {
             className="text-[#4A5853] hover:text-[#4A5853] focus:outline-none focus:ring-2 focus:ring-[#7EDFCD]"
             aria-label="Open navigation menu"
             tabIndex={0}
-            onClick={() => setShowLanding(true)}
+            onClick={() => {
+              setShowLanding(true)
+              router.push(pathname + '#about')
+            }}
           >
             <svg className="w-6 h-6" fill="none" stroke="white" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -170,7 +176,13 @@ export function Frame({ children }: { children: React.ReactNode }) {
       {/* Landing Overlay (self-contained) */}
       <LandingOverlay
         show={showLanding}
-        onClose={() => setShowLanding(false)}
+        onClose={() => {
+          setShowLanding(false)
+          // Remove #about from the URL
+          if (window.location.hash === '#about') {
+            router.push(pathname)
+          }
+        }}
         fetchedTweets={fetchedTweets}
       />
 

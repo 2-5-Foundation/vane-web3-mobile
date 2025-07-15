@@ -38,9 +38,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { address, network, hash } = await request.json();
+    const { account, network, hash } = await request.json();
     
-    if (!address || !network || !hash) {
+    if (!account || !network || !hash) {
       return NextResponse.json({ 
         success: false, 
         error: "Address, network, and hash are required" 
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     await redisClient.connect();
 
     // Store the address-hash mapping in ACCOUNT_LINK
-    await redisClient.hSet("ACCOUNT_LINK", address, hash);
+    await redisClient.hSet("ACCOUNT_LINK", account, hash);
 
     // Get existing accounts for this hash
     const existingAccounts = await redisClient.hGet("ACCOUNT_PROFILE", hash);
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     // Parse existing accounts and add the new one
     const accounts = JSON.parse(existingAccounts as string);
-    accounts.accounts.push({ address, network });
+    accounts.accounts.push({ account, network });
 
     // Update the account profile with the new account
     await redisClient.hSet("ACCOUNT_PROFILE", hash, JSON.stringify(accounts));

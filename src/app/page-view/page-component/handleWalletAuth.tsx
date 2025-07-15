@@ -12,6 +12,7 @@ import { useTransactionStore } from "@/app/lib/useStore";
 
 export default function ClientAuthProvider({ children }: { children: React.ReactNode }) {
   const registerUserRedis = useTransactionStore.getState().registerUserRedis;
+  const setUserProfile = useTransactionStore.getState().setUserProfile;
   const setRpcurl = useTransactionStore.getState().setWsUrl;
 
   const handleAuthenticatedUser = async (args: { user: UserProfile }) => {    
@@ -21,7 +22,7 @@ export default function ClientAuthProvider({ children }: { children: React.React
     }else{
       network = args.user.verifiedCredentials[0].chain;
     }
-    registerUserRedis([{address: args.user.verifiedCredentials[0].address, network: network}]);
+    registerUserRedis([{account: args.user.verifiedCredentials[0].address, network: network}]);
   };
 
   return (
@@ -34,7 +35,8 @@ export default function ClientAuthProvider({ children }: { children: React.React
             handleConnectedWallet: async (args) => {
                 void args
                 try{
-                    setRpcurl(args.address);                  
+                    setRpcurl(args.address);
+                    setUserProfile({account: args.address, network: args.chain});
                     return true;
                 }catch {
                     return false

@@ -1,16 +1,16 @@
 "use client"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 //import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useDynamicContext, useUserWallets, useTokenBalances, IsBrowser, DynamicConnectButton, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useUserWallets, IsBrowser, DynamicConnectButton, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
 import { useState } from "react";
 // import { toast } from "sonner";
-import Image from "next/image"
+
 
 export default function Wallets() {
   const {  primaryWallet,handleLogOut } = useDynamicContext();
-  const { tokenBalances, isLoading} = useTokenBalances();
   const userWallets = useUserWallets();
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
 
@@ -73,43 +73,13 @@ export default function Wallets() {
           >
             + Add Wallet
           </Button> */}
+          <Alert className="bg-blue-500/10 border-blue-400/30">
+            <AlertTitle className="text-blue-400">Heads up!</AlertTitle>
+            <AlertDescription className="text-blue-300">
+              The product is not live yet but you can explore it.
+            </AlertDescription>
+          </Alert>
         </div>
-      </div>
-
-      {/* Tokens Section */}
-      <div className="space-y-2">
-        <h2 className="text-[#9EB2AD] text-sm">{selectedWallet && 'Balances'}</h2>
-        {isLoading ? (
-          <div className="text-center py-4 text-[#9EB2AD]">Loading balances...</div>
-        ) : (
-          tokenBalances.map((token) => (
-            <Card 
-              key={token.address || token.symbol}
-              className="bg-[#0D1B1B] border-[#4A5853]/20"
-            >
-              <CardContent className="p-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {token.logoURI ? (
-                      <Image 
-                        src={token.logoURI} 
-                        alt={token.symbol} 
-                        width={20} 
-                        height={20} 
-                        className="w-5 h-5 rounded-full" 
-                      />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-[#4A5853]" />
-                    )}
-                    <span className="text-white">{token.symbol}</span>
-                    <span className="text-[#4A5853] text-xs">{token.name}</span>
-                  </div>
-                  <span className="text-white">{token.balance}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
       </div>
     </div>
     </IsBrowser>

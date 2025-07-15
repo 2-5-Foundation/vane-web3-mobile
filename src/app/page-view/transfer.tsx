@@ -33,9 +33,10 @@ export default function Transfer() {
   return (
     <div className="pt-2 px-4 max-w-sm mx-auto">
       {/* Balance Display */}
-      <div className="text-center space-y-0.5 mb-3">
-        <p className="text-xs text-[#F5F5F5]">Total balance</p>
-        <h1 className="text-2xl font-bold text-[#FFFFFF]">${totalAmount}</h1>
+      <div className="bg-[#0D1B1B]/80 backdrop-blur-sm border border-[#4A5853]/20 rounded-xl p-2 mb-3 shadow-lg">
+        <div className="text-left">
+          <h1 className="text-lg font-mono text-[#9EB2AD]">${totalAmount}</h1>
+        </div>
       </div>
 
       {/* Tabs */}

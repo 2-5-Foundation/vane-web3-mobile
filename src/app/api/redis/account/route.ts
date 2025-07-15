@@ -11,15 +11,15 @@ export async function POST(request: Request) {
     await redisClient.connect();
 
     // check if the hash already exists
-    const hashExist = await redisClient.hGet("ACCOUNT_LINK", addresses[0].address);
+    const hashExist = await redisClient.hGet("ACCOUNT_LINK", addresses[0].account);
     if (hashExist) {
       return NextResponse.json({ success: true, message: "Address already registered" });
     }
 
     // store each address in redis pointing to a same hash
-    const hash = keccak256(toHex(addresses[0].address));
+    const hash = keccak256(toHex(addresses[0].account));
     for (const accountInfo of addresses) {
-      await redisClient.hSet("ACCOUNT_LINK", accountInfo.address, hash);
+      await redisClient.hSet("ACCOUNT_LINK", accountInfo.account, hash);
     }
 
     // store the array of address and network as value with the hash as the key in redis
@@ -36,16 +36,16 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const address = searchParams.get('address');
+    const account = searchParams.get('account');
     
-    if (!address) {
+    if (!account) {
       return NextResponse.json({ success: false, error: "Address is required" }, { status: 400 });
     }
 
     const redisClient = createClient({ url: REDIS_URL });
     await redisClient.connect();
 
-    const hash = await redisClient.hGet("ACCOUNT_LINK", address);
+    const hash = await redisClient.hGet("ACCOUNT_LINK", account);
     if (!hash) {
       return NextResponse.json({ success: false, error: "Address not found" }, { status: 404 });
     }
