@@ -11,9 +11,7 @@ import { SolanaWalletConnectors } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
 
 export default function ClientAuthProvider({ children }: { children: React.ReactNode }) {
-  const registerUserRedis = useTransactionStore.getState().registerUserRedis;
   const setUserProfile = useTransactionStore.getState().setUserProfile;
-  const setRpcurl = useTransactionStore.getState().setWsUrl;
 
   const handleAuthenticatedUser = async (args: { user: UserProfile }) => {    
     let network = "";
@@ -22,7 +20,7 @@ export default function ClientAuthProvider({ children }: { children: React.React
     }else{
       network = args.user.verifiedCredentials[0].chain;
     }
-    registerUserRedis([{account: args.user.verifiedCredentials[0].address, network: network}]);
+    // WASM initialization is now handled in page.tsx
   };
 
   return (
@@ -33,15 +31,12 @@ export default function ClientAuthProvider({ children }: { children: React.React
         handlers: {
             handleAuthenticatedUser,
             handleConnectedWallet: async (args) => {
-                void args
                 try{
-                    setRpcurl(args.address);
                     setUserProfile({account: args.address, network: args.chain});
                     return true;
                 }catch {
                     return false
                 }
-                
             },
         }, 
       }}

@@ -9,24 +9,18 @@ import { AlertCircle } from "lucide-react"
 import SenderPending from "./sender-pending"
 import { useEffect, useState } from "react"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
+import { TxStateMachine } from '@/lib/vane_lib/main'
+import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useInitializeWebSocket } from "@/app/lib/helper";
 import { toast } from "sonner"
 
 export default function TransferForm() {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
-  const { vaneClient, senderPendingTransactions } = useTransactionStore();
-  const fetchPendingTxUpdates = useTransactionStore(state => state.fetchPendingTxUpdates);
+  const { senderPendingTransactions, initiateTransaction, fetchPendingUpdates, isWasmInitialized } = useTransactionStore();
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
   
-  const [initiatedTransactions, setInitiatedTransactions] = useState<Array<{
-    receiverAddress: string;
-    amount: number;
-    token: string;
-    network: string;
-    codeword: string;
-  }>>([]);
+  const [initiatedTransactions, setInitiatedTransactions] = useState<TxStateMachine[]>([]);
   const setCurrentView = useStore(state => state.setCurrentView);
 
   const [formData, setFormData] = useState<TransferFormData>({
@@ -36,8 +30,7 @@ export default function TransferForm() {
     network: 'Ethereum'
   });
 
-  // Initialize WebSocket and get connection status
-  const { isConnected } = useInitializeWebSocket();
+  // WASM initialization is now handled at app level in page.tsx
 
   useEffect(() => {
     if (formData.amount > 0 && formData.recipient.trim() !== '') {
@@ -53,10 +46,7 @@ export default function TransferForm() {
         prev.filter(initiatedTx => 
           !senderPendingTransactions.some(realTx => 
             realTx.receiverAddress === initiatedTx.receiverAddress &&
-            realTx.amount.toString() === initiatedTx.amount.toString() &&
-            realTx.token === initiatedTx.token &&
-            realTx.network === initiatedTx.network &&
-            realTx.codeword === initiatedTx.codeword
+            realTx.amount.toString() === initiatedTx.amount.toString()
           )
         )
       );
@@ -81,12 +71,12 @@ export default function TransferForm() {
     }
   }, []);
 
-  // Fetch pending transactions when WebSocket connects
+  // Fetch pending transactions when WASM initializes
   useEffect(() => {
-    if (isConnected) {
-      fetchPendingTxUpdates();
+    if (isWasmInitialized()) {
+      fetchPendingUpdates();
     }
-  }, [isConnected, fetchPendingTxUpdates]);
+  }, [isWasmInitialized, fetchPendingUpdates]);
 
   const handleTransferFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -122,35 +112,30 @@ export default function TransferForm() {
         return;
       }
 
-      // Check WebSocket connection before attempting transaction
-      if (!isConnected || !vaneClient) {
-        toast.error('WebSocket not connected. Please wait or refresh the page.');
+      // Check WASM initialization before attempting transaction
+      if (!isWasmInitialized()) {
+        toast.error('Connection not initialized. Please wait or refresh the page.');
         return;
       }
       
-      // Add to initiated transactions immediately for better UX
-      const newInitiatedTx = {
-        receiverAddress: formData.recipient,
-        amount: formData.amount,
-        token: formData.asset,
-        network: formData.network,
-        codeword: 'Goated'
-      };
-
-      setInitiatedTransactions(prev => [...prev, newInitiatedTx]);
+      // Create token using TokenManager
+      const token = formData.asset === 'ETH' 
+        ? TokenManager.createNativeToken(ChainSupported.Ethereum)
+        : TokenManager.createERC20Token(ChainSupported.Ethereum, formData.asset);
       
-      await vaneClient.initiateTransaction(
+      // Call the actual initiateTransaction from vane_lib (matches test pattern)
+      await initiateTransaction(
         primaryWallet.address,
         formData.recipient,
-        formData.amount,
-        formData.asset,
-        formData.network,
-        'Goated'
+        BigInt(formData.amount),
+        token,
+        'Goated',
+        ChainSupported.Ethereum,
+        ChainSupported.Ethereum
       );
 
       setTransferStatus('Genesis');
       console.log("Transaction initiated successfully");
-      
       
       // Clear form after successful submission
       setFormData({
@@ -163,22 +148,11 @@ export default function TransferForm() {
     } catch (error) {
       console.error('Transaction failed:', error);
       toast.error(`Transaction failed: ${error}`);
-      
-      // Remove the failed transaction from initiated list
-      setInitiatedTransactions(prev => 
-        prev.filter(tx => 
-          !(tx.receiverAddress === formData.recipient &&
-            tx.amount === formData.amount &&
-            tx.token === formData.asset &&
-            tx.network === formData.network &&
-            tx.codeword === 'Goated')
-        )
-      );
     }
   };
 
   // Determine if form should be disabled
-  const isFormDisabled = !isConnected || !primaryWallet;
+  const isFormDisabled = !isWasmInitialized() || !primaryWallet;
 
   return (
     <div className="flex flex-col h-full">

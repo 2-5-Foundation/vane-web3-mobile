@@ -1,9 +1,45 @@
+/**
+ * Vane Web3 Mobile Store - Transaction State Management
+ * 
+ * This store manages transaction state and sorting logic for the Vane Web3 mobile app:
+ * - User profile and wallet connection
+ * - Transaction state management (sender/receiver contexts)
+ * - Automatic transaction sorting and categorization
+ * - Utility methods for transaction status checking
+ * 
+ * Key Features:
+ * - Transaction sorting logic (sender vs receiver)
+ * - Status management and utility functions
+ * - Clean separation of concerns (no WASM API wrappers)
+ * - Direct integration with vane_lib WASM API
+ * 
+ * Usage:
+ * - Use vane_lib WASM API functions directly
+ * - Use this store for transaction state management and sorting
+ * - Call txStatusSorter() to process incoming transaction updates
+ */
+
 import { create } from 'zustand'
-import { TxStateMachine, VaneClientRpc, createVaneClient } from 'vane_lib'
+import { 
+  TxStateMachine, 
+  Token, 
+  ChainSupported, 
+  initializeNode,
+  initiateTransaction,
+  senderConfirm,
+  receiverConfirm,
+  revertTransaction,
+  fetchPendingTxUpdates,
+  watchTxUpdates,
+  exportStorage,
+  isInitialized,
+  LogLevel
+} from '@/lib/vane_lib/main'
+
+
 import { config } from 'dotenv';
 
 config();
-
 export interface TransferFormData {
   recipient: string;
   amount: number; 
@@ -25,6 +61,9 @@ export interface TransactionState {
   recvTransactions: TxStateMachine[]
   status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted';
 
+  // WASM state
+  isWatchingUpdates: boolean;
+
   // Methods
   setUserProfile: (userProfile: UserProfile) => void;
   storeSetTransferFormData: (formData: TransferFormData) => void;
@@ -33,23 +72,31 @@ export interface TransactionState {
   sortTransactionsUpdates: (txs:TxStateMachine[]) => void;
   clearAllTransactions: () => void; 
   // sender context
-  removeTransaction: (txNonce: number) => void;  // Add this
+  removeTransaction: (txNonce: number) => void;
   addTransaction: (tx: TxStateMachine) => void;
   // receiver context
   addRecvTransaction: (tx: TxStateMachine) => void;
   removeRecvTransaction: (txNonce: number) => void;
-  // websocket connection
-  wsUrl: string;
-  vaneClient:VaneClientRpc | null;
-  isWebSocketConnected: boolean;
-  setWsUrl: (account: string) => Promise<void>;
-  watchPendingTxUpdates: () => Promise<boolean>;
-  fetchPendingTxUpdates: () => Promise<void>;
-  disconnectWebSocket: () => void;
-  // redis
-  registerUserRedis: (addresses: {account: string, network: string}[]) => Promise<void>;
-  addAccount: (address: string, network: string, hash: string) => Promise<void>;
-  getAccountLinkHashRedis: (address: string) => Promise<string>;
+  
+  // WASM initialization and management
+  initializeWasm: (relayMultiAddr: string, account: string, network: string, live?: boolean) => Promise<void>;
+  startWatching: () => Promise<void>;
+  stopWatching: () => void;
+  isWasmInitialized: () => boolean;
+  
+  // WASM transaction methods
+  initiateTransaction: (sender: string, receiver: string, amount: bigint, token: Token, codeWord: string, senderNetwork: ChainSupported, receiverNetwork: ChainSupported) => Promise<TxStateMachine>;
+  senderConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
+  receiverConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
+  revertTransaction: (tx: TxStateMachine, reason?: string) => Promise<void>;
+  fetchPendingUpdates: () => Promise<TxStateMachine[]>;
+  exportStorageData: () => Promise<void>;
+  loadStorageData: () => unknown | null;
+  
+  // Utility methods
+  isTransactionReverted: (tx: TxStateMachine) => boolean;
+  isTransactionCompleted: (tx: TxStateMachine) => boolean;
+  getTransactionStatus: (tx: TxStateMachine) => string;
 }
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
@@ -76,11 +123,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   senderPendingTransactions: [],
   recvTransactions: [],
   status: 'Genesis',
-  wsUrl: '',
-  vaneClient: null,
-  isWebSocketConnected: false,
-  airtable: null,
-  redis: null,
+  isWatchingUpdates: false,
 
   // method
   setUserProfile: (userProfile: UserProfile) => {
@@ -96,10 +139,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   
   txStatusSorter: (update: TxStateMachine) => {
     set((state) => {
-        // Cast status to string or get the type property
-        const statusString = typeof update.status === 'string' 
-            ? update.status 
-            : (update.status as unknown as {type: string})?.type || update.status;
+        // Use the utility method to get consistent status string
+        const statusString = get().getTransactionStatus(update);
         
         switch (statusString) {
             case 'Genesis':
@@ -190,175 +231,228 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }));
   },
 
-  // ---------------------------------- WebSocket connection (Postman-like stability) ----------------------------------
-  watchPendingTxUpdates: async () => {
+  // WASM initialization and management
+  initializeWasm: async (relayMultiAddr: string, account: string, network: string, live: boolean = false) => {
     try {
-        const state = get();
-        
-        // Don't create multiple connections - just like Postman
-        if (state.vaneClient && state.vaneClient.isConnected() && state.isWebSocketConnected) {
-          console.log('WebSocket already connected and stable - no need to reconnect');
-          return true;
-        }
+      
+      
+      if (isInitialized()) {
+        console.log('WASM already initialized');
+        return;
+      }
 
-        // Clean up any existing connection first
-        if (state.vaneClient) {
-          console.log('Cleaning up existing connection...');
-          state.vaneClient.disconnect();
-          set({ vaneClient: null, isWebSocketConnected: false });
-        }
-
-        if (!state.wsUrl) {
-          console.error('WebSocket URL not set');
-          throw new Error('WebSocket URL not set');
-        }
-
-        console.log("Creating single stable WebSocket connection to:", state.wsUrl);
-        const vaneClientInstance = await createVaneClient(state.wsUrl);
-        
-        if (!vaneClientInstance || !vaneClientInstance.isConnected()) {
-          console.error('Failed to create or connect Vane client');
-          throw new Error('Failed to create stable WebSocket connection');
-        }
- 
-        set({ 
-          vaneClient: vaneClientInstance,
-          isWebSocketConnected: true
-        });
- 
-        // Set up transaction watching once - like Postman's simple message handling
-        await vaneClientInstance.watchTxUpdates((update: TxStateMachine) => {
-          if (!update) {
-            console.log("No updates yet, continuing to watch...");
-            return;
-          }
-
-          try {
-            console.log("Received transaction update:", update);
-            get().txStatusSorter(update);
-          } catch (error) {
-            console.error('Error processing transaction update:', error);
-            // Don't disconnect on processing errors - keep connection stable
-          }
-        });
-
-        console.log("WebSocket connected and stable - watching for updates");
-        return true;
- 
+      console.log('Initializing WASM node...');
+      
+      await initializeNode({
+        relayMultiAddr,
+        account,
+        network,
+        live,
+        logLevel: LogLevel.Debug
+      });
+      
+      console.log('WASM node initialized successfully');
     } catch (error) {
-        console.error('Failed to establish stable WebSocket connection:', error);
-        set({ 
-          vaneClient: null,
-          isWebSocketConnected: false
-        });
-        throw error;
+      console.error('Failed to initialize WASM node:', error);
+      throw error;
     }
   },
 
-  fetchPendingTxUpdates: async () => {
+  startWatching: async () => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+
     const state = get();
-    
-    if (!state.vaneClient ) {
-      console.warn('WebSocket not connected - cannot fetch updates');
+    if (state.isWatchingUpdates) {
+      console.log('Already watching updates');
       return;
     }
 
     try {
-      const pendingTxUpdates = await state.vaneClient.fetchPendingTxUpdates();
-      get().sortTransactionsUpdates(pendingTxUpdates);
+      await watchTxUpdates((tx: TxStateMachine) => {
+        get().txStatusSorter(tx);
+      });
+      
+      set({ isWatchingUpdates: true });
+      console.log('Started watching transaction updates');
+    } catch (error) {
+      console.error('Error starting transaction watching:', error);
+      throw error;
+    }
+  },
+
+  stopWatching: () => {
+    set({ isWatchingUpdates: false });
+    console.log('Stopped watching transaction updates');
+  },
+
+  isWasmInitialized: () => isInitialized(),
+
+  // WASM transaction methods
+  initiateTransaction: async (
+    sender: string, 
+    receiver: string, 
+    amount: bigint, 
+    token: Token, 
+    codeWord: string, 
+    senderNetwork: ChainSupported, 
+    receiverNetwork: ChainSupported
+  ) => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+
+    try {
+      const tx = await initiateTransaction(sender, receiver, amount, token, codeWord, senderNetwork, receiverNetwork);
+      console.log('Transaction initiated successfully:', tx);
+      
+      // Add to local state
+      get().txStatusSorter(tx);
+      
+      return tx;
+    } catch (error) {
+      console.error('Error initiating transaction:', error);
+      throw error;
+    }
+  },
+
+  senderConfirmTransaction: async (tx: TxStateMachine) => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+
+    try {
+      await senderConfirm(tx);
+      console.log('Transaction confirmed by sender successfully');
+    } catch (error) {
+      console.error('Error confirming transaction by sender:', error);
+      throw error;
+    }
+  },
+
+  receiverConfirmTransaction: async (tx: TxStateMachine) => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+
+    try {
+      await receiverConfirm(tx);
+      console.log('Transaction confirmed by receiver successfully');
+    } catch (error) {
+      console.error('Error confirming transaction by receiver:', error);
+      throw error;
+    }
+  },
+
+  revertTransaction: async (tx: TxStateMachine, reason?: string) => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+
+    try {
+      await revertTransaction(tx, reason);
+      console.log('Transaction reverted successfully');
+    } catch (error) {
+      console.error('Error reverting transaction:', error);
+      throw error;
+    }
+  },
+
+  fetchPendingUpdates: async () => {
+    const state = get();
+    
+    if (!state.isWasmInitialized) {
+      console.warn('WASM node not initialized - cannot fetch updates');
+      return [];
+    }
+
+    try {
+      const updates = await fetchPendingTxUpdates();
+      console.log('Fetched pending updates:', updates);
+      
+      // Process updates
+      get().sortTransactionsUpdates(updates);
+      
+      return updates;
     } catch (error) {
       console.error('Error fetching pending updates:', error);
-      // Don't disconnect on fetch errors - keep connection stable
+      return [];
     }
   },
 
-  disconnectWebSocket: () => {
-    const state = get();
-    if (state.vaneClient) {
-      console.log('Manually disconnecting WebSocket...');
-      state.vaneClient.disconnect();
-      set({ 
-        vaneClient: null,
-        isWebSocketConnected: false
-      });
+  exportStorageData: async () => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
     }
-  },
 
-  setWsUrl: async (account: string) => {
     try {
-      const response = await fetch(`/api/redis/account?account=${account}`);
-      const data = await response.json();
+      const storage = await exportStorage();
+      console.log('Exported storage data:', storage);
       
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch account profile');
+      // Save to browser storage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vane-storage-export', JSON.stringify(storage, (key, value) => {
+          // Handle BigInt serialization
+          if (typeof value === 'bigint') {
+            return value.toString();
+          }
+          return value;
+        }));
+        console.log('Storage data saved to localStorage');
       }
-
-      const wsUrl = `wss://${data.profile.rpc}`;
-      set({ wsUrl: wsUrl });
-      console.log('WebSocket URL set to:', wsUrl);
     } catch (error) {
-      console.error('Error setting WebSocket URL:', error);
+      console.error('Error exporting and saving storage data:', error);
       throw error;
     }
   },
 
-  registerUserRedis: async (addresses: {account: string, network: string}[]) => {
-    try {
-      const response = await fetch('/api/redis/account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ addresses }),
-      });
-
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(`Failed to register users: ${data.error}`);
+  loadStorageData: () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('vane-storage-export');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          console.log('Loaded storage data from localStorage:', parsed);
+          return parsed;
+        }
+      } catch (error) {
+        console.error('Error loading storage data from localStorage:', error);
       }
-      set({userProfile: {account: addresses[0].account, network: addresses[0].network}});
-      console.log("Redis setup successful");
-    } catch (error) {
-      console.error('Error registering users in Redis:', error);
-      throw error;
     }
+    return null;
   },
 
-  addAccount: async (account: string, network: string, hash: string) => {
-    try {
-      const response = await fetch('/api/redis/add-account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ account, network, hash }),
-      });
-
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(`Failed to add account: ${data.error}`);
-      }
-    } catch (error) {
-      console.error('Error adding account:', error);
-      throw error;
-    }
+  // Utility methods
+  isTransactionReverted: (tx: TxStateMachine) => {
+    const status = get().getTransactionStatus(tx);
+    return status === 'Reverted' || status === 'FailedToSubmitTxn';
   },
 
-  getAccountLinkHashRedis: async (address: string) => {
-    try {
-      const response = await fetch(`/api/redis/add-account?address=${address}`);
-      const data = await response.json();
+  isTransactionCompleted: (tx: TxStateMachine) => {
+    const status = get().getTransactionStatus(tx);
+    return status === 'TxSubmissionPassed' || status === 'FailedToSubmitTxn' || status === 'Reverted';
+  },
+
+  getTransactionStatus: (tx: TxStateMachine) => {
+    if (typeof tx.status === 'string') {
+      return tx.status;
+    }
+    
+    if (typeof tx.status === 'object' && tx.status !== null) {
+      // Handle object-based status
+      if ('type' in tx.status) {
+        return tx.status.type;
+      }
       
-      if (!data.success) {
-        throw new Error(`Failed to fetch account hash: ${data.error}`);
-      }
-
-      return data.hash;
-    } catch (error) {
-      console.error('Error fetching account hash:', error);
-      throw error;
+      // Handle status with data
+      const keys = Object.keys(tx.status);
+      return keys.length > 0 ? keys[0] : 'Unknown';
     }
-  }
+    
+    return 'Unknown';
+  },
+
 
 }));
 

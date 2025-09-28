@@ -14,14 +14,22 @@ import { AppError } from './lib/errors'
 export default function Home() {
   const { primaryWallet } = useDynamicContext();
   const currentView = useStore(state => state.currentView)
-  const connectNode = useTransactionStore(state => state.setWsUrl);
+  const { initializeWasm, startWatching, isWasmInitialized } = useTransactionStore();
 
   useEffect(() => {
-    const connectToNode = async () => {
+    const initializeWasmNode = async () => {
       if (!primaryWallet?.address) return;
 
       try {
-        await connectNode(primaryWallet.address);
+        if (!isWasmInitialized()) {
+          await initializeWasm(
+            'relay-multiaddr-here', // Replace with actual relay multiaddr
+            primaryWallet.address,
+            'Ethereum'
+          );
+          await startWatching();
+          console.log('WASM initialized and watching started');
+        }
       } catch (error) {
         if (error instanceof AppError) {
           console.error(error.message);
@@ -33,8 +41,8 @@ export default function Home() {
       }
     };
 
-    connectToNode();
-  }, [primaryWallet, connectNode]);
+    initializeWasmNode();
+  }, [primaryWallet, initializeWasm, startWatching, isWasmInitialized]);
 
   const renderView = () => {
     // Always show Wallets page regardless of connection state

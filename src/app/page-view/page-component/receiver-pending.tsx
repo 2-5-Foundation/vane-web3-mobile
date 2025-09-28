@@ -5,25 +5,20 @@ import { Button } from "@/components/ui/button"
 import { hexToBytes } from "viem"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore";
-import { TxStateMachine, TxStateMachineManager } from "vane_lib";
-import { useInitializeWebSocket } from "@/app/lib/helper";
+import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle } from "lucide-react";
 import { useState } from "react";
 
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
-  const vaneClient = useTransactionStore(state => state.vaneClient)
-  const recvPendingTransactions = useTransactionStore(state => state.recvTransactions)
+  const { recvTransactions, receiverConfirmTransaction, isWasmInitialized } = useTransactionStore()
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
-  
-  // Use the same WebSocket hook instead of calling watchPendingTxUpdates directly
-  const { isConnected } = useInitializeWebSocket();
 
   const handleApprove = async (transaction: TxStateMachine) => {
     try {
-      if (!isConnected || !vaneClient) {
-        toast.error('Please refresh the page.');
+      if (!isWasmInitialized()) {
+        toast.error('Connection not initialized. Please refresh the page.');
         return;
       }
 
@@ -36,7 +31,7 @@ export default function ReceiverPending() {
       const txManager = new TxStateMachineManager(transaction);
       txManager.setReceiverSignature(hexToBytes(signature as `0x${string}`));
       const updatedTx = txManager.getTx();
-      await vaneClient.receiverConfirm(updatedTx);
+      await receiverConfirmTransaction(updatedTx);
       
       // Mark this transaction as approved
       setApprovedTransactions(prev => new Set(prev).add(String(transaction.txNonce)));
@@ -50,7 +45,7 @@ export default function ReceiverPending() {
   }
 
   // Show connection status if not connected
-  if (!isConnected) {
+      if (!isWasmInitialized()) {
     return (
       <div className="space-y-3">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
@@ -66,7 +61,7 @@ export default function ReceiverPending() {
   }
 
   // Show empty state when no pending transactions
-  if (!recvPendingTransactions || recvPendingTransactions.length === 0) {
+  if (!recvTransactions || recvTransactions.length === 0) {
     return (
       <div className="space-y-3">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
@@ -89,7 +84,7 @@ export default function ReceiverPending() {
       {/* Connection Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {isConnected ? (
+          {isWasmInitialized() ? (
             <div className="flex items-center gap-1 text-green-400">
               <Wifi className="h-3 w-3" />
               <span className="text-xs">Connected</span>
@@ -102,12 +97,12 @@ export default function ReceiverPending() {
           )}
         </div>
         <span className="text-xs text-[#9EB2AD]">
-          {recvPendingTransactions.length} pending
+          {recvTransactions.length} pending
         </span>
       </div>
 
       {/* Pending Transactions */}
-      {recvPendingTransactions.map((transaction) => (
+      {recvTransactions.map((transaction) => (
         <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
             <div>
@@ -119,17 +114,17 @@ export default function ReceiverPending() {
               {/* Codeword Row */}
               <div>
                 <span className="text-xs text-[#9EB2AD]">Codeword</span>
-                <p className="font-mono text-xs text-white">{transaction.codeword}</p>
+                    <p className="font-mono text-xs text-white">{transaction.codeWord}</p>
               </div>
               {/* Network/Amount Row */}
               <div className="flex justify-between gap-4">
                 <div>
                   <span className="text-xs text-[#9EB2AD]">Network</span>
-                  <p className="text-xs text-white">{transaction.network}</p>
+                  <p className="text-xs text-white">Ethereum</p>
                 </div>
                 <div>
                   <span className="text-xs text-[#9EB2AD]">Amount</span>
-                  <p className="text-xs text-white">{transaction.amount} {transaction.token}</p>
+                  <p className="text-xs text-white">{transaction.amount} ETH</p>
                 </div>
               </div>
               {/* Status Row */}
@@ -156,10 +151,10 @@ export default function ReceiverPending() {
               <div className="mt-4 flex flex-col items-center">
                 <Button
                   onClick={() => handleApprove(transaction)}
-                  disabled={!isConnected || !primaryWallet}
+                  disabled={!isWasmInitialized() || !primaryWallet}
                   className="w-full h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium disabled:bg-gray-500 disabled:text-gray-300"
                 >
-                  {!isConnected ? 'Connecting...' : 
+                  {!isWasmInitialized() ? 'Connecting...' : 
                    !primaryWallet ? 'Connect Wallet' : 
                    'Confirm'}
                 </Button>

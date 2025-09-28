@@ -6,33 +6,20 @@ import { RefreshCw, AlertCircle } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
-import { TxStateMachine, TxStateMachineManager } from "vane_lib"
+import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main'
 import { bytesToHex, hexToBytes } from 'viem';
-import { useInitializeWebSocket } from "@/app/lib/helper";
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 
-// Define a type for transaction keys
-type TxKeyFields = {
-  receiverAddress: string;
-  amount: number | string | bigint;
-  token: string;
-  network: string;
-  codeword: string;
-  txNonce?: string | number;
-};
-
 // Helper to generate a unique key for a transaction
-const getTxKey = (tx: TxKeyFields) => {
+const getTxKey = (tx: TxStateMachine | { receiverAddress: string; amount: number; asset: string; codeword: string }) => {
   // Use txNonce if available (for real tx), else composite key
-  if (tx.txNonce !== undefined && tx.txNonce !== null) return `nonce_${tx.txNonce}`;
+  if ('txNonce' in tx && tx.txNonce !== undefined && tx.txNonce !== null) return `nonce_${tx.txNonce}`;
   return [
     tx.receiverAddress,
-    tx.amount,
-    tx.token,
-    tx.network,
-    tx.codeword
+    tx.amount.toString(),
+    'codeword' in tx ? tx.codeword : tx.codeWord
   ].join(":");
 };
 
@@ -93,13 +80,7 @@ const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }
 export default function SenderPending({
   initiatedTransactions = []
 }: {
-  initiatedTransactions?: Array<{
-    receiverAddress: string;
-    amount: number;
-    token: string;
-    network: string;
-    codeword: string;
-  }>;
+  initiatedTransactions?: TxStateMachine[];
 }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelConfirmArr, setShowCancelConfirmArr] = useState<boolean[]>([]);
@@ -107,9 +88,10 @@ export default function SenderPending({
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
   const removeTransaction = useTransactionStore(state => state.removeTransaction)
   const addTransaction = useTransactionStore(state => state.addTransaction)
-  const fetchPendingTxUpdates = useTransactionStore(state => state.fetchPendingTxUpdates)
+  const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
   const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
-  const vaneClient = useTransactionStore(state => state.vaneClient)
+  const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
+  const revertTransaction = useTransactionStore(state => state.revertTransaction)
   // ------------- Wallet ---------------------------------------
   const {primaryWallet}  = useDynamicContext()
   
@@ -136,7 +118,7 @@ export default function SenderPending({
   }, [senderPendingTransactions, showSuccessComponents]);
 
   const handleRevert = async (transaction) => {
-    await vaneClient?.revertTransaction(transaction);
+    await revertTransaction(transaction, "User requested revert");
     removeTransaction(transaction.txNonce);
     toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`);
   }
@@ -145,13 +127,13 @@ export default function SenderPending({
     try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
-      const signature = await primaryWallet?.signMessage(bytesToHex(transaction.callPayload))
+      const signature = await primaryWallet?.signMessage(bytesToHex(transaction.callPayload![0]))
       const txManager = new TxStateMachineManager(transaction);
-      console.log(`signaytyre:${signature}`)
+      console.log(`signature:${signature}`)
       txManager.setSignedCallPayload(hexToBytes(signature as `0x${string}`));
       const updatedTransaction = txManager.getTx();
 
-      await vaneClient?.senderConfirm(updatedTransaction)
+      await senderConfirmTransaction(updatedTransaction)
       
       // THIS WAS FOR SIMULATION ONLY
       // Create success transaction with TxSubmissionPassed status
@@ -177,8 +159,8 @@ export default function SenderPending({
   const handleRefresh = async () => {
     setIsRefreshing(true)
     
-    // Call fetchPendingTxUpdates to get latest data
-    fetchPendingTxUpdates()
+    // Call fetchPendingUpdates to get latest data
+    fetchPendingUpdates()
     
     // Run for 3 seconds
     setTimeout(() => {
@@ -195,8 +177,7 @@ export default function SenderPending({
     }, 3000)
   }
 
-  // UseEffect hook
-  useInitializeWebSocket();
+  // WASM is initialized in transfer-form.tsx when wallet connects
 
   const handleShowActionConfirm = (txKey: string, show: boolean) => {
     setShowActionConfirmMap(prev => ({ ...prev, [txKey]: show }));
@@ -665,10 +646,7 @@ export default function SenderPending({
   const pendingInitiatedTransactions = showInitiatedTransactions ? initiatedTransactions.filter(initiatedTx => 
     !senderPendingTransactions?.some(realTx => 
       realTx.receiverAddress === initiatedTx.receiverAddress &&
-      realTx.amount.toString() === initiatedTx.amount.toString() &&
-      realTx.token === initiatedTx.token &&
-      realTx.network === initiatedTx.network &&
-      realTx.codeword === initiatedTx.codeword
+      realTx.amount.toString() === initiatedTx.amount.toString()
     )
   ) : [];
 
@@ -692,21 +670,26 @@ export default function SenderPending({
         return (
           <Card key={`initiated-${index}`} className="bg-[#1a2628] border-white/10 flex flex-col justify-between h-full">
             <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
-              <div>
-                {/* Address Row */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">To address</span>
-                    <p className="font-mono text-xs text-white break-all">{initiatedTx.receiverAddress}</p>
-                  </div>
+              <div className="space-y-3">
+                {/* Sender Address Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">From address</span>
+                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{initiatedTx.senderAddress}</p>
                 </div>
-                {/* Codeword Row with Refresh Button */}
-                <div className="flex items-center">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">Codeword</span>
-                    <p className="font-mono text-xs text-white">{initiatedTx.codeword}</p>
+                
+                {/* Receiver Address Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">To address</span>
+                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{initiatedTx.receiverAddress}</p>
+                </div>
+                
+                {/* Codeword Row with Timer and Refresh Button */}
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
+                    <p className="font-mono text-xs text-white bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20 mt-1">{initiatedTx.codeWord}</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-auto">
+                  <div className="flex items-center gap-2 ml-3">
                     <TxTimer txKey={getTxKey(initiatedTx)} />
                     <Button
                       variant="ghost"
@@ -720,15 +703,28 @@ export default function SenderPending({
                     </Button>
                   </div>
                 </div>
-                {/* Network/Amount Row */}
-                <div className="flex justify-between gap-4">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">Network</span>
-                    <p className="text-xs text-white">{initiatedTx.network}</p>
+                
+                {/* Networks Row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
+                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
+                      <span className="text-xs text-white font-medium">{initiatedTx.senderAddressNetwork}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">Amount</span>
-                    <p className="text-xs text-white">{initiatedTx.amount} {initiatedTx.token}</p>
+                  <div className="space-y-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
+                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
+                      <span className="text-xs text-white font-medium">{initiatedTx.receiverAddressNetwork}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Amount Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
+                  <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
+                    <span className="text-sm text-white font-semibold">{initiatedTx.amount.toString()} {initiatedTx.token.toString()}</span>
                   </div>
                 </div>
               </div>
@@ -785,21 +781,26 @@ export default function SenderPending({
           <Card key={txKey} className="bg-[#1a2628] border-white/10 relative">
             <CardContent className="p-3 space-y-3">
               {/* Transaction Details */}
-              <div className="space-y-2">
-                {/* Address Row */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">To address</span>
-                    <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
-                  </div>
+              <div className="space-y-3">
+                {/* Sender Address Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">From address</span>
+                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{transaction.senderAddress}</p>
                 </div>
-                {/* Codeword Row with Refresh Button */}
-                <div className="flex items-center">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">Codeword</span>
-                    <p className="font-mono text-xs text-white">{transaction.codeword}</p>
+                
+                {/* Receiver Address Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">To address</span>
+                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{transaction.receiverAddress}</p>
+                </div>
+                
+                {/* Codeword Row with Timer and Refresh Button */}
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
+                    <p className="font-mono text-xs text-white bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20 mt-1">{transaction.codeWord}</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-auto">
+                  <div className="flex items-center gap-2 ml-3">
                     {statusType !== 'TxSubmissionPassed' && <TxTimer txKey={getTxKey(transaction)} />}
                     <Button
                       variant="ghost"
@@ -813,15 +814,28 @@ export default function SenderPending({
                     </Button>
                   </div>
                 </div>
-                {/* Network/Amount Row */}
-                <div className="flex justify-between gap-4">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">Network</span>
-                    <p className="text-xs text-white">{transaction.network}</p>
+                
+                {/* Networks Row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
+                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
+                      <span className="text-xs text-white font-medium">Ethereum</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs text-[#9EB2AD]">Amount</span>
-                    <p className="text-xs text-white">{transaction.amount} {transaction.token}</p>
+                  <div className="space-y-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
+                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
+                      <span className="text-xs text-white font-medium">Ethereum</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Amount Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
+                  <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
+                    <span className="text-sm text-white font-semibold">{transaction.amount.toString()} {transaction.token.toString()}</span>
                   </div>
                 </div>
               </div>

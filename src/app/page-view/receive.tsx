@@ -8,18 +8,22 @@ import { useTransactionStore } from "../lib/useStore"
 
 export default function Receive() {
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const fetchPendingTxUpdates = useTransactionStore(state => state.fetchPendingTxUpdates)
-  const recvPendingTransactions = useTransactionStore(state => state.recvTransactions)
+  const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
+  const recvTransactions = useTransactionStore(state => state.recvTransactions)
 
-
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true)
-    fetchPendingTxUpdates()   
-    console.log("recvPendingTransactions", recvPendingTransactions)
-    // Reset the animation after 1 second
-    setTimeout(() => {
-      setIsRefreshing(false)
-    }, 1000)
+    try {
+      await fetchPendingUpdates()
+      console.log("recvTransactions", recvTransactions)
+    } catch (error) {
+      console.error('Failed to fetch pending updates:', error)
+    } finally {
+      // Reset the animation after 1 second
+      setTimeout(() => {
+        setIsRefreshing(false)
+      }, 1000)
+    }
   }
 
   return (
