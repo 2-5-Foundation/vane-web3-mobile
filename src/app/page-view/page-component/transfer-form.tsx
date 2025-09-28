@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, Wifi, WifiOff } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import SenderPending from "./sender-pending"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useInitializeWebSocket } from "@/app/lib/helper";
@@ -38,45 +38,6 @@ export default function TransferForm() {
 
   // Initialize WebSocket and get connection status
   const { isConnected } = useInitializeWebSocket();
-  // Registration state
-  const [isRegistered, setIsRegistered] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('user-registered') === 'true';
-    }
-    return false;
-  });
-  const [regCountdown, setRegCountdown] = useState(98);
-  const regIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Registration timer effect
-  useEffect(() => {
-    if (isRegistered || isConnected || !primaryWallet) return;
-    // Only run timer if not registered, not connected, and wallet is connected
-    regIntervalRef.current = setInterval(() => {
-      setRegCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(regIntervalRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (regIntervalRef.current) clearInterval(regIntervalRef.current);
-    };
-  }, [isRegistered, isConnected, primaryWallet]);
-
-  // When websocket connects, set registration
-  useEffect(() => {
-    if (!isRegistered && isConnected) {
-      setIsRegistered(true);
-      localStorage.setItem('user-registered', 'true');
-    }
-  }, [isConnected, isRegistered]);
-
-  // Format timer
-  const regMM = String(Math.floor(regCountdown / 60)).padStart(2, '0');
-  const regSS = String(regCountdown % 60).padStart(2, '0');
 
   useEffect(() => {
     if (formData.amount > 0 && formData.recipient.trim() !== '') {
@@ -221,122 +182,126 @@ export default function TransferForm() {
 
   return (
     <div className="flex flex-col h-full">
+      <style>{`
+        * {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+        }
+        .glass-pane {
+          background: rgba(37, 54, 57, 0.7);
+          backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .btn-primary {
+          background: #3d5a5e;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #f1f5f9;
+          font-weight: 500;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          transition: all 0.15s ease;
+          font-size: 13px;
+        }
+        .btn-primary:hover {
+          background: #4a6569;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+        }
+        .btn-secondary {
+          background: #253639;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #cbd5e1;
+          font-weight: 500;
+          transition: all 0.15s ease;
+          font-size: 13px;
+        }
+        .btn-secondary:hover {
+          background: #2d4044;
+          border-color: rgba(255, 255, 255, 0.12);
+        }
+      `}</style>
       {/* Fixed Transfer Form */}
       <div className="flex-none">
-        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+        <Card className="bg-[#1a2628] border-white/10">
           <CardContent className="pt-2 px-3 space-y-3">
-            {/* Connection Status Indicator */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                {isConnected ? (
-                  <div className="flex items-center gap-1 text-green-400">
-                    <Wifi className="h-3 w-3" />
-                    <span className="text-xs">Connected</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 text-yellow-400">
-                    <WifiOff className="h-3 w-3" />
-                    <span className="text-xs">Connecting...</span>
-                  </div>
-                )}
-              </div>
-              {/* Registration logic for status row */}
-              {!isConnected && !isRegistered && (
-                <span className="text-xs text-[#9EB2AD] flex items-center gap-2">
-                  Please wait
-                  <span className="ml-2 px-2 py-0.5 rounded bg-[#1A2A2A] text-[#7EDFCD] text-xs font-mono min-w-[44px] text-center">
-                    {regMM}:{regSS}
-                  </span>
-                </span>
-              )}
-              {!isConnected && isRegistered && (
-                <span className="text-xs text-[#9EB2AD]">Please wait</span>
-              )}
-            </div>
 
             {/* Recipient Field */}
-            <div className="space-y-1">
-              <Label className="text-sm text-[#9EB2AD]">Recipient</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-400 font-medium">Receiver Address</Label>
               <Input 
                 name="recipient"
                 value={formData.recipient}
                 onChange={handleTransferFormChange}
-                placeholder="0x.." 
-                className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] text-xs border-t-0 border-x-0 rounded-t-none font-mono"
+                placeholder="0x..." 
+                className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
               />
             </div>
 
             {/* Network Field */}
-            <div className="space-y-1">
-              <Label className="text-sm text-[#9EB2AD]">Network</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-400 font-medium">Receiver Network</Label>
               <Select 
                 value={formData.network}
                 onValueChange={handleNetworkChange}
               >
-                <SelectTrigger className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] text-sm font-mono">
+                <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
                   <SelectValue placeholder="Ethereum" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0B1B1C] border-[#4A5853]/20">
-                  <SelectItem value="Ethereum" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">Ethereum</SelectItem>
-                  <SelectItem value="Polygon" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">Polygon</SelectItem>
-                  <SelectItem value="Base" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">Base</SelectItem>
-                  <SelectItem value="Arbitrum" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">Arbitrum</SelectItem>
-                  <SelectItem value="Optimism" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">Optimism</SelectItem>
+                <SelectContent className="bg-[#253639] border-white/10">
+                  <SelectItem value="Ethereum" className="text-white focus:bg-white/5">Ethereum</SelectItem>
+                  <SelectItem value="Polygon" className="text-white focus:bg-white/5">Polygon</SelectItem>
+                  <SelectItem value="Base" className="text-white focus:bg-white/5">Base</SelectItem>
+                  <SelectItem value="Arbitrum" className="text-white focus:bg-white/5">Arbitrum</SelectItem>
+                  <SelectItem value="Optimism" className="text-white focus:bg-white/5">Optimism</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Amount and Asset Fields */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-sm text-[#9EB2AD]">Amount</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-400 font-medium">Amount</Label>
                 <Input 
                   name="amount"
                   type="number"
                   value={formData.amount === 0 ? '' : formData.amount}
                   onChange={handleTransferFormChange}
                   placeholder="0.00"
-                  className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] border-t-0 border-x-0 rounded-t-none font-mono"
+                  className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-sm text-[#9EB2AD]">Asset</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-400 font-medium">Asset</Label>
                 <Select 
                   value={formData.asset}
                   onValueChange={handleAssetChange}
                 >
-                  <SelectTrigger className="h-8 bg-transparent border-[#4A5853]/20 text-[#FFFFFF] border-t-0 border-x-0 rounded-t-none font-mono">
+                  <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
                     <SelectValue placeholder="ETH" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#0B1B1C] border-[#4A5853]/20">
-                    <SelectItem value="Eth" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">ETH</SelectItem>
-                    <SelectItem value="UsdcEth" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">USDC</SelectItem>
-                    <SelectItem value="UsdtEth" className="text-[#FFFFFF] focus:bg-[#7EDFCD]/5">USDT</SelectItem>
+                  <SelectContent className="bg-[#253639] border-white/10">
+                    <SelectItem value="Eth" className="text-white focus:bg-white/5">ETH</SelectItem>
+                    <SelectItem value="UsdcEth" className="text-white focus:bg-white/5">USDC</SelectItem>
+                    <SelectItem value="UsdtEth" className="text-white focus:bg-white/5">USDT</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             {/* Warning Message */}
-            <div className="flex items-center gap-2 border border-[#424BDF] text-[#A0A6F5] bg-[#282A3D] p-2 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-[#424BDF]" />
-              <p className="text-xs">Secure, requires confirmation from the receiver</p>
+            <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-blue-500/20">
+              <AlertCircle className="w-3 h-3 flex-shrink-0 text-blue-400" />
+              <span className="text-blue-300 font-medium">Secure, requires confirmation from the receiver</span>
             </div>
 
             {/* Submit Button */}
             <Button 
-              className="w-full h-10 bg-[#7EDFCD] text-[#0B1B1C] hover:bg-[#7EDFCD]/90 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed"
+              className="btn-primary w-full h-10 rounded-lg disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed"
               onClick={submitInitiateTx}
               disabled={
-                (!isRegistered && !isConnected) || // registration in progress
                 isFormDisabled ||
                 !formData.recipient ||
                 !formData.amount
               }
             >
-              {!isRegistered && !isConnected ? 'One time activation process'
-                : !isConnected ? 'Connecting...'
-                : !primaryWallet ? 'Connect Wallet'
+              {!primaryWallet ? 'Connect Wallet'
                 : 'Initiate transfer'}
             </Button>
           </CardContent>

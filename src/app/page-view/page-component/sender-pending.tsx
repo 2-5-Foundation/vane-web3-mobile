@@ -6,7 +6,7 @@ import { RefreshCw, AlertCircle } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
-import { TxStateMachineManager } from "vane_lib"
+import { TxStateMachine, TxStateMachineManager } from "vane_lib"
 import { bytesToHex, hexToBytes } from 'viem';
 import { useInitializeWebSocket } from "@/app/lib/helper";
 import { toast } from "sonner"
@@ -141,7 +141,7 @@ export default function SenderPending({
     toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`);
   }
 
-  const handleConfirm = async(transaction) => {
+  const handleConfirm = async(transaction:TxStateMachine) => {
     try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
@@ -153,6 +153,7 @@ export default function SenderPending({
 
       await vaneClient?.senderConfirm(updatedTransaction)
       
+      // THIS WAS FOR SIMULATION ONLY
       // Create success transaction with TxSubmissionPassed status
       const successTxManager = new TxStateMachineManager(updatedTransaction);
       successTxManager.updateStatus({ type: 'TxSubmissionPassed', data: { hash: new Uint8Array(32) } });
@@ -314,7 +315,7 @@ export default function SenderPending({
             </Button>
             {/* Overlay for Confirm */}
             {showActionConfirmMap[transaction.txNonce] && (
-              <div className="mt-4 w-full bg-[#0D1B1B] border border-[#4A5853]/20 rounded-xl p-4">
+              <div className="mt-4 w-full bg-[#1a2628] border border-white/10 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="h-5 w-5 text-[#7EDFCD]" />
                   <span className="text-white text-base">Receiver confirmed</span>
@@ -350,7 +351,7 @@ export default function SenderPending({
                   handleShowActionConfirm(`revert-${transaction.txNonce}`, !showActionConfirmMap[`revert-${transaction.txNonce}`]);
                 }}
                 variant="outline"
-                className="flex-1 h-10 text-white transition-all duration-200 bg-transparent border-red-500/20 text-white hover:bg-red-500/10 text-xs font-medium"
+                className="flex-1 h-10 text-white transition-all duration-200 bg-transparent border-red-500/20 hover:bg-red-500/10 text-xs font-medium"
               >
                 Revert
               </Button>
@@ -365,7 +366,7 @@ export default function SenderPending({
               </Button>
             </div>
             {showActionConfirmMap[transaction.txNonce] && (
-              <div className="w-full mt-2 pt-5 space-y-3 bg-[#0D1B1B] border-[#4A5853]/20 rounded-lg">
+              <div className="w-full mt-2 pt-5 space-y-3 bg-[#1a2628] border-white/10 rounded-lg">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-green-400" />
@@ -382,7 +383,7 @@ export default function SenderPending({
               </div>
             )}
             {showActionConfirmMap[`revert-${transaction.txNonce}`] && (
-              <div className="w-full mt-2 p-3 space-y-3 bg-[#0D1B1B] border-[#4A5853]/20 rounded-lg">
+              <div className="w-full mt-2 p-3 space-y-3 bg-[#1a2628] border-white/10 rounded-lg">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-red-400" />
@@ -421,7 +422,7 @@ export default function SenderPending({
               Cancel Transaction
             </Button>
             {showActionConfirmMap[transaction.txNonce] && (
-              <Alert className="mt-4 bg-[#0D1B1B] border-[#4A5853]/20 rounded-xl shadow flex flex-col items-start p-6 w-full">
+              <Alert className="mt-4 bg-[#1a2628] border-white/10 rounded-xl shadow flex flex-col items-start p-6 w-full">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="h-5 w-5 text-red-400" />
                   <span className="text-red-400 text-base">Cancel Transaction?</span>
@@ -495,7 +496,7 @@ export default function SenderPending({
               Revert
             </Button>
             {showActionConfirmMap[transaction.txNonce] && (
-              <Alert className="mt-4 bg-[#0D1B1B] border-[#4A5853]/20 rounded-xl shadow flex flex-col items-start p-6 w-full">
+              <Alert className="mt-4 bg-[#1a2628] border-white/10 rounded-xl shadow flex flex-col items-start p-6 w-full">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="h-5 w-5 text-red-400" />
                   <span className="text-red-400 text-base">Revert Transaction?</span>
@@ -543,7 +544,7 @@ export default function SenderPending({
             Revert
           </Button>
         ) : (
-          <Alert className="mt-4 bg-[#0D1B1B] border-[#4A5853]/20 rounded-xl shadow flex flex-col items-start p-6 w-full">
+          <Alert className="mt-4 bg-[#1a2628] border-white/10 rounded-xl shadow flex flex-col items-start p-6 w-full">
             <div className="flex items-center gap-2 mb-2">
               <AlertCircle className="h-5 w-5 text-red-400" />
               <span className="text-red-400 text-base">Revert Transaction?</span>
@@ -689,7 +690,7 @@ export default function SenderPending({
       {pendingInitiatedTransactions.map((initiatedTx, index) => {
         const statusInfo = getStatusInfo('Genesis'); // Default status for initiated transactions
         return (
-          <Card key={`initiated-${index}`} className="bg-[#0D1B1B] border-[#4A5853]/20 flex flex-col justify-between h-full">
+          <Card key={`initiated-${index}`} className="bg-[#1a2628] border-white/10 flex flex-col justify-between h-full">
             <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
               <div>
                 {/* Address Row */}
@@ -781,7 +782,7 @@ export default function SenderPending({
         const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
         const statusInfo = getStatusInfo(statusType);
         return (
-          <Card key={txKey} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
+          <Card key={txKey} className="bg-[#1a2628] border-white/10 relative">
             <CardContent className="p-3 space-y-3">
               {/* Transaction Details */}
               <div className="space-y-2">

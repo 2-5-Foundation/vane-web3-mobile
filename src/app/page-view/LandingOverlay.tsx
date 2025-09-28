@@ -51,7 +51,7 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
       </button>
       {/* Content */}
       <div className="w-full max-w-md mx-auto px-4 flex flex-col items-center pb-32 pt-[10vh] relative z-10">
-        <h2 className="relative text-xl sm:text-1xl md:text-3xl font-sans font-bold tracking-wider text-center mb-8 uppercase">
+        <h2 className="relative text-2xl sm:text-3xl md:text-4xl font-sans font-bold tracking-wider text-center mb-8 uppercase max-w-xs mx-auto leading-tight">
             <span className="bg-gradient-to-r from-[#7EDFCD] to-[#5BC4B0] bg-clip-text text-transparent drop-shadow-lg">
                 we are protecting you from
             </span>
