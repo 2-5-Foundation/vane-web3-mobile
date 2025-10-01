@@ -8,6 +8,7 @@
     "jsx": "react-jsx",
     "allowJs": true,
 
+    
     // Add these options
     "declaration": true,
     "outDir": "./dist",
@@ -21,7 +22,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
-    // Maximum permissive type checking - allow any types everywhere
+    // Relaxed type checking - allow any types
     "strict": false,
     "noImplicitAny": false,
     "strictNullChecks": false,
@@ -31,26 +32,15 @@
     "noImplicitReturns": false,
     "noImplicitThis": false,
     "alwaysStrict": false,
-    "noImplicitOverride": false,
-    "useUnknownInCatchVariables": false,
     
     "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": false,
+    "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false,
-    "noPropertyAccessFromIndexSignature": false,
 
-    // Disable all unused and strict warnings
+    // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "allowUnusedLabels": true,
-    "allowUnreachableCode": true,
-    
-    // Allow importing non-TS files
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": false
+    "noPropertyAccessFromIndexSignature": false
   },
   "exclude": ["dist", "node_modules"]
 }

@@ -709,13 +709,13 @@ export default function SenderPending({
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
                     <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">{initiatedTx.senderAddressNetwork}</span>
+                      <span className="text-xs text-white font-medium">{initiatedTx.senderAddressNetwork || ''}</span>
                     </div>
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
                     <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">{initiatedTx.receiverAddressNetwork}</span>
+                      <span className="text-xs text-white font-medium">Ethereum</span>
                     </div>
                   </div>
                 </div>
@@ -820,7 +820,7 @@ export default function SenderPending({
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
                     <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">Ethereum</span>
+                      <span className="text-xs text-white font-medium">{transaction.senderAddressNetwork || ''}</span>
                     </div>
                   </div>
                   <div className="space-y-1">

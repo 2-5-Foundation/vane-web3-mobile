@@ -3,27 +3,46 @@
 import React, { useState, useEffect } from "react";
 import { User, Shield, TrendingUp, DollarSign, CreditCard } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTransactionStore } from "../lib/useStore";
+import { NodeConnectionStatus, StorageExport, StorageExportManager } from "@/lib/vane_lib/main";
 
 export default function Profile() {
+  const { getNodeConnectionStatus, exportStorageData } = useTransactionStore();
+  const [nodeConnectionStatus, setNodeConnectionStatus] = useState<NodeConnectionStatus | null>(null);
+  const [storageExport, setStorageExport] = useState<StorageExport | null>(null);
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [subscriptionType, setSubscriptionType] = useState('monthly');
 
   useEffect(() => {
     loadProfileData();
-  }, []);
+    getNodeConnectionStatus().then((status) => setNodeConnectionStatus(status));
+    exportStorageData().then((storage) => setStorageExport(storage));
+  }, [exportStorageData, getNodeConnectionStatus]);
+
+  // Reload profile data when storage export changes
+  useEffect(() => {
+    if (storageExport) {
+      loadProfileData();
+    }
+  }, [storageExport]);
 
   const loadProfileData = async () => {
     setIsLoading(true);
     try {
-      // Mock data for now - replace with actual API calls
-      const mockStats = {
-        protected_amount: 127.5,
-        largest_recovery: 45,
-        total_transactions: 12,
-        total_volume: 1250.75
-      };
-      setStats(mockStats);
+      // Use storage export data if available
+      if (storageExport) {
+        const storageManager = new StorageExportManager(storageExport);
+        const metrics = storageManager.getSummary();
+        
+        const realStats = {
+          protected_amount: metrics.totalValueSuccess,
+          largest_recovery: metrics.totalValueSuccess, // You might want to track largest single recovery
+          total_transactions: metrics.totalTransactions,
+          total_volume: metrics.totalValueSuccess + metrics.totalValueFailed
+        };
+        setStats(realStats);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -49,6 +68,14 @@ export default function Profile() {
         <div>
           <h2 className="text-sm font-medium text-white">Anonymous User</h2>
           <p className="text-xs text-gray-400 font-medium">Protected by VaneWeb3</p>
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <div className={`w-2 h-2 rounded-full ${
+              nodeConnectionStatus?.relay_connected ? 'bg-green-500' : 'bg-red-500'
+            }`}></div>
+            <p className="text-xs text-gray-400 font-medium">
+              {nodeConnectionStatus?.relay_connected ? 'Connected' : 'Disconnected'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -123,14 +150,17 @@ export default function Profile() {
                 Switch
               </button>
             </div>
-            <div className="mt-1">
-              <p className="text-[9px] text-gray-500">
-                {subscriptionType === 'monthly' 
-                  ? 'Unlimited transactions • $9.99/month' 
-                  : 'Pay per transaction • $0.50 per transfer'
-                }
-              </p>
-            </div>
+              <div className="mt-1">
+                <p className="text-[9px] text-gray-500">
+                  {subscriptionType === 'monthly' 
+                    ? '$15/month' 
+                    : '$0.50 per protected transaction'
+                  }
+                </p>
+                <p className="text-[9px] text-gray-500 mt-0.5">
+                  Current plan: Free
+                </p>
+              </div>
           </motion.div>
 
         </>

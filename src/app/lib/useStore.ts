@@ -32,8 +32,12 @@ import {
   fetchPendingTxUpdates,
   watchTxUpdates,
   exportStorage,
+  StorageExport,
+  getNodeConnection,
   isInitialized,
-  LogLevel
+  LogLevel,
+  NodeConnectionStatus,
+  
 } from '@/lib/vane_lib/main'
 
 
@@ -45,6 +49,7 @@ export interface TransferFormData {
   amount: number; 
   asset: string;
   network: string;
+  tokenAddress?: string;
 }
 
 export interface UserProfile {
@@ -90,9 +95,10 @@ export interface TransactionState {
   receiverConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
   revertTransaction: (tx: TxStateMachine, reason?: string) => Promise<void>;
   fetchPendingUpdates: () => Promise<TxStateMachine[]>;
-  exportStorageData: () => Promise<void>;
+  exportStorageData: () => Promise<StorageExport>;
   loadStorageData: () => unknown | null;
-  
+  getNodeConnectionStatus: () => Promise<NodeConnectionStatus>;
+
   // Utility methods
   isTransactionReverted: (tx: TxStateMachine) => boolean;
   isTransactionCompleted: (tx: TxStateMachine) => boolean;
@@ -316,6 +322,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw error;
     }
   },
+  getNodeConnectionStatus: async (): Promise<NodeConnectionStatus> => {
+    return getNodeConnection();
+  },
 
   senderConfirmTransaction: async (tx: TxStateMachine) => {
     if (!isInitialized()) {
@@ -381,7 +390,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  exportStorageData: async () => {
+  exportStorageData: async (): Promise<StorageExport> => {
     if (!isInitialized()) {
       throw new Error('WASM node not initialized');
     }
@@ -401,6 +410,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         }));
         console.log('Storage data saved to localStorage');
       }
+      
+      return storage;
     } catch (error) {
       console.error('Error exporting and saving storage data:', error);
       throw error;

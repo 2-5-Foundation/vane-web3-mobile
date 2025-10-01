@@ -174,7 +174,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Landing Overlay (self-contained) */}
-      <LandingOverlay
+      {/* <LandingOverlay
         show={showLanding}
         onClose={() => {
           setShowLanding(false)
@@ -184,7 +184,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
           }
         }}
         fetchedTweets={fetchedTweets}
-      />
+      /> */}
 
       {/* Main content */}
       <main className="container pt-0 md:ml-[200px]">

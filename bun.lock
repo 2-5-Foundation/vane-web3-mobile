@@ -4,6 +4,7 @@
     "": {
       "name": "vaneweb3",
       "dependencies": {
+        "@dynamic-labs-sdk/client": "^0.0.1-alpha.1",
         "@dynamic-labs/bitcoin": "^4.8.2",
         "@dynamic-labs/ethereum": "^4.8.2",
         "@dynamic-labs/sdk-react-core": "^4.8.2",
@@ -302,6 +303,8 @@
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
+    "@dynamic-labs-sdk/client": ["@dynamic-labs-sdk/client@0.0.1-alpha.1", "", { "dependencies": { "@dynamic-labs/sdk-api-core": "0.0.630", "eventemitter3": "^5.0.1" } }, "sha512-BrSmSgQD1legE/oJwz28U5dw6xBWVF1dTIrTx4/bQQ/O/IIM21AS3fJCEGVaONrjRYFFDCT3ofSHZjxdJuUpPg=="],
+
     "@dynamic-labs/assert-package-version": ["@dynamic-labs/assert-package-version@4.8.2", "", { "dependencies": { "@dynamic-labs/logger": "4.8.2" } }, "sha512-0T5T9UhtvPYYzrKtJXZkLGnk4KUIzIqZcb0IrQdH/1ppx6dwzqKIGRfTOOvdAbgUXOXDnDL5XhaS/6U3PGfK+g=="],
 
     "@dynamic-labs/bitcoin": ["@dynamic-labs/bitcoin@4.8.2", "", { "dependencies": { "@btckit/types": "0.0.19", "@dynamic-labs/assert-package-version": "4.8.2", "@dynamic-labs/sdk-api-core": "0.0.633", "@dynamic-labs/types": "4.8.2", "@dynamic-labs/utils": "4.8.2", "@dynamic-labs/wallet-book": "4.8.2", "@dynamic-labs/wallet-connector-core": "4.8.2", "@wallet-standard/app": "1.0.1", "@wallet-standard/base": "1.0.1", "bitcoinjs-lib": "6.1.5", "eventemitter3": "5.0.1", "jsontokens": "4.0.1", "sats-connect": "3.0.1" } }, "sha512-bTlHeEw4nOmttCVR9Z7SesAyxwZfOp2bCCSPMhOr7dLGSk4HE0r4rqafeqL940GaO26pqoZvkkighXz/u85cRQ=="],
@@ -324,7 +327,7 @@
 
     "@dynamic-labs/rpc-providers": ["@dynamic-labs/rpc-providers@4.8.2", "", { "dependencies": { "@dynamic-labs/assert-package-version": "4.8.2", "@dynamic-labs/types": "4.8.2" } }, "sha512-xvnJJHm/C1bq1Dl41D4RaNHpmAlNcXZbAxq5pnmF3vQv6UmpZ8NRTgrtUbTfdJQqhOKYormcjhaz4dx0Yz0OdA=="],
 
-    "@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+    "@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.630", "", {}, "sha512-5+gHeFSJcRYSrvDxS/YIxT8esV/kqLx938JQ4xmXIME3RtpEj536sWi0SXu+n33KKAGosSKlMDtJjnlFWNreGg=="],
 
     "@dynamic-labs/sdk-react-core": ["@dynamic-labs/sdk-react-core@4.8.2", "", { "dependencies": { "@dynamic-labs/assert-package-version": "4.8.2", "@dynamic-labs/iconic": "4.8.2", "@dynamic-labs/logger": "4.8.2", "@dynamic-labs/multi-wallet": "4.8.2", "@dynamic-labs/rpc-providers": "4.8.2", "@dynamic-labs/sdk-api-core": "0.0.633", "@dynamic-labs/store": "4.8.2", "@dynamic-labs/types": "4.8.2", "@dynamic-labs/utils": "4.8.2", "@dynamic-labs/wallet-book": "4.8.2", "@dynamic-labs/wallet-connector-core": "4.8.2", "@hcaptcha/react-hcaptcha": "1.4.4", "@thumbmarkjs/thumbmarkjs": "0.16.0", "bs58": "5.0.0", "country-list": "2.3.0", "eventemitter3": "5.0.1", "formik": "2.2.9", "i18next": "23.4.6", "qrcode": "1.5.1", "react-focus-lock": "2.9.2", "react-i18next": "13.5.0", "react-international-phone": "4.2.5", "yup": "0.32.11" }, "peerDependencies": { "react": "^18.0.0", "react-dom": "^18.0.0" } }, "sha512-2CpodfCvHGPLjFjuqlKzd94G9F6ufCNaH5dE1YF5cVfyPbywyHYlL5JaDgHRhfR5EgJQpbn53RuazPc5OwBQWA=="],
 
@@ -2644,13 +2647,37 @@
 
     "@cspotcode/source-map-support/@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.9", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.0.3", "@jridgewell/sourcemap-codec": "^1.4.10" } }, "sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ=="],
 
+    "@dynamic-labs/bitcoin/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/embedded-wallet/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/embedded-wallet-evm/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/embedded-wallet-solana/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
     "@dynamic-labs/embedded-wallet-solana/react-dom": ["react-dom@18.2.0", "", { "dependencies": { "loose-envify": "^1.1.0", "scheduler": "^0.23.0" }, "peerDependencies": { "react": "^18.2.0" } }, "sha512-6IMTriUmvsjHUjNtEDudZfuDQUoWXVxKHhlEGSk81n4YFS+r/Kl99wXiwlVXtPBtJenozv2P+hxDsw9eA7Xo6g=="],
 
     "@dynamic-labs/embedded-wallet-solana/viem": ["viem@2.21.57", "", { "dependencies": { "@noble/curves": "1.7.0", "@noble/hashes": "1.6.1", "@scure/bip32": "1.6.0", "@scure/bip39": "1.5.0", "abitype": "1.0.7", "isows": "1.0.6", "ox": "0.1.2", "webauthn-p256": "0.0.10", "ws": "8.18.0" }, "peerDependencies": { "typescript": ">=5.0.4" }, "optionalPeers": ["typescript"] }, "sha512-Mw4f4Dw0+Y/wSHdynVmP4uh+Cw15HEoj8BOKvKH5nGA6oFZYRxSy9Ruu7ZG8jexeAVCZ57aIuXb0gNg6Vb1x0g=="],
 
+    "@dynamic-labs/ethereum-core/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
     "@dynamic-labs/iconic/sharp": ["sharp@0.33.5", "", { "dependencies": { "color": "^4.2.3", "detect-libc": "^2.0.3", "semver": "^7.6.3" }, "optionalDependencies": { "@img/sharp-darwin-arm64": "0.33.5", "@img/sharp-darwin-x64": "0.33.5", "@img/sharp-libvips-darwin-arm64": "1.0.4", "@img/sharp-libvips-darwin-x64": "1.0.4", "@img/sharp-libvips-linux-arm": "1.0.5", "@img/sharp-libvips-linux-arm64": "1.0.4", "@img/sharp-libvips-linux-s390x": "1.0.4", "@img/sharp-libvips-linux-x64": "1.0.4", "@img/sharp-libvips-linuxmusl-arm64": "1.0.4", "@img/sharp-libvips-linuxmusl-x64": "1.0.4", "@img/sharp-linux-arm": "0.33.5", "@img/sharp-linux-arm64": "0.33.5", "@img/sharp-linux-s390x": "0.33.5", "@img/sharp-linux-x64": "0.33.5", "@img/sharp-linuxmusl-arm64": "0.33.5", "@img/sharp-linuxmusl-x64": "0.33.5", "@img/sharp-wasm32": "0.33.5", "@img/sharp-win32-ia32": "0.33.5", "@img/sharp-win32-x64": "0.33.5" } }, "sha512-haPVm1EkS9pgvHrQ/F3Xy+hgcuMV0Wm9vfIBSiwZ05k+xgb0PkBQpGsAA/oWdDobNaZTH5ppvHtzCFbnSEwHVw=="],
 
+    "@dynamic-labs/multi-wallet/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
     "@dynamic-labs/multi-wallet/tslib": ["tslib@2.4.1", "", {}, "sha512-tGyy4dAjRIEwI7BzsB0lynWgOpfqjUdq91XXAlIWD2OwKBH7oCl/GZG/HT4BOHrTlPMOASlMQ7veyTqpmRcrNA=="],
+
+    "@dynamic-labs/sdk-react-core/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/solana/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/solana-core/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/types/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/utils/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
+
+    "@dynamic-labs/wallet-connector-core/@dynamic-labs/sdk-api-core": ["@dynamic-labs/sdk-api-core@0.0.633", "", {}, "sha512-ZXUzS3rjDwyXw12lJas+Dzcag1FC0c0egWBIrUK0n0McRGazrXQ6GqFzuxkizIHOq2V4XHWwQ0wGJC5zQSXSSQ=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
 

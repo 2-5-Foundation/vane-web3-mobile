@@ -12,6 +12,7 @@ import { useTransactionStore } from "@/app/lib/useStore";
 
 export default function ClientAuthProvider({ children }: { children: React.ReactNode }) {
   const setUserProfile = useTransactionStore.getState().setUserProfile;
+  const { initializeWasm, startWatching, isWasmInitialized } = useTransactionStore.getState();
 
   const handleAuthenticatedUser = async (args: { user: UserProfile }) => {    
     let network = "";
@@ -20,7 +21,21 @@ export default function ClientAuthProvider({ children }: { children: React.React
     }else{
       network = args.user.verifiedCredentials[0].chain;
     }
-    // WASM initialization is now handled in page.tsx
+    
+    // Initialize WASM when user authenticates
+    try {
+      if (!isWasmInitialized()) {
+        await initializeWasm(
+          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+          args.user.verifiedCredentials[0].address,
+          network
+        );
+        await startWatching();
+        console.log('WASM initialized and watching started');
+      }
+    } catch (error) {
+      console.error('Failed to initialize WASM:', error);
+    }
   };
 
   return (

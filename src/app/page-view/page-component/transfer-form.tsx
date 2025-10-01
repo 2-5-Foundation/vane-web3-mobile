@@ -14,7 +14,11 @@ import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { toast } from "sonner"
 
-export default function TransferForm() {
+interface TransferFormProps {
+  tokenList: any[]; // TokenBalance objects
+}
+
+export default function TransferForm({ tokenList }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
   const { senderPendingTransactions, initiateTransaction, fetchPendingUpdates, isWasmInitialized } = useTransactionStore();
@@ -105,6 +109,12 @@ export default function TransferForm() {
         return;
       }
       
+      // Additional validation for custom ERC20
+      if (formData.asset === 'ERC20' && !formData.tokenAddress) {
+        toast.error('Please enter a token address for custom ERC20');
+        return;
+      }
+      
       if (!primaryWallet) {
         toast.info('Please connect a wallet first');
         setShowAuthFlow(true);
@@ -119,9 +129,21 @@ export default function TransferForm() {
       }
       
       // Create token using TokenManager
-      const token = formData.asset === 'ETH' 
-        ? TokenManager.createNativeToken(ChainSupported.Ethereum)
-        : TokenManager.createERC20Token(ChainSupported.Ethereum, formData.asset);
+      let token;
+      
+      // Find the selected token from tokenList to check if it's native ETH
+      const selectedToken = tokenList.find(t => t.address === formData.asset);
+      
+      if (selectedToken && selectedToken.symbol?.toUpperCase() === 'ETH') {
+        // ETH should be created as native token, not ERC20
+        token = TokenManager.createNativeToken(ChainSupported.Ethereum);
+      } else if (formData.asset === 'ERC20' && formData.tokenAddress) {
+        // Custom ERC20 token address
+        token = TokenManager.createERC20Token(ChainSupported.Ethereum, formData.tokenAddress);
+      } else {
+        // All other tokens (USDC, USDT, etc.) are ERC20 tokens
+        token = TokenManager.createERC20Token(ChainSupported.Ethereum, formData.asset);
+      }
       
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
       await initiateTransaction(
@@ -129,9 +151,9 @@ export default function TransferForm() {
         formData.recipient,
         BigInt(formData.amount),
         token,
-        'Goated',
-        ChainSupported.Ethereum,
-        ChainSupported.Ethereum
+        primaryWallet.connector.name,
+        ChainSupported.Ethereum, // this should depend on the wallet
+        ChainSupported.Ethereum // this should depend on the form data
       );
 
       setTransferStatus('Genesis');
@@ -248,16 +270,32 @@ export default function TransferForm() {
                   onValueChange={handleAssetChange}
                 >
                   <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
-                    <SelectValue placeholder="ETH" />
+                    <SelectValue placeholder="ETH" className="text-white" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#253639] border-white/10">
-                    <SelectItem value="Eth" className="text-white focus:bg-white/5">ETH</SelectItem>
-                    <SelectItem value="UsdcEth" className="text-white focus:bg-white/5">USDC</SelectItem>
-                    <SelectItem value="UsdtEth" className="text-white focus:bg-white/5">USDT</SelectItem>
+                    {tokenList.length > 0 && tokenList.map((token) => (
+                      <SelectItem key={token.symbol} value={token.address} className="text-white focus:bg-white/5">
+                        {token?.symbol}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+            
+            {/* Custom ERC20 Token Address Input */}
+            {formData.asset === 'ERC20' && (
+              <div className="space-y-1.5 w-full">
+                <Label className="text-xs text-gray-400 font-medium">Token Address</Label>
+                <Input
+                  type="text"
+                  placeholder="0x..."
+                  value={formData.tokenAddress || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tokenAddress: e.target.value }))}
+                  className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9 placeholder-gray-500 w-full"
+                />
+              </div>
+            )}
 
             {/* Warning Message */}
             <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-blue-500/20">
