@@ -262,7 +262,7 @@ export default function Wallets() {
           <Alert className="bg-blue-500/10 border-blue-400/30">
             <AlertTitle className="text-blue-400">Heads up!</AlertTitle>
             <AlertDescription className="text-blue-300">
-              The product is not live yet but you can explore it.
+              User experience will improve currently in open beta
             </AlertDescription>
           </Alert>
         </div>
