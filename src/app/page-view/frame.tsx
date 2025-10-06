@@ -147,7 +147,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
           {/* Logo section */}
           <div className="flex items-center">
             <Image 
-              src="/vane-logo.png" 
+              src="/vane-logo-icon.png" 
               alt="Vane Logo" 
               width={24}
               height={24}
