@@ -82,10 +82,65 @@ export default function SenderPending({
 }: {
   initiatedTransactions?: TxStateMachine[];
 }) {
+  const getTokenLabel = (token: any): string => {
+    if (!token) return '';
+    if (typeof token === 'string') return token;
+    if (typeof token === 'number') return String(token);
+    if (typeof token === 'bigint') return token.toString();
+    
+    // Handle object tokens
+    if (typeof token === 'object') {
+      // Handle nested objects like {Ethereum: 'ETH'}
+      if (token.Ethereum) return token.Ethereum;
+      if (token.symbol) return token.symbol;
+      if (token.ticker) return token.ticker;
+      if (token.code) return token.code;
+      if (token.name) return token.name;
+      return 'ETH';
+    }
+    
+    // Fallback
+    return 'ETH';
+  };
+
+  // Helper function to convert wei to ETH (decimal format)
+  const formatAmount = (amount: any): string => {
+    if (!amount) return '0';
+    
+    let amountValue: bigint | number;
+    
+    if (typeof amount === 'bigint') {
+      amountValue = amount;
+    } else if (typeof amount === 'number') {
+      amountValue = BigInt(Math.floor(amount));
+    } else if (typeof amount === 'string') {
+      amountValue = BigInt(amount);
+    } else {
+      return '0';
+    }
+    
+    // Convert wei to ETH (divide by 10^18)
+    const ethValue = Number(amountValue) / Math.pow(10, 18);
+    
+    // Format to remove unnecessary trailing zeros
+    return ethValue.toString().replace(/\.?0+$/, '');
+  };
+
+  const formatStatus = (status: string): string => {
+    if (!status) return 'Unknown';
+    
+    // Convert camelCase to readable format
+    return status
+      .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+      .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+      .trim(); // Remove leading/trailing spaces
+  };
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelConfirmArr, setShowCancelConfirmArr] = useState<boolean[]>([]);
   const [showActionConfirmMap, setShowActionConfirmMap] = useState<Record<string, boolean>>({});
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
+  const [fetchedTransactions, setFetchedTransactions] = useState<TxStateMachine[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const removeTransaction = useTransactionStore(state => state.removeTransaction)
   const addTransaction = useTransactionStore(state => state.addTransaction)
   const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
@@ -95,11 +150,29 @@ export default function SenderPending({
   // ------------- Wallet ---------------------------------------
   const {primaryWallet}  = useDynamicContext()
   
+  // Effect to fetch transactions on mount
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setIsLoadingTransactions(true);
+      try {
+        const transactions = await fetchPendingUpdates();
+        setFetchedTransactions(transactions);
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        toast.error('Failed to load pending transactions');
+      } finally {
+        setIsLoadingTransactions(false);
+      }
+    };
+    
+    fetchTransactions();
+  }, [fetchPendingUpdates]);
+
   // Effect to handle 3-second delay for success components
   useEffect(() => {
     const timeouts: Record<string, ReturnType<typeof setTimeout>> = {};
     
-    senderPendingTransactions.forEach(transaction => {
+    fetchedTransactions.forEach(transaction => {
       const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
       const txKey = String(transaction.txNonce || transaction.receiverAddress);
       
@@ -115,7 +188,7 @@ export default function SenderPending({
     return () => {
       Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
     };
-  }, [senderPendingTransactions, showSuccessComponents]);
+  }, [fetchedTransactions, showSuccessComponents]);
 
   const handleRevert = async (transaction) => {
     await revertTransaction(transaction, "User requested revert");
@@ -159,22 +232,17 @@ export default function SenderPending({
   const handleRefresh = async () => {
     setIsRefreshing(true)
     
-    // Call fetchPendingUpdates to get latest data
-    fetchPendingUpdates()
-    
-    // Run for 3 seconds
-    setTimeout(() => {
+    try {
+      // Call fetchPendingUpdates to get latest data
+      const transactions = await fetchPendingUpdates()
+      setFetchedTransactions(transactions)
+      toast.success('Transactions refreshed')
+    } catch (error) {
+      console.error('Error refreshing transactions:', error)
+      toast.error('Failed to refresh transactions')
+    } finally {
       setIsRefreshing(false)
-      
-      // After 3 seconds, check if senderPendingTransactions is empty
-      // If empty, remove the default card by dispatching an event
-      if (!senderPendingTransactions || senderPendingTransactions.length === 0) {
-        // Remove all initiated transactions since no real transactions were found
-        if (typeof window !== 'undefined' && window.dispatchEvent) {
-          window.dispatchEvent(new CustomEvent('removeAllInitiatedTx'));
-        }
-      }
-    }, 3000)
+    }
   }
 
   // WASM is initialized in transfer-form.tsx when wallet connects
@@ -202,36 +270,20 @@ export default function SenderPending({
             </Button>
           </div>
         ) : (
-          <Dialog open={showActionConfirmMap[transaction.txNonce]} onOpenChange={(open) => handleShowActionConfirm(transaction.txNonce, open)}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  <Alert className="bg-red-100/10 border-red-300/40">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
-                    <AlertTitle className="text-red-400 font-semibold">Revert Transaction?</AlertTitle>
-                  </Alert>
-                </DialogTitle>
-              </DialogHeader>
-              <DialogDescription>
-                Are you sure you want to revert this transaction?
-              </DialogDescription>
-              <DialogFooter className="flex gap-2">
-                <Button
-                  className="flex-1 bg-red-400 hover:bg-red-500 text-white font-semibold"
-                  onClick={() => handleRevert(transaction)}
-                >
-                  Confirm Revert
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 border-red-300/40 text-red-400"
-                  onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-                >
-                  Keep Transaction
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="w-full flex gap-2">
+            <Button
+              className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
+              onClick={() => handleRevert(transaction)}
+            >
+              Confirm Revert
+            </Button>
+            <Button
+              className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
+              onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
+            >
+              Keep Transaction
+            </Button>
+          </div>
         );
       case 'RecvAddrFailed':
         return !showActionConfirmMap[transaction.txNonce] ? (
@@ -245,36 +297,20 @@ export default function SenderPending({
             </Button>
           </div>
         ) : (
-          <Dialog open={showActionConfirmMap[transaction.txNonce]} onOpenChange={(open) => handleShowActionConfirm(transaction.txNonce, open)}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  <Alert className="bg-red-100/10 border-red-300/40">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
-                    <AlertTitle className="text-red-400 font-semibold">Revert Transaction?</AlertTitle>
-                  </Alert>
-                </DialogTitle>
-              </DialogHeader>
-              <DialogDescription>
-                Are you sure you want to revert this transaction?
-              </DialogDescription>
-              <DialogFooter className="flex gap-2">
-                <Button
-                  className="flex-1 bg-red-400 hover:bg-red-500 text-white font-semibold"
-                  onClick={() => handleRevert(transaction)}
-                >
-                  Confirm Revert
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 border-red-300/40 text-red-400"
-                  onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-                >
-                  Keep Transaction
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="w-full flex gap-2">
+            <Button
+              className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
+              onClick={() => handleRevert(transaction)}
+            >
+              Confirm Revert
+            </Button>
+            <Button
+              className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
+              onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
+            >
+              Keep Transaction
+            </Button>
+          </div>
         );
       case 'RecvAddrConfirmed':
         return (
@@ -294,27 +330,23 @@ export default function SenderPending({
             >
               Confirm
             </Button>
-            {/* Overlay for Confirm */}
+            {/* Simple confirmation */}
             {showActionConfirmMap[transaction.txNonce] && (
-              <div className="mt-4 w-full bg-[#1a2628] border border-white/10 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-5 w-5 text-[#7EDFCD]" />
-                  <span className="text-white text-base">Receiver confirmed</span>
-                </div>
-                <div className="text-white text-sm break-all mb-4 ml-7">{transaction.receiverAddress}</div>
-                <div className="flex gap-2 w-full">
+              <div className="mt-2 space-y-2">
+                <div className="text-xs text-green-400 text-center">Submit transaction?</div>
+                <div className="flex gap-2">
                   <Button
-                    className="flex-1 bg-[#7EDFCD] hover:bg-[#7EDFCD]/90 text-black rounded-md"
+                    className="flex-1 h-8 bg-[#7EDFCD] hover:bg-[#7EDFCD]/90 text-black text-xs"
                     onClick={() => handleConfirm(transaction)}
                   >
-                    Submit Transaction
+                    Yes, Submit
                   </Button>
                   <Button
                     variant="outline"
-                    className="flex-1 border-[#7EDFCD] text-[#7EDFCD] bg-transparent rounded-md"
+                    className="flex-1 h-8 border-gray-500/40 text-gray-400 hover:bg-gray-500/10 text-xs"
                     onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
                   >
-                    Keep Transaction
+                    Cancel
                   </Button>
                 </div>
               </div>
@@ -347,35 +379,38 @@ export default function SenderPending({
               </Button>
             </div>
             {showActionConfirmMap[transaction.txNonce] && (
-              <div className="w-full mt-2 pt-5 space-y-3 bg-[#1a2628] border-white/10 rounded-lg">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-green-400" />
-                    <span className="text-sm text-green-400">Receiver address confirmed</span>
-                  </div>
-                  <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
+              <div className="mt-2 space-y-2">
+                <div className="text-xs text-green-400 text-center">Submit transaction?</div>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 h-8 bg-[#7EDFCD] hover:bg-[#7EDFCD]/90 text-black text-xs"
+                    onClick={() => handleConfirm(transaction)}
+                  >
+                    Yes, Submit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-8 border-gray-500/40 text-gray-400 hover:bg-gray-500/10 text-xs"
+                    onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
+                  >
+                    Cancel
+                  </Button>
                 </div>
-                <Button
-                  className="w-full h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 transition-all duration-200"
-                  onClick={() => handleConfirm(transaction)}
-                >
-                  Submit Transaction
-                </Button>
               </div>
             )}
             {showActionConfirmMap[`revert-${transaction.txNonce}`] && (
-              <div className="w-full mt-2 p-3 space-y-3 bg-[#1a2628] border-white/10 rounded-lg">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-red-400" />
-                    <span className="text-sm text-red-400">You are safely reverting the transaction</span>
-                  </div>
-                </div>
+              <div className="mt-2 flex gap-2">
                 <Button
-                  className="w-full h-10 bg-red-500 text-white hover:bg-red-600 transition-all duration-200"
+                  className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
                   onClick={() => handleRevert(transaction)}
                 >
-                  Revert Transaction
+                  Confirm Revert
+                </Button>
+                <Button
+                  className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
+                  onClick={() => handleShowActionConfirm(`revert-${transaction.txNonce}`, false)}
+                >
+                  Keep Transaction
                 </Button>
               </div>
             )}
@@ -403,28 +438,20 @@ export default function SenderPending({
               Cancel Transaction
             </Button>
             {showActionConfirmMap[transaction.txNonce] && (
-              <Alert className="mt-4 bg-[#1a2628] border-white/10 rounded-xl shadow flex flex-col items-start p-6 w-full">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                  <span className="text-red-400 text-base">Cancel Transaction?</span>
-                </div>
-                <div className="text-sm text-red-300 break-all mb-6 ml-7">{transaction.receiverAddress}</div>
-                <div className="flex gap-2 w-full">
-                  <Button
-                    className="flex-1 bg-red-400 hover:bg-red-500 text-white rounded-md"
-                    onClick={() => handleRevert(transaction)}
-                  >
-                    Confirm Cancel
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 border-red-300/40 text-red-400 bg-transparent rounded-md"
-                    onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-                  >
-                    Keep Transaction
-                  </Button>
-                </div>
-              </Alert>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
+                  onClick={() => handleRevert(transaction)}
+                >
+                  Confirm Cancel
+                </Button>
+                <Button
+                  className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
+                  onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
+                >
+                  Keep Transaction
+                </Button>
+              </div>
             )}
           </div>
         );
@@ -467,39 +494,30 @@ export default function SenderPending({
           </div>
         );
       case 'ReceiverNotRegistered':
-        return (
-          <div className="space-y-2">
+        return !showActionConfirmMap[transaction.txNonce] ? (
+          <div className="w-full">
             <Button
               onClick={() => handleShowActionConfirm(transaction.txNonce, true)}
               variant="outline"
-              className="w-full h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs"
+              className="w-full block h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs"
             >
               Revert
             </Button>
-            {showActionConfirmMap[transaction.txNonce] && (
-              <Alert className="mt-4 bg-[#1a2628] border-white/10 rounded-xl shadow flex flex-col items-start p-6 w-full">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                  <span className="text-red-400 text-base">Revert Transaction?</span>
-                </div>
-                <div className="text-sm text-red-300 break-all mb-6 ml-7">{transaction.receiverAddress}</div>
-                <div className="flex gap-2 w-full">
-                  <Button
-                    className="flex-1 bg-red-400 hover:bg-red-500 text-white rounded-md"
-                    onClick={() => handleRevert(transaction)}
-                  >
-                    Confirm Revert
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 border-red-300/40 text-red-400 bg-transparent rounded-md"
-                    onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-                  >
-                    Keep Transaction
-                  </Button>
-                </div>
-              </Alert>
-            )}
+          </div>
+        ) : (
+          <div className="w-full flex gap-2">
+            <Button
+              className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
+              onClick={() => handleRevert(transaction)}
+            >
+              Confirm Revert
+            </Button>
+            <Button
+              className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
+              onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
+            >
+              Keep Transaction
+            </Button>
           </div>
         );
       case 'Reverted':
@@ -515,38 +533,30 @@ export default function SenderPending({
         );
       default:
         return !showActionConfirmMap[transaction.txNonce] ? (
-          <Button
-            onClick={() => handleShowActionConfirm(transaction.txNonce, true)}
-            variant="outline"
-            className={`flex-1 h-10 text-white transition-all duration-200 ${
-              'bg-transparent border-red-500/20 text-white hover:bg-red-500/10'
-            } text-xs font-medium`}
-          >
-            Revert
-          </Button>
+          <div className="w-full">
+            <Button
+              onClick={() => handleShowActionConfirm(transaction.txNonce, true)}
+              variant="outline"
+              className="w-full block h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs"
+            >
+              Revert
+            </Button>
+          </div>
         ) : (
-          <Alert className="mt-4 bg-[#1a2628] border-white/10 rounded-xl shadow flex flex-col items-start p-6 w-full">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-              <span className="text-red-400 text-base">Revert Transaction?</span>
-            </div>
-            <div className="text-sm text-red-300 break-all mb-6 ml-7">{transaction.receiverAddress}</div>
-            <div className="flex gap-2 w-full">
-              <Button
-                className="flex-1 bg-red-400 hover:bg-red-500 text-white rounded-md"
-                onClick={() => handleRevert(transaction)}
-              >
-                Confirm Revert
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 border-red-300/40 text-red-400 bg-transparent rounded-md"
-                onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-              >
-                Keep Transaction
-              </Button>
-            </div>
-          </Alert>
+          <div className="w-full flex gap-2">
+            <Button
+              className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
+              onClick={() => handleRevert(transaction)}
+            >
+              Confirm Revert
+            </Button>
+            <Button
+              className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
+              onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
+            >
+              Keep Transaction
+            </Button>
+          </div>
         );
     }
   };
@@ -644,16 +654,11 @@ export default function SenderPending({
 
   // Filter out initiated transactions that already exist in the real transactions list
   const pendingInitiatedTransactions = showInitiatedTransactions ? initiatedTransactions.filter(initiatedTx => 
-    !senderPendingTransactions?.some(realTx => 
+    !fetchedTransactions?.some(realTx => 
       realTx.receiverAddress === initiatedTx.receiverAddress &&
       realTx.amount.toString() === initiatedTx.amount.toString()
     )
   ) : [];
-
-  // Don't render anything if no real transactions exist and no initiated transactions to show
-  if ((!senderPendingTransactions || senderPendingTransactions.length === 0) && pendingInitiatedTransactions.length === 0) {
-    return null;
-  }
 
   // Handler to remove an initiated transaction
   const handleCancelInitiated = (indexToRemove: number) => {
@@ -662,9 +667,55 @@ export default function SenderPending({
     }
   };
 
+  // Show loading state while fetching transactions
+  if (isLoadingTransactions) {
+    return (
+      <div className="space-y-3 pb-24">
+        <div className="flex justify-end mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled
+            className="h-10 px-4 text-[#7EDFCD] opacity-50 cursor-not-allowed"
+          >
+            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            Loading...
+          </Button>
+        </div>
+        <div className="text-center py-8 text-[#9EB2AD]">
+          <p>Loading pending transactions...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3">
-      {/* Render all pending initiated transactions that don't exist in real list yet */}
+    <div className="space-y-3 pb-24">
+      {/* Refresh Button */}
+      <div className="flex justify-end mb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRefresh}
+          className={`h-10 px-4 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10 transition-all duration-200 ${
+            isRefreshing ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105'
+          }`}
+          disabled={isRefreshing}
+          aria-label={isRefreshing ? 'Refreshing...' : 'Refresh Pending Transactions'}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
+      </div>
+
+      {/* Don't render transactions if no real transactions exist and no initiated transactions to show */}
+      {(!fetchedTransactions || fetchedTransactions.length === 0) && pendingInitiatedTransactions.length === 0 ? (
+        <div className="text-center py-8 text-[#9EB2AD]">
+          <p>No pending transactions found</p>
+        </div>
+      ) : (
+        <>
+          {/* Render all pending initiated transactions that don't exist in real list yet */}
       {pendingInitiatedTransactions.map((initiatedTx, index) => {
         const statusInfo = getStatusInfo('Genesis'); // Default status for initiated transactions
         return (
@@ -674,33 +725,23 @@ export default function SenderPending({
                 {/* Sender Address Row */}
                 <div className="space-y-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">From address</span>
-                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{initiatedTx.senderAddress}</p>
+                  <p className="font-mono text-xs text-white break-all px-2 py-1">{initiatedTx.senderAddress}</p>
                 </div>
                 
                 {/* Receiver Address Row */}
                 <div className="space-y-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">To address</span>
-                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{initiatedTx.receiverAddress}</p>
+                  <p className="font-mono text-xs text-white break-all px-2 py-1">{initiatedTx.receiverAddress}</p>
                 </div>
                 
                 {/* Codeword Row with Timer and Refresh Button */}
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                    <p className="font-mono text-xs text-white bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20 mt-1">{initiatedTx.codeWord}</p>
+                    <p className="font-mono text-xs text-white px-2 py-1 mt-1">{initiatedTx.codeWord}</p>
                   </div>
                   <div className="flex items-center gap-2 ml-3">
                     <TxTimer txKey={getTxKey(initiatedTx)} />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleRefresh}
-                      className="h-8 w-8 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10 transition-transform"
-                      disabled={isRefreshing}
-                      aria-label="Refresh"
-                    >
-                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </Button>
                   </div>
                 </div>
                 
@@ -708,24 +749,32 @@ export default function SenderPending({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">{initiatedTx.senderAddressNetwork || ''}</span>
-                    </div>
+                    <p className="text-xs text-white font-medium px-2 py-1">{initiatedTx.senderAddressNetwork || 'Ethereum'}</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">Ethereum</span>
-                    </div>
+                    <p className="text-xs text-white font-medium px-2 py-1">Ethereum</p>
                   </div>
                 </div>
                 
                 {/* Amount Row */}
                 <div className="space-y-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                  <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                    <span className="text-sm text-white font-semibold">{initiatedTx.amount.toString()} {initiatedTx.token.toString()}</span>
-                  </div>
+                  <p className="text-sm text-white font-semibold px-2 py-1">
+                    {formatAmount(initiatedTx.amount)} {getTokenLabel((initiatedTx as any).token)}
+                  </p>
+                </div>
+
+                {/* Transaction Status Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">Status</span>
+                  <p className="text-sm text-white px-2 py-1">
+                    {formatStatus(
+                      typeof initiatedTx.status === 'string' 
+                        ? initiatedTx.status 
+                        : initiatedTx.status?.type || 'Genesis'
+                    )}
+                  </p>
                 </div>
               </div>
               {/* Status */}
@@ -773,7 +822,12 @@ export default function SenderPending({
       })}
 
       {/* Render all real transactions */}
-      {senderPendingTransactions?.map((transaction) => {
+      {fetchedTransactions?.filter((transaction) => {
+        // Check if status is an object with 'Reverted' property
+        const isReverted = transaction.status && typeof transaction.status === 'object' && 'Reverted' in transaction.status;
+        // Don't display reverted transactions
+        return !isReverted;
+      }).map((transaction) => {
         const txKey = String(transaction.txNonce || transaction.receiverAddress);
         const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
         const statusInfo = getStatusInfo(statusType);
@@ -785,33 +839,23 @@ export default function SenderPending({
                 {/* Sender Address Row */}
                 <div className="space-y-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">From address</span>
-                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{transaction.senderAddress}</p>
+                  <p className="font-mono text-xs text-white break-all px-2 py-1">{transaction.senderAddress}</p>
                 </div>
                 
                 {/* Receiver Address Row */}
                 <div className="space-y-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">To address</span>
-                  <p className="font-mono text-xs text-white break-all bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">{transaction.receiverAddress}</p>
+                  <p className="font-mono text-xs text-white break-all px-2 py-1">{transaction.receiverAddress}</p>
                 </div>
                 
                 {/* Codeword Row with Timer and Refresh Button */}
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                    <p className="font-mono text-xs text-white bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20 mt-1">{transaction.codeWord}</p>
+                    <p className="font-mono text-xs text-white px-2 py-1 mt-1">{transaction.codeWord}</p>
                   </div>
                   <div className="flex items-center gap-2 ml-3">
                     {statusType !== 'TxSubmissionPassed' && <TxTimer txKey={getTxKey(transaction)} />}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleRefresh}
-                      className="h-8 w-8 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10 transition-transform"
-                      disabled={isRefreshing}
-                      aria-label="Refresh"
-                    >
-                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </Button>
                   </div>
                 </div>
                 
@@ -819,25 +863,43 @@ export default function SenderPending({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">{transaction.senderAddressNetwork || ''}</span>
-                    </div>
+                    <p className="text-xs text-white font-medium px-2 py-1">{transaction.senderAddressNetwork || 'Ethereum'}</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                    <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                      <span className="text-xs text-white font-medium">Ethereum</span>
-                    </div>
+                    <p className="text-xs text-white font-medium px-2 py-1">Ethereum</p>
                   </div>
                 </div>
                 
                 {/* Amount Row */}
                 <div className="space-y-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                  <div className="bg-[#0D1B1B] px-2 py-1 rounded border border-[#4A5853]/20">
-                    <span className="text-sm text-white font-semibold">{transaction.amount.toString()} {transaction.token.toString()}</span>
-                  </div>
+                  <p className="text-sm text-white font-semibold px-2 py-1">
+                    {formatAmount(transaction.amount)} {getTokenLabel((transaction as any).token)}
+                  </p>
                 </div>
+
+                {/* Transaction Status Row */}
+                <div className="space-y-1">
+                  <span className="text-xs text-[#9EB2AD] font-medium">Status</span>
+                  <p className="text-sm text-white px-2 py-1">
+                    {formatStatus(
+                      typeof transaction.status === 'string' 
+                        ? transaction.status 
+                        : transaction.status?.type || 'Unknown'
+                    )}
+                  </p>
+                </div>
+
+                {/* Transaction Errors Row */}
+                {transaction.txRelatedErrors && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-[#9EB2AD] font-medium">Transaction Errors</span>
+                    <div className="bg-red-900/20 px-3 py-2 rounded border border-red-500/30">
+                      <span className="text-sm text-red-400 font-medium">{transaction.txRelatedErrors}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Status with Refresh Button */}
@@ -860,6 +922,8 @@ export default function SenderPending({
           </Card>
         );
       })}
+        </>
+      )}
     </div>
   )
 }

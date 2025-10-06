@@ -5,6 +5,7 @@ import Profile from './page-view/profile'
 import Wallets from './page-view/wallets'
 import Transfer from './page-view/transfer'
 import Receive from './page-view/receive'
+import Pending from './page-view/pending'
 import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
 
 // get the connected address from dynamic wallet
@@ -24,7 +25,7 @@ export default function Home() {
         case 'transfers':
           return <Transfer />;
         case 'pending':
-          return <Receive />;
+          return <Pending />;
         case 'profile':
           return <Profile />;
         default:
@@ -37,7 +38,7 @@ export default function Home() {
       case 'transfers':
         return <Transfer />;
       case 'pending':
-        return <Receive />;
+        return <Pending />;
       case 'profile':
         return <Profile />;
       default:

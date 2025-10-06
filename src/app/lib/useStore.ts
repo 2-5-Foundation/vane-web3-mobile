@@ -40,8 +40,22 @@ import {
   
 } from '@/lib/vane_lib/main'
 
+import {
+  mnemonicGenerate,
+  mnemonicValidate,
+  mnemonicToMiniSecret,
+  ed25519PairFromSeed
+} from '@polkadot/util-crypto';
 
 import { config } from 'dotenv';
+import { 
+  getKdfMessageBytes,
+  setupKeystoreWithSignature,
+  loadEnvelopeOrThrow,
+  unlockCEKWithSignature,
+  decryptLibp2pSecretWithCEK
+} from './keystore';
+import { bytesToHex } from 'viem';
 
 config();
 export interface TransferFormData {
@@ -49,7 +63,6 @@ export interface TransferFormData {
   amount: number; 
   asset: string;
   network: string;
-  tokenAddress?: string;
 }
 
 export interface UserProfile {
@@ -68,6 +81,7 @@ export interface TransactionState {
 
   // WASM state
   isWatchingUpdates: boolean;
+  nodeStatus: 'idle' | 'initializing' | 'ready';
 
   // Methods
   setUserProfile: (userProfile: UserProfile) => void;
@@ -84,7 +98,7 @@ export interface TransactionState {
   removeRecvTransaction: (txNonce: number) => void;
   
   // WASM initialization and management
-  initializeWasm: (relayMultiAddr: string, account: string, network: string, live?: boolean) => Promise<void>;
+  initializeWasm: (relayMultiAddr: string, account: string, network: string, authSignature?: Uint8Array, live?: boolean) => Promise<void>;
   startWatching: () => Promise<void>;
   stopWatching: () => void;
   isWasmInitialized: () => boolean;
@@ -130,6 +144,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   recvTransactions: [],
   status: 'Genesis',
   isWatchingUpdates: false,
+  nodeStatus: 'idle',
 
   // method
   setUserProfile: (userProfile: UserProfile) => {
@@ -150,7 +165,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         
         switch (statusString) {
             case 'Genesis':
-                console.log("userProfile", get().userProfile);
                 const isSender = update.senderAddress === get().userProfile.account;
                 const isReceiver = update.receiverAddress === get().userProfile.account;
                 
@@ -238,7 +252,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   // WASM initialization and management
-  initializeWasm: async (relayMultiAddr: string, account: string, network: string, live: boolean = false) => {
+  initializeWasm: async (relayMultiAddr: string, account: string, network: string, authSignature?: Uint8Array, live: boolean = false) => {
     try {
       
       
@@ -247,17 +261,59 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         return;
       }
 
+      // Build a chain-agnostic key identifier like "evm:0x...", "sol:...", "btc:..."
+      const toPrefix = (n: string) => {
+        const normalized = (n || '').toLowerCase();
+        if ([
+          'ethereum', 'base', 'polygon', 'optimism', 'arbitrum', 'bnb', 'bsc', 'evm'
+        ].includes(normalized)) return 'evm';
+        if (normalized.includes('sol')) return 'sol';
+        if (normalized.includes('btc') || normalized.includes('bitcoin')) return 'btc';
+        if (normalized.includes('dot') || normalized.includes('polkadot')) return 'dot';
+        if (normalized.includes('tron')) return 'tron';
+        return normalized || 'evm';
+      };
+      const keyIdentifier = `${toPrefix(network)}:${account}`;
+
+      // ——— Keystore: first-time or unlock path ———
+      let libp2pSecret32: Uint8Array | null = null;
+      try {
+        const env = await loadEnvelopeOrThrow();
+        if (!authSignature) throw new Error('Missing auth signature to unlock keystore');
+        const CEK = await unlockCEKWithSignature(env, keyIdentifier, authSignature);
+        const secret = await decryptLibp2pSecretWithCEK(env, CEK);
+        CEK.fill(0);
+        libp2pSecret32 = secret;
+      } catch {
+        // First-time setup: derive a libp2p secret deterministically for now
+        if (!authSignature) throw new Error('Missing auth signature for first-time setup');
+        // Generate a new libp2p secret (32 bytes). Using polkadot util to derive from mnemonic.
+        const mnemonic = mnemonicGenerate();
+        const secret = mnemonicToMiniSecret(mnemonic);
+        await setupKeystoreWithSignature(secret, keyIdentifier, authSignature);
+        libp2pSecret32 = secret;
+      }
+
+      // Optional: restore exported storage if available
+      const maybeStored = get().loadStorageData() as StorageExport | null;
+      if (maybeStored) {
+        console.log('Found storage export in browser storage; passing to initializeNode.');
+      }
+
       console.log('Initializing WASM node...');
-      
       await initializeNode({
         relayMultiAddr,
         account,
         network,
         live,
-        logLevel: LogLevel.Debug
+        logLevel: LogLevel.Info,
+        libp2pKey: bytesToHex(libp2pSecret32!),
+        storage: maybeStored ?? undefined
       });
-      
       console.log('WASM node initialized successfully');
+
+      // Zeroize sensitive material
+      if (libp2pSecret32) libp2pSecret32.fill(0);
     } catch (error) {
       console.error('Failed to initialize WASM node:', error);
       throw error;

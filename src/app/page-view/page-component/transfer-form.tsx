@@ -18,6 +18,65 @@ interface TransferFormProps {
   tokenList: any[]; // TokenBalance objects
 }
 
+// Helper function to convert network ID to ChainSupported
+function getWalletNetworkFromId(networkId: number): ChainSupported {
+  switch (networkId) {
+    case 1:
+      return ChainSupported.Ethereum;
+    case 137:
+      return ChainSupported.Polygon;
+    case 8453:
+      return ChainSupported.Base;
+    case 10:
+      return ChainSupported.Optimism;
+    case 42161:
+      return ChainSupported.Arbitrum;
+    case 56:
+      return ChainSupported.Bnb;
+    default:
+      console.warn(`Unknown network ID: ${networkId}, defaulting to Ethereum`);
+      throw new Error(`Unknown network ID: ${networkId}`);
+  }
+}
+
+// Helper function to determine if a token is native based on symbol and address
+function isNativeTokenBySymbolAndAddress(symbol: string | undefined, address: string | undefined, network: ChainSupported): boolean {
+  if (!symbol) return false;
+  
+  const upperSymbol = symbol.toUpperCase();
+  
+  // Check for native token symbols by network
+  switch (network) {
+    case ChainSupported.Ethereum:
+    case ChainSupported.Base:
+    case ChainSupported.Arbitrum:
+    case ChainSupported.Optimism:
+      // ETH is native on these networks
+      return upperSymbol === 'ETH';
+    case ChainSupported.Polygon:
+      // POL is native on Polygon
+      return upperSymbol === 'POL';
+    case ChainSupported.Bnb:
+      // BNB is native on BNB Smart Chain
+      return upperSymbol === 'BNB';
+    case ChainSupported.Solana:
+      // SOL is native on Solana
+      return upperSymbol === 'SOL';
+    case ChainSupported.Tron:
+      // TRX is native on TRON
+      return upperSymbol === 'TRX';
+    case ChainSupported.Polkadot:
+      // DOT is native on Polkadot
+      return upperSymbol === 'DOT';
+    case ChainSupported.Bitcoin:
+      // BTC is native on Bitcoin
+      return upperSymbol === 'BTC';
+    default:
+      return false;
+  }
+}
+
+
 export default function TransferForm({ tokenList }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
@@ -109,11 +168,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         return;
       }
       
-      // Additional validation for custom ERC20
-      if (formData.asset === 'ERC20' && !formData.tokenAddress) {
-        toast.error('Please enter a token address for custom ERC20');
-        return;
-      }
+      // No need for custom ERC20 validation since we only show wallet tokens
       
       if (!primaryWallet) {
         toast.info('Please connect a wallet first');
@@ -128,32 +183,67 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         return;
       }
       
-      // Create token using TokenManager
+      // Create token using TokenManager based on network and asset type
       let token;
       
-      // Find the selected token from tokenList to check if it's native ETH
-      const selectedToken = tokenList.find(t => t.address === formData.asset);
+      // Get the selected network
+      const selectedNetwork = formData.network as ChainSupported;
       
-      if (selectedToken && selectedToken.symbol?.toUpperCase() === 'ETH') {
-        // ETH should be created as native token, not ERC20
-        token = TokenManager.createNativeToken(ChainSupported.Ethereum);
-      } else if (formData.asset === 'ERC20' && formData.tokenAddress) {
-        // Custom ERC20 token address
-        token = TokenManager.createERC20Token(ChainSupported.Ethereum, formData.tokenAddress);
+      // Find the selected token from tokenList by symbol
+      const selectedToken = tokenList.find(t => t.symbol === formData.asset);
+      
+      // Create token based on network and whether it's native
+      const tokenName = selectedToken?.name || formData.asset;
+      const tokenAddress = selectedToken?.address;
+      const tokenSymbol = selectedToken?.symbol;
+      
+      // Check if it's a native token based on symbol and address patterns
+      const isNativeToken = isNativeTokenBySymbolAndAddress(tokenSymbol, tokenAddress, selectedNetwork);
+      
+      if (isNativeToken) {
+        token = TokenManager.createNativeToken(selectedNetwork);
       } else {
-        // All other tokens (USDC, USDT, etc.) are ERC20 tokens
-        token = TokenManager.createERC20Token(ChainSupported.Ethereum, formData.asset);
+        // Has address, so it's a token standard token
+        switch (selectedNetwork) {
+          case ChainSupported.Ethereum:
+          case ChainSupported.Base:
+          case ChainSupported.Arbitrum:
+          case ChainSupported.Polygon:
+          case ChainSupported.Optimism:
+            // All Ethereum-compatible chains use ERC20
+            token = TokenManager.createERC20Token(selectedNetwork, tokenName, tokenAddress);
+            break;
+          case ChainSupported.Bnb:
+            token = TokenManager.createBEP20Token(tokenName, tokenAddress);
+            break;
+          case ChainSupported.Solana:
+            token = TokenManager.createSPLToken(tokenName, tokenAddress);
+            break;
+          case ChainSupported.Tron:
+            token = TokenManager.createTRC20Token(tokenName, tokenAddress);
+            break;
+          default:
+            throw new Error(`Unsupported network: ${selectedNetwork}`);
+        }
       }
+      
+      // Get wallet network and convert to ChainSupported
+      const walletNetworkId = await primaryWallet.getNetwork();
+      const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
+      
+      // Convert decimal amount to wei (smallest unit) for BigInt conversion
+      // For ETH: 1 ETH = 10^18 wei
+      const amountInWei = Math.floor(formData.amount * Math.pow(10, 18));
       
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
       await initiateTransaction(
         primaryWallet.address,
         formData.recipient,
-        BigInt(formData.amount),
+        BigInt(amountInWei),
         token,
         primaryWallet.connector.name,
-        ChainSupported.Ethereum, // this should depend on the wallet
-        ChainSupported.Ethereum // this should depend on the form data
+        walletNetwork, // sender network from wallet
+        selectedNetwork // receiver network from user selection
       );
 
       setTransferStatus('Genesis');
@@ -274,7 +364,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-[#253639] border-white/10">
                     {tokenList.length > 0 && tokenList.map((token) => (
-                      <SelectItem key={token.symbol} value={token.address} className="text-white focus:bg-white/5">
+                      <SelectItem key={token.symbol} value={token.symbol} className="text-white focus:bg-white/5">
                         {token?.symbol}
                       </SelectItem>
                     ))}
@@ -283,19 +373,6 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
               </div>
             </div>
             
-            {/* Custom ERC20 Token Address Input */}
-            {formData.asset === 'ERC20' && (
-              <div className="space-y-1.5 w-full">
-                <Label className="text-xs text-gray-400 font-medium">Token Address</Label>
-                <Input
-                  type="text"
-                  placeholder="0x..."
-                  value={formData.tokenAddress || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tokenAddress: e.target.value }))}
-                  className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9 placeholder-gray-500 w-full"
-                />
-              </div>
-            )}
 
             {/* Warning Message */}
             <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-blue-500/20">
@@ -326,13 +403,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       </div>
 
       {/* Scrollable Transaction Pending */}
-      <div className="flex-1 min-h-0">
-        <div className="h-full overflow-y-auto">
-          <div className="space-y-2 pb-16">
-            <SenderPending initiatedTransactions={initiatedTransactions} />
-          </div>
-        </div>
-      </div>
+     
     </div>
   )
 }

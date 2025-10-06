@@ -34,6 +34,13 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        {/* iOS PWA icon (use single source; iOS will scale). Provide black background in the PNG */}
+        <link rel="apple-touch-icon" href="/vane-logo.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="theme-color" content="#0B1B1C" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
@@ -45,7 +52,12 @@ export default function RootLayout({
             <Analytics />
           </Frame>
         </ClientAuthProvider>
-        <Toaster position="top-right" />
+        <Toaster 
+          position="top-right" 
+          theme="light"
+          duration={5000}
+          closeButton
+        />
       </body>
     </html>
   );

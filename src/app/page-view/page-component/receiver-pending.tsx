@@ -8,12 +8,120 @@ import { useTransactionStore } from "@/app/lib/useStore";
 import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
   const { recvTransactions, receiverConfirmTransaction, isWasmInitialized } = useTransactionStore()
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
+  const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
+  const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
+  const INITIAL_SECONDS = 9 * 60 + 50; // 9:50
+  const STORAGE_PREFIX = 'recvTimer:';
+
+  const getExpiryFromStorage = (key: string): number | null => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_PREFIX + key) : null;
+      if (!raw) return null;
+      const parsed = parseInt(raw, 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setExpiryInStorage = (key: string, expiryMs: number) => {
+    try {
+      if (typeof window === 'undefined') return;
+      window.localStorage.setItem(STORAGE_PREFIX + key, String(expiryMs));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Initialize timers for any new transactions (persist using localStorage expiry timestamps)
+  useEffect(() => {
+    if (!recvTransactions) return;
+    setExpiryByTx(prev => {
+      const next: Record<string, number> = { ...prev };
+      for (const tx of recvTransactions) {
+        const key = String(tx.txNonce);
+        let expiry = getExpiryFromStorage(key);
+        if (!expiry) {
+          expiry = Date.now() + INITIAL_SECONDS * 1000;
+          setExpiryInStorage(key, expiry);
+        }
+        next[key] = expiry;
+      }
+      return next;
+    });
+
+    setRemainingByTx(prev => {
+      const next: Record<string, number> = { ...prev };
+      for (const tx of recvTransactions) {
+        const key = String(tx.txNonce);
+        const stored = getExpiryFromStorage(key);
+        const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
+        const baseRemaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+        // If this tx existed before (has stored expiry), subtract 5s to compensate for refresh gap
+        next[key] = Math.max(0, baseRemaining - (stored ? 5 : 0));
+      }
+      return next;
+    });
+  }, [recvTransactions, INITIAL_SECONDS]);
+
+  // Tick down once per second
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRemainingByTx(prev => {
+        const next: Record<string, number> = {};
+        const keys = new Set<string>([
+          ...Object.keys(prev),
+          ...Object.keys(expiryByTx)
+        ]);
+        const now = Date.now();
+        keys.forEach(key => {
+          const expiry = expiryByTx[key] ?? getExpiryFromStorage(key);
+          if (!expiry) {
+            next[key] = INITIAL_SECONDS; // fallback
+          } else {
+            next[key] = Math.max(0, Math.floor((expiry - now) / 1000));
+          }
+        });
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [expiryByTx, INITIAL_SECONDS]);
+
+  const formatTime = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const s = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  // Helper function to convert wei to ETH (decimal format)
+  const formatAmount = (amount: any): string => {
+    if (!amount) return '0';
+    
+    let amountValue: bigint | number;
+    
+    if (typeof amount === 'bigint') {
+      amountValue = amount;
+    } else if (typeof amount === 'number') {
+      amountValue = BigInt(Math.floor(amount));
+    } else if (typeof amount === 'string') {
+      amountValue = BigInt(amount);
+    } else {
+      return '0';
+    }
+    
+    // Convert wei to ETH (divide by 10^18)
+    const ethValue = Number(amountValue) / Math.pow(10, 18);
+    
+    // Format to remove unnecessary trailing zeros
+    return ethValue.toString().replace(/\.?0+$/, '');
+  };
 
   const handleApprove = async (transaction: TxStateMachine) => {
     try {
@@ -106,42 +214,59 @@ export default function ReceiverPending() {
         <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
             <div>
-              {/* Address Row */}
-              <div>
-                <span className="text-xs text-[#9EB2AD]">From address</span>
-                <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
-              </div>
-              {/* Codeword Row */}
-              <div>
-                <span className="text-xs text-[#9EB2AD]">Codeword</span>
-                    <p className="font-mono text-xs text-white">{transaction.codeWord}</p>
-              </div>
-              {/* Network/Amount Row */}
-              <div className="flex justify-between gap-4">
+              {/* Address Rows */}
+              <div className="grid grid-cols-1 gap-2">
                 <div>
-                  <span className="text-xs text-[#9EB2AD]">Network</span>
-                  <p className="text-xs text-white">Ethereum</p>
+                  <span className="text-xs text-[#9EB2AD]">From address</span>
+                  <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-[#9EB2AD]">To address</span>
+                  <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
+                </div>
+              </div>
+              {/* Codeword Row with Timer */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-[#9EB2AD]">Codeword</span>
+                  <p className="font-mono text-xs text-white">{transaction.codeWord}</p>
+                </div>
+                <div className={`px-2 py-0.5 rounded text-xs font-medium ${ (remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ? 'text-[#7EDFCD] bg-[#7EDFCD]/10' : 'text-red-400 bg-red-500/10' }`}>
+                  {(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ?
+                    formatTime(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) :
+                    'Expired'}
+                </div>
+              </div>
+              {/* Networks and Amount Row */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <span className="text-xs text-[#9EB2AD]">Sender Network</span>
+                  <p className="text-xs text-white">{transaction.senderAddressNetwork || 'Ethereum'}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-[#9EB2AD]">Receiver Network</span>
+                  <p className="text-xs text-white">{transaction.receiverAddressNetwork || 'Ethereum'}</p>
                 </div>
                 <div>
                   <span className="text-xs text-[#9EB2AD]">Amount</span>
-                  <p className="text-xs text-white">{transaction.amount} ETH</p>
+                  <p className="text-xs text-white">{formatAmount(transaction.amount)} ETH</p>
                 </div>
               </div>
               {/* Status Row */}
               <div className={`flex items-center gap-2 border rounded-lg px-2 py-1 mt-2 ${
                 approvedTransactions.has(String(transaction.txNonce))
                   ? 'text-green-400 border-green-400'
-                  : 'text-[#FFA500] border-[#FFA500]'
+                  : ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'text-red-400 border-red-400' : 'text-[#FFA500] border-[#FFA500]')
               }`}>
                 {approvedTransactions.has(String(transaction.txNonce)) ? (
                   <CheckCircle className="h-4 w-4 text-green-400" />
                 ) : (
-                  <AlertCircle className="h-4 w-4 text-[#FFA500]" />
+                  <AlertCircle className={`h-4 w-4 ${((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0) ? 'text-red-400' : 'text-[#FFA500]'}`} />
                 )}
                 <span className="text-xs">
                   {approvedTransactions.has(String(transaction.txNonce))
                     ? 'Confirmed, waiting for sender\'s approval'
-                    : 'Waiting for your confirmation…'
+                    : ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'Request expired' : 'Waiting for your confirmation…')
                   }
                 </span>
               </div>
@@ -151,12 +276,12 @@ export default function ReceiverPending() {
               <div className="mt-4 flex flex-col items-center">
                 <Button
                   onClick={() => handleApprove(transaction)}
-                  disabled={!isWasmInitialized() || !primaryWallet}
+                  disabled={!isWasmInitialized() || !primaryWallet || (remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0}
                   className="w-full h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium disabled:bg-gray-500 disabled:text-gray-300"
                 >
-                  {!isWasmInitialized() ? 'Connecting...' : 
-                   !primaryWallet ? 'Connect Wallet' : 
-                   'Confirm'}
+                  {!isWasmInitialized() ? 'Connecting...' :
+                   !primaryWallet ? 'Connect Wallet' :
+                   ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'Expired' : 'Confirm')}
                 </Button>
               </div>
             )}
