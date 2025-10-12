@@ -125,7 +125,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
 
           <p className="text-lg sm:text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light">
             Effortless transfers, intelligent management, and military-grade
-            security—all in one beautiful wallet.
+            security—all in one beautiful application.
           </p>
 
           <div className="pt-6">
