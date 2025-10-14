@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight } from "lucide-react"
 import SenderPending from "./sender-pending"
 import { useEffect, useState } from "react"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
@@ -93,6 +93,10 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     network: 'Ethereum'
   });
 
+  const [currentStep, setCurrentStep] = useState<'recipient' | 'amount' | 'confirm'>('recipient');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [senderNetwork, setSenderNetwork] = useState<ChainSupported | null>(null);
+
   // WASM initialization is now handled at app level in page.tsx
 
   useEffect(() => {
@@ -141,6 +145,27 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     }
   }, [isWasmInitialized, fetchPendingUpdates]);
 
+  // Get sender network when wallet is connected
+  useEffect(() => {
+    const getSenderNetwork = async () => {
+      if (primaryWallet) {
+        try {
+          const walletNetworkId = await primaryWallet.getNetwork();
+          const network = getWalletNetworkFromId(Number(walletNetworkId));
+          setSenderNetwork(network);
+          // Update form data to match sender network
+          setFormData(prev => ({ ...prev, network: network }));
+        } catch (error) {
+          console.error('Error getting wallet network:', error);
+        }
+      } else {
+        setSenderNetwork(null);
+      }
+    };
+
+    getSenderNetwork();
+  }, [primaryWallet]);
+
   const handleTransferFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     console.log('handleTransferFormChange', name, value);
@@ -149,6 +174,26 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       ...prev,
       [name]: name === 'amount' ? Number(value) : value
     }));
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 'recipient') {
+      if (formData.recipient.trim()) {
+        setCurrentStep('amount');
+      }
+    } else if (currentStep === 'amount') {
+      if (formData.amount > 0) {
+        setCurrentStep('confirm');
+      }
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep === 'amount') {
+      setCurrentStep('recipient');
+    } else if (currentStep === 'confirm') {
+      setCurrentStep('amount');
+    }
   };
 
   const handleAssetChange = (value: string) => {
@@ -163,8 +208,11 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
 
   const submitInitiateTx = async() => {
     try {
+      setIsSubmitting(true);
+      
       if (!formData.recipient || !formData.amount || !formData.asset || !formData.network) {
         toast.error('Please fill in all required fields');
+        setIsSubmitting(false);
         return;
       }
       
@@ -174,12 +222,14 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         toast.info('Please connect a wallet first');
         setShowAuthFlow(true);
         setCurrentView('wallet');
+        setIsSubmitting(false);
         return;
       }
 
       // Check WASM initialization before attempting transaction
       if (!isWasmInitialized()) {
-        toast.error('Connection not initialized. Please wait or refresh the page.');
+        toast.error('Please connect the node first. Go to Wallet page and click "Connect Node".');
+        setIsSubmitting(false);
         return;
       }
       
@@ -249,17 +299,20 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       setTransferStatus('Genesis');
       console.log("Transaction initiated successfully");
       
-      // Clear form after successful submission
+      // Clear form after successful submission and reset to step 1
       setFormData({
         recipient: '',
         amount: 0,
         asset: 'ETH',
         network: 'Ethereum'
       });
+      setCurrentStep('recipient');
       
     } catch (error) {
       console.error('Transaction failed:', error);
       toast.error(`Transaction failed: ${error}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -303,96 +356,117 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
           border-color: rgba(255, 255, 255, 0.12);
         }
       `}</style>
-      {/* Fixed Transfer Form */}
+      {/* Progressive Transfer Form */}
       <div className="flex-none">
         <Card className="bg-[#1a2628] border-white/10">
           <CardContent className="pt-2 px-3 space-y-3">
 
-            {/* Recipient Field */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-gray-400 font-medium">Receiver Address</Label>
-              <Input 
-                name="recipient"
-                value={formData.recipient}
-                onChange={handleTransferFormChange}
-                placeholder="0x..." 
-                className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
-              />
-            </div>
-
-            {/* Network Field */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-gray-400 font-medium">Receiver Network</Label>
-              <Select 
-                value={formData.network}
-                onValueChange={handleNetworkChange}
-              >
-                <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
-                  <SelectValue placeholder="Ethereum" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#253639] border-white/10">
-                  <SelectItem value="Ethereum" className="text-white focus:bg-white/5">Ethereum</SelectItem>
-                  <SelectItem value="Polygon" className="text-white focus:bg-white/5">Polygon</SelectItem>
-                  <SelectItem value="Base" className="text-white focus:bg-white/5">Base</SelectItem>
-                  <SelectItem value="Arbitrum" className="text-white focus:bg-white/5">Arbitrum</SelectItem>
-                  <SelectItem value="Optimism" className="text-white focus:bg-white/5">Optimism</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Amount and Asset Fields */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Step 1: Recipient Information */}
+            <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-gray-400 font-medium">Amount</Label>
+                <Label className="text-xs text-gray-400 font-medium">Receiver Address</Label>
                 <Input 
-                  name="amount"
-                  type="number"
-                  value={formData.amount === 0 ? '' : formData.amount}
+                  name="recipient"
+                  value={formData.recipient}
                   onChange={handleTransferFormChange}
-                  placeholder="0.00"
+                  placeholder="0x..." 
                   className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
                 />
               </div>
+
               <div className="space-y-1.5">
-                <Label className="text-xs text-gray-400 font-medium">Asset</Label>
-                <Select 
-                  value={formData.asset}
-                  onValueChange={handleAssetChange}
-                >
-                  <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
-                    <SelectValue placeholder="ETH" className="text-white" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#253639] border-white/10">
-                    {tokenList.length > 0 && tokenList.map((token) => (
-                      <SelectItem key={token.symbol} value={token.symbol} className="text-white focus:bg-white/5">
-                        {token?.symbol}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs text-gray-400 font-medium">Receiver Network</Label>
+                <div className="bg-[#1a2628] border border-white/10 text-white rounded-lg h-9 px-3 flex items-center">
+                  <span className="text-sm text-white">
+                    {senderNetwork}
+                  </span>
+                </div>
+                
               </div>
-            </div>
-            
 
-            {/* Warning Message */}
-            <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-blue-500/20">
-              <AlertCircle className="w-3 h-3 flex-shrink-0 text-blue-400" />
-              <span className="text-blue-300 font-medium">Secure, requires confirmation from the receiver</span>
+              {/* Note for Step 1 */}
+              <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-blue-500/20">
+                <AlertCircle className="w-3 h-3 flex-shrink-0 text-blue-400" />
+                <span className="text-blue-300 font-medium">Funds will only be transferred once the receiver confirms.</span>
+              </div>
+
+              {/* Step 1 Button - only show when on recipient step */}
+              {currentStep === 'recipient' && (
+                <Button 
+                  className="w-full h-10 rounded-lg bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  onClick={handleNextStep}
+                  disabled={!formData.recipient.trim() || !primaryWallet}
+                >
+                  {!primaryWallet ? 'Connect Wallet' : (
+                    <>
+                      Next: Enter Amount
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
-            {/* Submit Button */}
-            <Button 
-              className="btn-primary w-full h-10 rounded-lg disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed"
-              onClick={submitInitiateTx}
-              disabled={
-                isFormDisabled ||
-                !formData.recipient ||
-                !formData.amount
-              }
-            >
-              {!primaryWallet ? 'Connect Wallet'
-                : 'Initiate transfer'}
-            </Button>
+            {/* Step 2: Amount Information */}
+            {currentStep === 'amount' && (
+              <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-400 font-medium">Amount</Label>
+                    <Input 
+                      name="amount"
+                      type="number"
+                      value={formData.amount === 0 ? '' : formData.amount}
+                      onChange={handleTransferFormChange}
+                      placeholder="0.00"
+                      className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-400 font-medium">Asset</Label>
+                    <Select 
+                      value={formData.asset}
+                      onValueChange={handleAssetChange}
+                    >
+                      <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
+                        <SelectValue placeholder="ETH" className="text-white" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#253639] border-white/10">
+                        {tokenList.length > 0 && tokenList.map((token) => (
+                          <SelectItem key={token.symbol} value={token.symbol} className="text-white focus:bg-white/5">
+                            {token?.symbol}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Note for Step 2 */}
+                <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-green-500/20">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0 text-green-400" />
+                  <span className="text-green-300 font-medium">Your transaction is protected from any mistakes</span>
+                </div>
+
+                {/* Step 2 Buttons */}
+                <div className="flex gap-2">
+                  <Button 
+                    className="h-10 w-10 rounded-lg bg-[#253639] border border-white/10 text-white hover:bg-[#2d4044] p-0"
+                    onClick={handlePrevStep}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    className="flex-1 h-10 rounded-lg bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed"
+                    onClick={submitInitiateTx}
+                    disabled={!formData.amount || formData.amount <= 0 || isSubmitting}
+                  >
+                    {isSubmitting ? 'Processing...' : 'Initiate Transfer'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       </div>

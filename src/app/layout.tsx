@@ -54,9 +54,19 @@ export default function RootLayout({
         </ClientAuthProvider>
         <Toaster 
           position="top-right" 
-          theme="light"
+          theme="dark"
           duration={5000}
           closeButton
+          toastOptions={{
+            style: {
+              background: '#0D1B1B',
+              border: '1px solid rgba(74, 88, 83, 0.2)',
+              color: '#ffffff',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            },
+            className: 'toast-custom',
+          }}
         />
       </body>
     </html>

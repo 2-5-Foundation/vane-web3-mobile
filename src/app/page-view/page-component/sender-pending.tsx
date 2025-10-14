@@ -892,11 +892,11 @@ export default function SenderPending({
                 </div>
 
                 {/* Transaction Errors Row */}
-                {transaction.txRelatedErrors && (
+                {transaction.status && typeof transaction.status === 'object' && 'type' in transaction.status && (transaction.status as any).type === 'TxError' && (
                   <div className="space-y-1">
-                    <span className="text-xs text-[#9EB2AD] font-medium">Transaction Errors</span>
-                    <div className="bg-red-900/20 px-3 py-2 rounded border border-red-500/30">
-                      <span className="text-sm text-red-400 font-medium">{transaction.txRelatedErrors}</span>
+                    <span className="text-xs text-[#9EB2AD] font-medium">Transaction Error</span>
+                    <div className="bg-red-100 px-3 py-2 rounded border border-red-300">
+                      <span className="text-sm text-red-600 font-medium">{(transaction.status as any).data}</span>
                     </div>
                   </div>
                 )}

@@ -1,12 +1,13 @@
+// app/api/submit-bsc/route.ts
 import { reconstructSignedTransaction } from '@/lib/vane_lib/pkg/host_functions/networking';
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
-import { mainnet } from 'viem/chains';
-import { ChainSupported, type TxStateMachine } from '@/lib/vane_lib/primitives';
+import { bsc } from 'viem/chains';
+import type { TxStateMachine } from '@/lib/vane_lib/primitives';
 
 export const runtime = 'nodejs';
 
-const ETHEREUM_RPC_URL = process.env.ETHEREUM_MAINNET_API!;
+const BSC_RPC_URL = process.env.BSC_RPC_URL!;
 
 const errorJson = (status: number, message: string) =>
   NextResponse.json({ error: message }, { status });
@@ -19,32 +20,31 @@ const toUint8Array = (value: unknown): Uint8Array => {
 };
 
 export async function POST(request: NextRequest) {
-  if (!ETHEREUM_RPC_URL) return errorJson(500, 'Ethereum RPC URL not configured');
+  if (!BSC_RPC_URL) return errorJson(500, 'BSC RPC URL not configured');
 
   const stateMachine = (await request.json().catch(() => null)) as TxStateMachine | null;
   if (!stateMachine) return errorJson(400, 'Invalid JSON');
 
-  if (stateMachine.senderAddressNetwork !== ChainSupported.Ethereum) {
-    return errorJson(400, 'Only Ethereum/EVM supported in this endpoint');
+  if (stateMachine.senderAddressNetwork !== 'Bnb') {
+    return errorJson(400, 'Only BSC supported in this endpoint');
   }
   if (!stateMachine.signedCallPayload) {
     return errorJson(400, 'Missing signedCallPayload (signature)');
   }
   if (
     !stateMachine.callPayload ||
-    !('ethereum' in stateMachine.callPayload) ||
-    !stateMachine.callPayload.ethereum.callPayload?.[1]
+    !('bnb' in stateMachine.callPayload) ||
+    !stateMachine.callPayload.bnb.callPayload?.[1]
   ) {
-    return errorJson(400, 'Missing Ethereum callPayload (unsigned raw tx bytes)');
+    return errorJson(400, 'Missing BSC callPayload (unsigned raw tx bytes)');
   }
 
-  const unsignedTxBytes = toUint8Array(stateMachine.callPayload.ethereum.callPayload[1]);
+  const unsignedTxBytes = toUint8Array(stateMachine.callPayload.bnb.callPayload[1]);
   const signatureBytes = toUint8Array(stateMachine.signedCallPayload);
 
-  // Rebuild signed serialized tx (viem-compatible)
   const serializedSignedTx = reconstructSignedTransaction(unsignedTxBytes, signatureBytes);
 
-  const publicClient = createPublicClient({ chain: mainnet, transport: http(ETHEREUM_RPC_URL) });
+  const publicClient = createPublicClient({ chain: bsc, transport: http(BSC_RPC_URL) });
   try {
     const txHash = await publicClient.sendRawTransaction({ serializedTransaction: serializedSignedTx });
     return NextResponse.json({ hash: txHash });
