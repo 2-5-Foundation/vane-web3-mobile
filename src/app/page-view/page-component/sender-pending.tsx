@@ -6,7 +6,7 @@ import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
-import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main'
+import { Token, TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main'
 import { bytesToHex, hexToBytes } from 'viem';
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -78,26 +78,94 @@ const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }
 };
 
 export default function SenderPending() {
-  const getTokenLabel = (token: any): string => {
-    if (!token) return '';
-    if (typeof token === 'string') return token;
-    if (typeof token === 'number') return String(token);
-    if (typeof token === 'bigint') return token.toString();
-    
-    // Handle object tokens
-    if (typeof token === 'object') {
-      // Handle nested objects like {Ethereum: 'ETH'}
-      if (token.Ethereum) return token.Ethereum;
-      if (token.symbol) return token.symbol;
-      if (token.ticker) return token.ticker;
-      if (token.code) return token.code;
-      if (token.name) return token.name;
-      return 'ETH';
+  const getTokenLabel = (token: Token): string => {
+    if ('Ethereum' in token) {
+      const ethereumVariant = token.Ethereum;
+      if (typeof ethereumVariant === 'string') {
+        if (ethereumVariant === 'ETH') return 'ETH';
+      } else if ('ERC20' in ethereumVariant) {
+        return ethereumVariant.ERC20.name;
+      }
     }
-    
-    // Fallback
-    return 'ETH';
+  
+    if ('Bnb' in token) {
+      const bnbVariant = token.Bnb; 
+      if (typeof bnbVariant === 'string') {
+        if (bnbVariant === 'BNB') return 'BNB';
+      } else if ('BEP20' in bnbVariant) {
+        return bnbVariant.BEP20.name;
+      }
+    }
+  
+    if ('Polkadot' in token) {
+      const polkadotVariant = token.Polkadot; 
+      if (typeof polkadotVariant === 'string') {
+        if (polkadotVariant === 'DOT') return 'DOT';
+      } else if ('Asset' in polkadotVariant) {
+        return polkadotVariant.Asset.name;
+      }
+    }
+  
+    if ('Solana' in token) {
+      const solanaVariant = token.Solana; 
+      if (typeof solanaVariant === 'string') {
+        if (solanaVariant === 'SOL') return 'SOL';
+      } else if ('SPL' in solanaVariant) {
+        return solanaVariant.SPL.name;
+      }
+    }
+  
+    if ('Tron' in token) {
+      const tronVariant = token.Tron; 
+      if (typeof tronVariant === 'string') {
+        if (tronVariant === 'TRX') return 'TRX';
+      } else if ('TRC20' in tronVariant) {
+        return tronVariant.TRC20.name;
+      }
+    }
+  
+    if ('Optimism' in token) {
+      const optimismVariant = token.Optimism; 
+      if (typeof optimismVariant === 'string') {
+        if (optimismVariant === 'ETH') return 'ETH';
+      } else if ('ERC20' in optimismVariant) {
+        return optimismVariant.ERC20.name;
+      }
+    }
+  
+    if ('Arbitrum' in token) {
+      const arbitrumVariant = token.Arbitrum; 
+      if (typeof arbitrumVariant === 'string') {
+        if (arbitrumVariant === 'ETH') return 'ETH';
+      } else if ('ERC20' in arbitrumVariant) {
+        return arbitrumVariant.ERC20.name;
+      }
+    }
+  
+    if ('Polygon' in token) {
+      const polygonVariant = token.Polygon; 
+      if (typeof polygonVariant === 'string') {
+        if (polygonVariant === 'POL') return 'POL';
+      } else if ('ERC20' in polygonVariant) {
+        return polygonVariant.ERC20.name;
+      }
+    }
+  
+    if ('Base' in token) {
+      const baseVariant = token.Base; 
+      if (typeof baseVariant === 'string') {
+        if (baseVariant === 'ETH') return 'ETH';
+      } else if ('ERC20' in baseVariant) {
+        return baseVariant.ERC20.name;
+      }
+    }
+  
+    if ('Bitcoin' in token) {
+      const bitcoinVariant = token.Bitcoin; 
+      if (bitcoinVariant === 'BTC') return 'BTC';
+    }
   };
+  
 
   // Helper function to convert wei to ETH (decimal format)
   const formatAmount = (amount: any): string => {
@@ -575,199 +643,53 @@ export default function SenderPending() {
     }
   }, []);
 
-  // Get initiated transactions from the store
-  const pendingInitiatedTransactions = useTransactionStore((state) => state.senderPendingTransactions);
-
-  // Handler to remove an initiated transaction
-  const handleCancelInitiated = (indexToRemove: number) => {
-    if (typeof window !== 'undefined' && window.dispatchEvent) {
-      window.dispatchEvent(new CustomEvent('removeInitiatedTx', { detail: { index: indexToRemove } }));
-    }
-  };
-
   // Show loading state while fetching transactions
   if (isLoadingTransactions) {
     return (
-      <div className="space-y-3 pb-24">
-        <div className="flex justify-end mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled
-            className="h-10 px-4 text-[#7EDFCD] opacity-50 cursor-not-allowed"
-          >
-            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-            Loading...
-          </Button>
-        </div>
-        <div className="text-center py-8 text-[#9EB2AD]">
-          <p>Loading pending transactions...</p>
-        </div>
+      <div className="pt-2 px-4 max-w-sm mx-auto space-y-3">
+        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Loading pending transactions…</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 pb-24">
-      {/* Refresh Button */}
-      <div className="flex justify-end mb-4">
+    <div className="pt-2 px-4 max-w-sm mx-auto space-y-3">
+      {/* Header with Refresh */}
+      <div className="flex justify-end">
         <Button
-          variant="ghost"
-          size="sm"
           onClick={handleRefresh}
-          className={`h-10 px-4 text-[#7EDFCD] hover:text-[#7EDFCD] hover:bg-[#7EDFCD]/10 transition-all duration-200 ${
-            isRefreshing ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105'
-          }`}
           disabled={isRefreshing}
-          aria-label={isRefreshing ? 'Refreshing...' : 'Refresh Pending Transactions'}
+          variant="outline"
+          className="h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50"
+          aria-label="Refresh pending transactions"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </Button>
       </div>
 
-      {/* Don't render transactions if no real transactions exist and no initiated transactions to show */}
-      {(!fetchedTransactions || fetchedTransactions.length === 0) && pendingInitiatedTransactions.length === 0 ? (
-        <div className="space-y-3">
-        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-center gap-2 text-yellow-400">
-              <span className="text-sm">Initiate transactions to see pending updates...</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {(!fetchedTransactions || fetchedTransactions.length === 0) ? (
+        <>
+          <div className="">
+            <Card className="w-full bg-[#0D1B1B] border-[#4A5853]/20">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
+                  <span className="text-sm">No pending updates — initiate a transaction</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
       ) : (
         <>
-          {/* Render all pending initiated transactions that don't exist in real list yet */}
-      {pendingInitiatedTransactions.map((initiatedTx, index) => {
-        const txKey = getTxKey(initiatedTx);
-        const isExpanded = expandedCards.has(txKey);
-        const statusType = typeof initiatedTx.status === 'string' ? initiatedTx.status : initiatedTx.status?.type || 'Genesis';
-        const statusInfo = getStatusInfo(statusType, initiatedTx);
-        
-        return (
-          <Card key={`initiated-${index}`} className="bg-[#0D1B1B] border-white/10">
-            <CardContent className="p-3">
-              {/* Collapsed View - Always visible */}
-              <div className="space-y-2">
-                {/* Sender Address */}
-                <div>
-                  <span className="text-xs text-[#9EB2AD] font-medium">Sender Address</span>
-                  <p className="font-mono text-xs text-white break-all">{initiatedTx.senderAddress}</p>
-                </div>
-                
-                {/* Receiver Address */}
-                <div>
-                  <span className="text-xs text-[#9EB2AD] font-medium">Receiver Address</span>
-                  <p className="font-mono text-xs text-white break-all">{initiatedTx.receiverAddress}</p>
-                </div>
-                
-                {/* Networks Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                    <p className="text-xs text-white font-medium">{initiatedTx.senderAddressNetwork || 'Ethereum'}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                    <p className="text-xs text-white font-medium">Ethereum</p>
-                  </div>
-                </div>
-                
-                {/* Status Alert */}
-                <div className={`flex items-center gap-2 ${statusInfo.color} border rounded-lg px-2 py-1`}>
-                  <AlertCircle className={`h-4 w-4 ${statusInfo.iconColor}`} />
-                  {statusType === 'TxSubmissionPassed' && statusInfo.fullHash ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs">Transaction passed:</span>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(statusInfo.fullHash);
-                          toast.success('Transaction hash copied to clipboard');
-                        }}
-                        className="text-xs font-mono hover:bg-green-400/20 px-1 py-0.5 rounded transition-colors cursor-pointer"
-                        title="Click to copy full hash"
-                      >
-                        {statusInfo.message.split(': ')[1]}
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs">{statusInfo.message}</span>
-                  )}
-                </div>
-                
-                {/* Expand/Collapse Button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleCardExpansion(txKey)}
-                  className="w-full h-8 text-[#7EDFCD] hover:bg-[#7EDFCD]/10 flex items-center justify-center gap-2"
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="h-4 w-4" />
-                      Collapse
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-4 w-4" />
-                      Expand
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Expanded View - Only visible when expanded */}
-              {isExpanded && (
-                <div className="mt-4 space-y-3 border-t border-white/10 pt-3 relative">
-                  {/* Timer in top right corner */}
-                  <div className="absolute top-3 right-0">
-                    <TxTimer txKey={txKey} />
-                  </div>
-                  
-                  {/* Amount and Asset */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                      <p className="text-sm text-white font-semibold">
-                        {formatAmount(initiatedTx.amount)}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
-                      <p className="text-sm text-white font-semibold">
-                        {getTokenLabel((initiatedTx as any).token)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Fees and Codeword */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
-                      <p className="text-sm text-white">
-                        0.00
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                      <p className="font-mono text-xs text-white mt-1">{initiatedTx.codeWord}</p>
-                    </div>
-                  </div>
-
-                  {/* Dynamic Action Buttons */}
-                  <div className="w-full mt-4">
-                    {renderActionButtons(initiatedTx)}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
-
-      {/* Render all real transactions */}
+          {/* Render all real transactions */}
       {fetchedTransactions?.filter((transaction) => {
         // Check if status is an object with 'Reverted' property
         const isReverted = transaction.status && typeof transaction.status === 'object' && 'Reverted' in transaction.status;
@@ -872,7 +794,7 @@ export default function SenderPending() {
                     <div>
                       <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
                       <p className="text-sm text-white font-semibold">
-                        {getTokenLabel((transaction as any).token)}
+                        {getTokenLabel((transaction as TxStateMachine).token)}
                       </p>
                     </div>
                   </div>
@@ -882,7 +804,7 @@ export default function SenderPending() {
                     <div>
                       <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
                       <p className="text-sm text-white">
-                        0.00
+                        {transaction.feesAmount}
                       </p>
                     </div>
                     <div>

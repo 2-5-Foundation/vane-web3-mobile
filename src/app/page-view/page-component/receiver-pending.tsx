@@ -164,8 +164,8 @@ export default function ReceiverPending() {
       <div className="space-y-3">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-3">
-            <div className="flex items-center justify-center gap-2 text-yellow-400">
-              <WifiOff className="h-4 w-4" />
+            <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
+              <WifiOff className="text-[#7EDFCD] h-4 w-4" />
               <span className="text-sm">Connecting to receive updates...</span>
             </div>
           </CardContent>

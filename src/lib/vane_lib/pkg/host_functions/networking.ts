@@ -376,7 +376,6 @@ export async function createTestTxEthereum(tx: TxStateMachine): Promise<TxStateM
       address: tokenAddress as `0x${string}`,
       abi: erc20Abi,
       functionName: 'decimals',
-      authorizationList: [],
     });
   
     const value = parseUnits(String(tx.amount), decimals);
@@ -494,7 +493,6 @@ export async function createTestTxBSC(tx: TxStateMachine): Promise<TxStateMachin
       address: tokenAddress as `0x${string}`,
       abi: erc20Abi,
       functionName: 'decimals',
-      authorizationList: [],
     });
   
     const value = parseUnits(String(tx.amount), decimals);
