@@ -85,7 +85,7 @@ export default function Profile() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
-            className="glass-pane rounded-lg p-3"
+            className="bg-[#0D1B1B] rounded-lg p-3"
           >
             <div className="flex items-center gap-2 mb-2">
               <Shield className="w-3 h-3 text-gray-400" />
@@ -106,7 +106,7 @@ export default function Profile() {
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="glass-pane rounded-lg p-2.5"
+              className="bg-[#0D1B1B] rounded-lg p-2.5"
             >
               <TrendingUp className="w-3 h-3 text-gray-400 mb-1" />
               <p className="text-gray-400 text-[9px] font-medium mb-1 uppercase tracking-wide">Total Transactions</p>
@@ -117,7 +117,7 @@ export default function Profile() {
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="glass-pane rounded-lg p-2.5"
+              className="bg-[#0D1B1B] rounded-lg p-2.5"
             >
               <DollarSign className="w-3 h-3 text-gray-400 mb-1" />
               <p className="text-gray-400 text-[9px] font-medium mb-1 uppercase tracking-wide">Total Volume</p>
@@ -130,7 +130,7 @@ export default function Profile() {
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="glass-pane rounded-lg p-2.5"
+            className="bg-[#0D1B1B] rounded-lg p-2.5"
           >
             <div className="flex items-center gap-2 mb-2">
               <CreditCard className="w-3 h-3 text-gray-400" />

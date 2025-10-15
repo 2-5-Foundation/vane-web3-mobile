@@ -13,6 +13,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
   const { recvTransactions, receiverConfirmTransaction, isWasmInitialized } = useTransactionStore()
+  
+  // Use store transactions
+  const displayTransactions = recvTransactions;
+  
+  console.log('ReceiverPending - recvTransactions:', recvTransactions);
+  console.log('ReceiverPending - displayTransactions:', displayTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
   const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
   const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
@@ -41,10 +47,10 @@ export default function ReceiverPending() {
 
   // Initialize timers for any new transactions (persist using localStorage expiry timestamps)
   useEffect(() => {
-    if (!recvTransactions) return;
+    if (!displayTransactions) return;
     setExpiryByTx(prev => {
       const next: Record<string, number> = { ...prev };
-      for (const tx of recvTransactions) {
+      for (const tx of displayTransactions) {
         const key = String(tx.txNonce);
         let expiry = getExpiryFromStorage(key);
         if (!expiry) {
@@ -58,7 +64,7 @@ export default function ReceiverPending() {
 
     setRemainingByTx(prev => {
       const next: Record<string, number> = { ...prev };
-      for (const tx of recvTransactions) {
+      for (const tx of displayTransactions) {
         const key = String(tx.txNonce);
         const stored = getExpiryFromStorage(key);
         const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
@@ -68,7 +74,7 @@ export default function ReceiverPending() {
       }
       return next;
     });
-  }, [recvTransactions, INITIAL_SECONDS]);
+  }, [displayTransactions, INITIAL_SECONDS]);
 
   // Tick down once per second
   useEffect(() => {
@@ -153,7 +159,7 @@ export default function ReceiverPending() {
   }
 
   // Show connection status if not connected
-      if (!isWasmInitialized()) {
+  if (!isWasmInitialized()) {
     return (
       <div className="space-y-3">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
@@ -169,7 +175,7 @@ export default function ReceiverPending() {
   }
 
   // Show empty state when no pending transactions
-  if (!recvTransactions || recvTransactions.length === 0) {
+  if (!displayTransactions || displayTransactions.length === 0) {
     return (
       <div className="space-y-3">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
@@ -205,52 +211,64 @@ export default function ReceiverPending() {
           )}
         </div>
         <span className="text-xs text-[#9EB2AD]">
-          {recvTransactions.length} pending
+          {displayTransactions.length} pending
         </span>
       </div>
 
       {/* Pending Transactions */}
-      {recvTransactions.map((transaction) => (
-        <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20">
+      {displayTransactions.map((transaction) => (
+        <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
-            <div>
-              {/* Address Rows */}
-              <div className="grid grid-cols-1 gap-2">
+            {/* Timer in top right corner */}
+            <div className="absolute top-3 right-3">
+              <div className={`px-2 py-0.5 rounded text-xs font-medium ${ (remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ? 'text-[#7EDFCD] bg-[#7EDFCD]/10' : 'text-red-400 bg-red-500/10' }`}>
+                {(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ?
+                  formatTime(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) :
+                  'Expired'}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {/* Sender Address */}
+              <div>
+                <span className="text-xs text-[#9EB2AD] font-medium">Sender Address</span>
+                <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
+              </div>
+              
+              {/* Receiver Address */}
+              <div>
+                <span className="text-xs text-[#9EB2AD] font-medium">Receiver Address</span>
+                <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
+              </div>
+              
+              {/* Networks Row */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-xs text-[#9EB2AD]">From address</span>
-                  <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
+                  <p className="text-xs text-white font-medium">{transaction.senderAddressNetwork || 'Ethereum'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-[#9EB2AD]">To address</span>
-                  <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
+                  <p className="text-xs text-white font-medium">{transaction.receiverAddressNetwork || 'Ethereum'}</p>
                 </div>
               </div>
-              {/* Codeword Row with Timer */}
-              <div className="flex items-center justify-between">
+              
+              {/* Amount and Asset Row */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-xs text-[#9EB2AD]">Codeword</span>
-                  <p className="font-mono text-xs text-white">{transaction.codeWord}</p>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
+                  <p className="text-sm text-white font-semibold">{formatAmount(transaction.amount)}</p>
                 </div>
-                <div className={`px-2 py-0.5 rounded text-xs font-medium ${ (remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ? 'text-[#7EDFCD] bg-[#7EDFCD]/10' : 'text-red-400 bg-red-500/10' }`}>
-                  {(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ?
-                    formatTime(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) :
-                    'Expired'}
+                <div>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
+                  <p className="text-sm text-white font-semibold">ETH</p>
                 </div>
               </div>
-              {/* Networks and Amount Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <span className="text-xs text-[#9EB2AD]">Sender Network</span>
-                  <p className="text-xs text-white">{transaction.senderAddressNetwork || 'Ethereum'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-[#9EB2AD]">Receiver Network</span>
-                  <p className="text-xs text-white">{transaction.receiverAddressNetwork || 'Ethereum'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-[#9EB2AD]">Amount</span>
-                  <p className="text-xs text-white">{formatAmount(transaction.amount)} ETH</p>
-                </div>
+              
+              {/* Codeword */}
+              <div>
+                <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
+                <p className="font-mono text-xs text-white mt-1">{transaction.codeWord}</p>
               </div>
               {/* Status Row */}
               <div className={`flex items-center gap-2 border rounded-lg px-2 py-1 mt-2 ${

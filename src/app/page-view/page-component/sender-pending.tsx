@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, AlertCircle } from "lucide-react"
+import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
@@ -77,11 +77,7 @@ const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }
   );
 };
 
-export default function SenderPending({
-  initiatedTransactions = []
-}: {
-  initiatedTransactions?: TxStateMachine[];
-}) {
+export default function SenderPending() {
   const getTokenLabel = (token: any): string => {
     if (!token) return '';
     if (typeof token === 'string') return token;
@@ -139,6 +135,7 @@ export default function SenderPending({
   const [showCancelConfirmArr, setShowCancelConfirmArr] = useState<boolean[]>([]);
   const [showActionConfirmMap, setShowActionConfirmMap] = useState<Record<string, boolean>>({});
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [fetchedTransactions, setFetchedTransactions] = useState<TxStateMachine[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const removeTransaction = useTransactionStore(state => state.removeTransaction)
@@ -251,6 +248,18 @@ export default function SenderPending({
     setShowActionConfirmMap(prev => ({ ...prev, [txKey]: show }));
   };
 
+  const toggleCardExpansion = (txKey: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(txKey)) {
+        newSet.delete(txKey);
+      } else {
+        newSet.add(txKey);
+      }
+      return newSet;
+    });
+  };
+
   const renderActionButtons = (transaction) => {
     // Fix: handle both string and object status
     const statusType = typeof transaction.status === 'string'
@@ -316,105 +325,38 @@ export default function SenderPending({
         return (
           <div className="flex gap-2">
             <Button
-              onClick={() => handleShowActionConfirm(transaction.txNonce, true)}
+              onClick={() => handleRevert(transaction)}
               variant="outline"
-              className={`flex-1 h-10 text-white transition-all duration-200 ${
-                'bg-transparent border-red-500/20 text-white hover:bg-red-500/10'
-              } text-xs font-medium`}
+              className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
             >
-              Revert
+              Cancel
             </Button>
             <Button
-              onClick={() => handleShowActionConfirm(transaction.txNonce, true)}
+              onClick={() => handleConfirm(transaction)}
               className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
             >
               Confirm
             </Button>
-            {/* Simple confirmation */}
-            {showActionConfirmMap[transaction.txNonce] && (
-              <div className="mt-2 space-y-2">
-                <div className="text-xs text-green-400 text-center">Submit transaction?</div>
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1 h-8 bg-[#7EDFCD] hover:bg-[#7EDFCD]/90 text-black text-xs"
-                    onClick={() => handleConfirm(transaction)}
-                  >
-                    Yes, Submit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-8 border-gray-500/40 text-gray-400 hover:bg-gray-500/10 text-xs"
-                    onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         );
       case 'RecvAddrConfirmationPassed':
       case 'NetConfirmed':
         return (
-          <>
-            <div className="flex gap-4 w-full mb-4">
-              <Button
-                onClick={() => {
-                  handleShowActionConfirm(transaction.txNonce, false);
-                  handleShowActionConfirm(`revert-${transaction.txNonce}`, !showActionConfirmMap[`revert-${transaction.txNonce}`]);
-                }}
-                variant="outline"
-                className="flex-1 h-10 text-white transition-all duration-200 bg-transparent border-red-500/20 hover:bg-red-500/10 text-xs font-medium"
-              >
-                Revert
-              </Button>
-              <Button
-                onClick={() => {
-                  handleShowActionConfirm(`revert-${transaction.txNonce}`, false);
-                  handleShowActionConfirm(transaction.txNonce, !showActionConfirmMap[transaction.txNonce]);
-                }}
-                className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
-              >
-                Confirm
-              </Button>
-            </div>
-            {showActionConfirmMap[transaction.txNonce] && (
-              <div className="mt-2 space-y-2">
-                <div className="text-xs text-green-400 text-center">Submit transaction?</div>
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1 h-8 bg-[#7EDFCD] hover:bg-[#7EDFCD]/90 text-black text-xs"
-                    onClick={() => handleConfirm(transaction)}
-                  >
-                    Yes, Submit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-8 border-gray-500/40 text-gray-400 hover:bg-gray-500/10 text-xs"
-                    onClick={() => handleShowActionConfirm(transaction.txNonce, false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-            {showActionConfirmMap[`revert-${transaction.txNonce}`] && (
-              <div className="mt-2 flex gap-2">
-                <Button
-                  className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-xs"
-                  onClick={() => handleRevert(transaction)}
-                >
-                  Confirm Revert
-                </Button>
-                <Button
-                  className="flex-1 h-10 bg-[#1a2628] text-white hover:bg-[#2a3638] text-xs"
-                  onClick={() => handleShowActionConfirm(`revert-${transaction.txNonce}`, false)}
-                >
-                  Keep Transaction
-                </Button>
-              </div>
-            )}
-          </>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => handleRevert(transaction)}
+              variant="outline"
+              className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleConfirm(transaction)}
+              className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+            >
+              Confirm
+            </Button>
+          </div>
         );
       case 'SenderConfirmed':
         return (
@@ -467,27 +409,11 @@ export default function SenderPending({
           </div>
         );
       case 'TxSubmissionPassed':
-        const txKey = String(transaction.txNonce || transaction.receiverAddress);
-        const shouldShowSuccess = showSuccessComponents.has(txKey);
-        
-        if (!shouldShowSuccess) {
-          return (
-            <div className="space-y-2">
-              <Button
-                className="w-full h-10 bg-[#4A5853]/20 text-[#7EDFCD] hover:bg-[#4A5853]/30 text-xs"
-                disabled
-              >
-                Processing...
-              </Button>
-            </div>
-          );
-        }
-        
         return (
           <div className="space-y-2">
             <Button
               onClick={() => handleComplete(transaction)}
-              className="w-full h-10 bg-[#4A5853]/20 text-[#7EDFCD] hover:bg-[#4A5853]/30 text-xs"
+              className="w-full h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
             >
               Completed
             </Button>
@@ -562,45 +488,26 @@ export default function SenderPending({
   };
 
   // Helper to get status colors and messages
-  const getStatusInfo = (statusType: string) => {
+  const getStatusInfo = (statusType: string, transaction?: any) => {
     switch (statusType) {
-      case 'TxSubmissionPassed':
+      case 'Genesis':
         return {
-          color: 'text-green-400 border-green-400',
-          iconColor: 'text-green-400',
-          message: 'Transaction completed successfully'
-        };
-      case 'Reverted':
-        return {
-          color: 'text-red-400 border-red-400',
-          iconColor: 'text-red-400',
-          message: 'Transaction reverted'
-        };
-      case 'RecvAddrFailed':
-      case 'SenderConfirmationfailed':
-      case 'FailedToSubmitTxn':
-        return {
-          color: 'text-red-400 border-red-400',
-          iconColor: 'text-red-400',
-          message: 'Transaction failed'
-        };
-      case 'FailedToSubmitTxn':
-        return {
-          color: 'text-blue-400 border-blue-400',
-          iconColor: 'text-blue-400',
-          message: 'Transaction successfully submitted'
+          color: 'text-[#FFA500] border-[#FFA500]',
+          iconColor: 'text-[#FFA500]',
+          message: 'Waiting for receiver confirmation'
         };
       case 'ReceiverNotRegistered':
         return {
           color: 'text-red-400 border-red-400',
           iconColor: 'text-red-400',
-          message: 'Transaction failed'
+          message: 'Receiver not registered to vane'
         };
-      case 'SenderConfirmed':
+      case 'RecvAddrFailed':
+      case 'SenderConfirmationfailed':
         return {
-          color: 'text-blue-400 border-blue-400',
-          iconColor: 'text-blue-400',
-          message: 'Processing transaction...'
+          color: 'text-red-400 border-red-400',
+          iconColor: 'text-red-400',
+          message: 'Receiver confirmation failed, please revert'
         };
       case 'RecvAddrConfirmed':
       case 'RecvAddrConfirmationPassed':
@@ -608,13 +515,37 @@ export default function SenderPending({
         return {
           color: 'text-green-400 border-green-400',
           iconColor: 'text-green-400',
-          message: 'Ready for confirmation'
+          message: 'Receiver confirmation passed, make sure you did communicate'
+        };
+      case 'TxSubmissionPassed':
+        const txHash = transaction?.status?.data?.hash ? 
+          `0x${Array.from(transaction.status.data.hash).map((b: number) => b.toString(16).padStart(2, '0')).join('')}` : 
+          'N/A';
+        const truncatedHash = txHash.length > 20 ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}` : txHash;
+        return {
+          color: 'text-green-400 border-green-400',
+          iconColor: 'text-green-400',
+          message: `Transaction passed: ${truncatedHash}`,
+          fullHash: txHash
+        };
+      case 'Reverted':
+        return {
+          color: 'text-red-400 border-red-400',
+          iconColor: 'text-red-400',
+          message: 'Transaction cancelled'
+        };
+      case 'TxError':
+        const errorData = transaction?.status?.data || 'Unknown error';
+        return {
+          color: 'text-red-400 border-red-400',
+          iconColor: 'text-red-400',
+          message: `Unexpected transaction error: ${errorData}`
         };
       default:
         return {
           color: 'text-[#FFA500] border-[#FFA500]',
           iconColor: 'text-[#FFA500]',
-          message: 'Waiting for receiver confirmation..'
+          message: 'Waiting for receiver confirmation'
         };
     }
   };
@@ -628,13 +559,12 @@ export default function SenderPending({
     });
   };
 
-  // State to track if we should show initiated transactions
-  const [showInitiatedTransactions, setShowInitiatedTransactions] = useState(true);
 
   // Listen for the removeAllInitiatedTx event
   useEffect(() => {
     const handleRemoveAllInitiated = () => {
-      setShowInitiatedTransactions(false);
+      // Clear all initiated transactions from store
+      useTransactionStore.getState().clearAllTransactions();
     };
 
     if (typeof window !== 'undefined') {
@@ -645,20 +575,8 @@ export default function SenderPending({
     }
   }, []);
 
-  // Reset showInitiatedTransactions when new initiatedTransactions are added
-  useEffect(() => {
-    if (initiatedTransactions.length > 0) {
-      setShowInitiatedTransactions(true);
-    }
-  }, [initiatedTransactions.length]);
-
-  // Filter out initiated transactions that already exist in the real transactions list
-  const pendingInitiatedTransactions = showInitiatedTransactions ? initiatedTransactions.filter(initiatedTx => 
-    !fetchedTransactions?.some(realTx => 
-      realTx.receiverAddress === initiatedTx.receiverAddress &&
-      realTx.amount.toString() === initiatedTx.amount.toString()
-    )
-  ) : [];
+  // Get initiated transactions from the store
+  const pendingInitiatedTransactions = useTransactionStore((state) => state.senderPendingTransactions);
 
   // Handler to remove an initiated transaction
   const handleCancelInitiated = (indexToRemove: number) => {
@@ -710,112 +628,140 @@ export default function SenderPending({
 
       {/* Don't render transactions if no real transactions exist and no initiated transactions to show */}
       {(!fetchedTransactions || fetchedTransactions.length === 0) && pendingInitiatedTransactions.length === 0 ? (
-        <div className="text-center py-8 text-[#9EB2AD]">
-          <p>No pending transactions found</p>
-        </div>
+        <div className="space-y-3">
+        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-center gap-2 text-yellow-400">
+              <span className="text-sm">Initiate transactions to see pending updates...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       ) : (
         <>
           {/* Render all pending initiated transactions that don't exist in real list yet */}
       {pendingInitiatedTransactions.map((initiatedTx, index) => {
-        const statusInfo = getStatusInfo('Genesis'); // Default status for initiated transactions
+        const txKey = getTxKey(initiatedTx);
+        const isExpanded = expandedCards.has(txKey);
+        const statusType = typeof initiatedTx.status === 'string' ? initiatedTx.status : initiatedTx.status?.type || 'Genesis';
+        const statusInfo = getStatusInfo(statusType, initiatedTx);
+        
         return (
-          <Card key={`initiated-${index}`} className="bg-[#1a2628] border-white/10 flex flex-col justify-between h-full">
-            <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
-              <div className="space-y-3">
-                {/* Sender Address Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">From address</span>
-                  <p className="font-mono text-xs text-white break-all px-2 py-1">{initiatedTx.senderAddress}</p>
+          <Card key={`initiated-${index}`} className="bg-[#0D1B1B] border-white/10">
+            <CardContent className="p-3">
+              {/* Collapsed View - Always visible */}
+              <div className="space-y-2">
+                {/* Sender Address */}
+                <div>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Sender Address</span>
+                  <p className="font-mono text-xs text-white break-all">{initiatedTx.senderAddress}</p>
                 </div>
                 
-                {/* Receiver Address Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">To address</span>
-                  <p className="font-mono text-xs text-white break-all px-2 py-1">{initiatedTx.receiverAddress}</p>
-                </div>
-                
-                {/* Codeword Row with Timer and Refresh Button */}
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                    <p className="font-mono text-xs text-white px-2 py-1 mt-1">{initiatedTx.codeWord}</p>
-                  </div>
-                  <div className="flex items-center gap-2 ml-3">
-                    <TxTimer txKey={getTxKey(initiatedTx)} />
-                  </div>
+                {/* Receiver Address */}
+                <div>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Receiver Address</span>
+                  <p className="font-mono text-xs text-white break-all">{initiatedTx.receiverAddress}</p>
                 </div>
                 
                 {/* Networks Row */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                  <div>
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                    <p className="text-xs text-white font-medium px-2 py-1">{initiatedTx.senderAddressNetwork || 'Ethereum'}</p>
+                    <p className="text-xs text-white font-medium">{initiatedTx.senderAddressNetwork || 'Ethereum'}</p>
                   </div>
-                  <div className="space-y-1">
+                  <div>
                     <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                    <p className="text-xs text-white font-medium px-2 py-1">Ethereum</p>
+                    <p className="text-xs text-white font-medium">Ethereum</p>
                   </div>
                 </div>
                 
-                {/* Amount Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                  <p className="text-sm text-white font-semibold px-2 py-1">
-                    {formatAmount(initiatedTx.amount)} {getTokenLabel((initiatedTx as any).token)}
-                  </p>
+                {/* Status Alert */}
+                <div className={`flex items-center gap-2 ${statusInfo.color} border rounded-lg px-2 py-1`}>
+                  <AlertCircle className={`h-4 w-4 ${statusInfo.iconColor}`} />
+                  {statusType === 'TxSubmissionPassed' && statusInfo.fullHash ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs">Transaction passed:</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(statusInfo.fullHash);
+                          toast.success('Transaction hash copied to clipboard');
+                        }}
+                        className="text-xs font-mono hover:bg-green-400/20 px-1 py-0.5 rounded transition-colors cursor-pointer"
+                        title="Click to copy full hash"
+                      >
+                        {statusInfo.message.split(': ')[1]}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs">{statusInfo.message}</span>
+                  )}
                 </div>
+                
+                {/* Expand/Collapse Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleCardExpansion(txKey)}
+                  className="w-full h-8 text-[#7EDFCD] hover:bg-[#7EDFCD]/10 flex items-center justify-center gap-2"
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      Collapse
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      Expand
+                    </>
+                  )}
+                </Button>
+              </div>
 
-                {/* Transaction Status Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">Status</span>
-                  <p className="text-sm text-white px-2 py-1">
-                    {formatStatus(
-                      typeof initiatedTx.status === 'string' 
-                        ? initiatedTx.status 
-                        : initiatedTx.status?.type || 'Genesis'
-                    )}
-                  </p>
-                </div>
-              </div>
-              {/* Status */}
-              <div className={`flex items-center gap-2 ${statusInfo.color} border border-${statusInfo.iconColor} rounded-lg px-2 py-1 mt-2`}>
-                <AlertCircle className={`h-4 w-4 ${statusInfo.iconColor}`} />
-                <span className="text-xs">{statusInfo.message}</span>
-              </div>
-              {/* Cancel Button at the bottom */}
-              <div className="mt-4 flex flex-col items-center">
-                {!showCancelConfirmArr[index] ? (
-                  <Button
-                    className="w-full h-10 bg-red-500/80 text-white hover:bg-red-500 transition-all duration-200 border border-red-500/20"
-                    onClick={() => handleShowCancelConfirm(index, true)}
-                  >
-                    Cancel
-                  </Button>
-                ) : (
-                  <div className="w-full flex flex-col items-center justify-center animate-zoom-in p-4 bg-gradient-to-b from-red-500/10 to-red-600/5 border border-red-500/30 rounded-lg backdrop-blur-sm transition-all duration-300">
-                    <div className="flex items-center gap-2 mb-3">
-                      <AlertCircle className="h-4 w-4 text-red-400" />
-                      <span className="text-white text-sm font-medium">Cancel Transaction?</span>
+              {/* Expanded View - Only visible when expanded */}
+              {isExpanded && (
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-3 relative">
+                  {/* Timer in top right corner */}
+                  <div className="absolute top-3 right-0">
+                    <TxTimer txKey={txKey} />
+                  </div>
+                  
+                  {/* Amount and Asset */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
+                      <p className="text-sm text-white font-semibold">
+                        {formatAmount(initiatedTx.amount)}
+                      </p>
                     </div>
-                
-                    <div className="w-full flex gap-2">
-                      <Button
-                        className="flex-1 h-10 bg-red-500 text-white hover:bg-red-600 transition-all duration-200 font-medium shadow-lg"
-                        onClick={() => handleCancelInitiated(index)}
-                      >
-                        Confirm Cancel
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="flex-1 h-10 bg-transparent border-[#4A5853]/40 text-[#9EB2AD] hover:bg-[#4A5853]/20 hover:text-white transition-all duration-200"
-                        onClick={() => handleShowCancelConfirm(index, false)}
-                      >
-                        Keep Transaction
-                      </Button>
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
+                      <p className="text-sm text-white font-semibold">
+                        {getTokenLabel((initiatedTx as any).token)}
+                      </p>
                     </div>
                   </div>
-                )}
-              </div>
+                  
+                  {/* Fees and Codeword */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
+                      <p className="text-sm text-white">
+                        0.00
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
+                      <p className="font-mono text-xs text-white mt-1">{initiatedTx.codeWord}</p>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Action Buttons */}
+                  <div className="w-full mt-4">
+                    {renderActionButtons(initiatedTx)}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
@@ -830,94 +776,137 @@ export default function SenderPending({
       }).map((transaction) => {
         const txKey = String(transaction.txNonce || transaction.receiverAddress);
         const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
-        const statusInfo = getStatusInfo(statusType);
+        const statusInfo = getStatusInfo(statusType, transaction);
+        const isExpanded = expandedCards.has(txKey);
+        
         return (
-          <Card key={txKey} className="bg-[#1a2628] border-white/10 relative">
-            <CardContent className="p-3 space-y-3">
-              {/* Transaction Details */}
-              <div className="space-y-3">
-                {/* Sender Address Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">From address</span>
-                  <p className="font-mono text-xs text-white break-all px-2 py-1">{transaction.senderAddress}</p>
+          <Card key={txKey} className="bg-[#0D1B1B] border-white/10 relative">
+            <CardContent className="p-3">
+              {/* Collapsed View - Always visible */}
+              <div className="space-y-2">
+                {/* Sender Address */}
+                <div>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Sender Address</span>
+                  <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
                 </div>
                 
-                {/* Receiver Address Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">To address</span>
-                  <p className="font-mono text-xs text-white break-all px-2 py-1">{transaction.receiverAddress}</p>
-                </div>
-                
-                {/* Codeword Row with Timer and Refresh Button */}
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                    <p className="font-mono text-xs text-white px-2 py-1 mt-1">{transaction.codeWord}</p>
-                  </div>
-                  <div className="flex items-center gap-2 ml-3">
-                    {statusType !== 'TxSubmissionPassed' && <TxTimer txKey={getTxKey(transaction)} />}
-                  </div>
+                {/* Receiver Address */}
+                <div>
+                  <span className="text-xs text-[#9EB2AD] font-medium">Receiver Address</span>
+                  <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
                 </div>
                 
                 {/* Networks Row */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                  <div>
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                    <p className="text-xs text-white font-medium px-2 py-1">{transaction.senderAddressNetwork || 'Ethereum'}</p>
+                    <p className="text-xs text-white font-medium">{transaction.senderAddressNetwork || 'Ethereum'}</p>
                   </div>
-                  <div className="space-y-1">
+                  <div>
                     <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                    <p className="text-xs text-white font-medium px-2 py-1">Ethereum</p>
+                    <p className="text-xs text-white font-medium">Ethereum</p>
                   </div>
                 </div>
                 
-                {/* Amount Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                  <p className="text-sm text-white font-semibold px-2 py-1">
-                    {formatAmount(transaction.amount)} {getTokenLabel((transaction as any).token)}
-                  </p>
+                {/* Status Alert */}
+                <div className={`flex items-center gap-2 ${statusInfo.color} border rounded-lg px-2 py-1`}>
+                  <AlertCircle className={`h-4 w-4 ${statusInfo.iconColor}`} />
+                  {statusType === 'TxSubmissionPassed' && statusInfo.fullHash ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs">Transaction passed:</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(statusInfo.fullHash);
+                          toast.success('Transaction hash copied to clipboard');
+                        }}
+                        className="text-xs font-mono hover:bg-green-400/20 px-1 py-0.5 rounded transition-colors cursor-pointer"
+                        title="Click to copy full hash"
+                      >
+                        {statusInfo.message.split(': ')[1]}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs">{statusInfo.message}</span>
+                  )}
                 </div>
+                
+                {/* Expand/Collapse Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleCardExpansion(txKey)}
+                  className="w-full h-8 text-[#7EDFCD] hover:bg-[#7EDFCD]/10 flex items-center justify-center gap-2"
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      Collapse
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      Expand
+                    </>
+                  )}
+                </Button>
+              </div>
 
-                {/* Transaction Status Row */}
-                <div className="space-y-1">
-                  <span className="text-xs text-[#9EB2AD] font-medium">Status</span>
-                  <p className="text-sm text-white px-2 py-1">
-                    {formatStatus(
-                      typeof transaction.status === 'string' 
-                        ? transaction.status 
-                        : transaction.status?.type || 'Unknown'
-                    )}
-                  </p>
-                </div>
-
-                {/* Transaction Errors Row */}
-                {transaction.status && typeof transaction.status === 'object' && 'type' in transaction.status && (transaction.status as any).type === 'TxError' && (
-                  <div className="space-y-1">
-                    <span className="text-xs text-[#9EB2AD] font-medium">Transaction Error</span>
-                    <div className="bg-red-100 px-3 py-2 rounded border border-red-300">
-                      <span className="text-sm text-red-600 font-medium">{(transaction.status as any).data}</span>
+              {/* Expanded View - Only visible when expanded */}
+              {isExpanded && (
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-3 relative">
+                  {/* Timer in top right corner */}
+                  {statusType !== 'TxSubmissionPassed' && (
+                    <div className="absolute top-3 right-0">
+                      <TxTimer txKey={getTxKey(transaction)} />
+                    </div>
+                  )}
+                  
+                  {/* Amount and Asset */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
+                      <p className="text-sm text-white font-semibold">
+                        {formatAmount(transaction.amount)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
+                      <p className="text-sm text-white font-semibold">
+                        {getTokenLabel((transaction as any).token)}
+                      </p>
                     </div>
                   </div>
-                )}
-              </div>
+                  
+                  {/* Fees and Codeword */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
+                      <p className="text-sm text-white">
+                        0.00
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
+                      <p className="font-mono text-xs text-white mt-1">{transaction.codeWord}</p>
+                    </div>
+                  </div>
 
-              {/* Status with Refresh Button */}
-              {['RecvAddrConfirmationPassed', 'NetConfirmed'].includes(statusType) ? (
-                <div className="flex items-center gap-2 text-green-400 border border-green-400 rounded-lg px-2 py-1 mt-2">
-                  <AlertCircle className="h-4 w-4 text-green-400" />
-                  <span className="text-sm">Receiver confirmed</span>
-                </div>
-              ) : (
-                <div className={`flex items-center gap-2 ${statusInfo.color} border border-${statusInfo.iconColor} rounded-lg px-2 py-1 mt-2`}>
-                  <AlertCircle className={`h-4 w-4 ${statusInfo.iconColor}`} />
-                  <span className="text-sm">{statusInfo.message}</span>
+                  {/* Transaction Errors Row */}
+                  {transaction.status && typeof transaction.status === 'object' && 'type' in transaction.status && (transaction.status as any).type === 'TxError' && (
+                    <div className="space-y-1">
+                      <span className="text-xs text-[#9EB2AD] font-medium">Transaction Error</span>
+                      <div className="bg-red-100 px-3 py-2 rounded border border-red-300">
+                        <span className="text-sm text-red-600 font-medium">{(transaction.status as any).data}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dynamic Action Buttons */}
+                  <div className="w-full mt-4">
+                    {renderActionButtons(transaction)}
+                  </div>
                 </div>
               )}
-              {/* Dynamic Action Buttons */}
-              <div className="w-full mt-4">
-                {renderActionButtons(transaction)}
-              </div>
             </CardContent>
           </Card>
         );

@@ -224,7 +224,7 @@ export default function Wallets() {
           </RadioGroup>
 
           <DynamicConnectButton
-           buttonContainerClassName="w-full h-10 flex justify-center items-center bg-transparent border border-dashed border-[#7EDFCD]/20 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/40">
+           buttonContainerClassName="w-full h-10 flex justify-center items-center bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 rounded-lg">
            {primaryWallet ? "Change Wallet" : "Connect Wallet"}
           </DynamicConnectButton>
 
