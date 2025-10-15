@@ -281,15 +281,12 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       const walletNetworkId = await primaryWallet.getNetwork();
       const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
       
-      // Convert decimal amount to wei (smallest unit) for BigInt conversion
-      // For ETH: 1 ETH = 10^18 wei
-      const amountInWei = Math.floor(formData.amount * Math.pow(10, 18));
       
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
       await initiateTransaction(
         primaryWallet.address,
         formData.recipient,
-        BigInt(amountInWei),
+        BigInt(formData.amount),
         token,
         primaryWallet.connector.name,
         walletNetwork, // sender network from wallet

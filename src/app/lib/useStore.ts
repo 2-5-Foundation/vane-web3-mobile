@@ -56,6 +56,7 @@ import {
   decryptLibp2pSecretWithCEK
 } from './keystore';
 import { bytesToHex } from 'viem';
+import { toast } from 'sonner';
 
 config();
 export interface TransferFormData {
@@ -389,9 +390,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     try {
       await senderConfirm(tx);
-      console.log('Transaction confirmed by sender successfully');
+      console.info('Transaction confirmed by sender successfully');
+      toast.success('Transaction confirmed by sender successfully');
     } catch (error) {
       console.error('Error confirming transaction by sender:', error);
+      toast.error('Error confirming transaction');
       throw error;
     }
   },
