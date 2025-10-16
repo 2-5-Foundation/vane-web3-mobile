@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect } from "react";
 
 interface LandingOverlayProps {
   show: boolean;
@@ -6,15 +6,21 @@ interface LandingOverlayProps {
   fetchedTweets: { html: string }[];
 }
 
-const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedTweets }) => {
+const LandingOverlay: React.FC<LandingOverlayProps> = ({
+  show,
+  onClose,
+  fetchedTweets,
+}) => {
   useEffect(() => {
     // Debug: fetch a single tweet oEmbed and log the result
-    fetch('https://publish.twitter.com/oembed?url=https://twitter.com/autismcapital/status/1786415766394527979')
-      .then(res => res.json())
-      .then(data => {
-        console.log('Single tweet oEmbed:', data);
+    fetch(
+      "https://publish.twitter.com/oembed?url=https://twitter.com/autismcapital/status/1786415766394527979"
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Single tweet oEmbed:", data);
       })
-      .catch(err => console.error('oEmbed fetch error:', err));
+      .catch((err) => console.error("oEmbed fetch error:", err));
   }, []);
 
   useEffect(() => {
@@ -24,8 +30,8 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
         // @ts-expect-error: twttr is not typed on window
         window.twttr.widgets.load();
       } else {
-        const script = document.createElement('script');
-        script.src = 'https://platform.twitter.com/widgets.js';
+        const script = document.createElement("script");
+        script.src = "https://platform.twitter.com/widgets.js";
         script.async = true;
         document.body.appendChild(script);
       }
@@ -46,38 +52,59 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
         onClick={onClose}
       >
         <svg className="w-6 h-6" fill="none" stroke="white" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18L18 6M6 6l12 12"
+          />
         </svg>
       </button>
       {/* Content */}
       <div className="w-full max-w-md mx-auto px-4 flex flex-col items-center pb-32 pt-[10vh] relative z-10">
-        <h2 className="relative text-2xl sm:text-3xl md:text-4xl font-sans font-bold tracking-wider text-center mb-8 uppercase max-w-xs mx-auto leading-tight">
-            <span className="bg-gradient-to-r from-[#7EDFCD] to-[#5BC4B0] bg-clip-text text-transparent drop-shadow-lg">
-                we are protecting you from
+        <div className="text-center space-y-6">
+          <h1 className="relative text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-sans font-bold tracking-tight max-w-4xl mx-auto leading-tight">
+            <span className="bg-gradient-to-r from-[#7EDFCD] via-[#6AD4C1] to-[#5BC4B0] bg-clip-text text-transparent drop-shadow-lg">
+              Your secure crypto wallet for seamless transfers and management.
             </span>
-            <span className="absolute inset-0 bg-gradient-to-r from-[#7EDFCD] to-[#5BC4B0] bg-clip-text text-transparent blur-sm opacity-50 -z-10">
-                we are protecting you from
-            </span>
-        </h2>
+          </h1>
+
+          <p className="text-lg sm:text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light">
+            Effortless transfers, intelligent management, and military-grade
+            security—all in one beautiful wallet.
+          </p>
+
+          <div className="pt-4">
+            <h3 className="relative text-base sm:text-lg md:text-xl font-semibold tracking-wide text-center uppercase max-w-xs mx-auto leading-tight">
+              <span className="bg-gradient-to-r from-[#7EDFCD] to-[#5BC4B0] bg-clip-text text-transparent drop-shadow-lg">
+                Sleep Easy Knowing You're Protected From:
+              </span>
+            </h3>
+          </div>
+        </div>
         {/* Tweets as images or HTML */}
         <div className="flex gap-4 overflow-x-auto w-full mb-8 pb-2 scrollbar-thin scrollbar-thumb-[#7EDFCD]/30 scrollbar-track-transparent">
-          {fetchedTweets.length > 0 ? (
-            fetchedTweets.map((tweet, idx) => (
-              <div key={idx} className="min-w-[260px] max-w-[300px] rounded-lg shadow-md p-2 bg-transparent" dangerouslySetInnerHTML={{ __html: tweet.html }} />
-            ))
-          ) : (
-            // Skeleton loader while tweets are loading
-            [...Array(3)].map((_, idx) => (
-              <div
-                key={idx}
-                className="min-w-[260px] max-w-[300px] h-[180px] rounded-lg bg-[#222] animate-pulse"
-              />
-            ))
-          )}
+          {fetchedTweets.length > 0
+            ? fetchedTweets.map((tweet, idx) => (
+                <div
+                  key={idx}
+                  className="min-w-[260px] max-w-[300px] rounded-lg shadow-md p-2 bg-transparent"
+                  dangerouslySetInnerHTML={{ __html: tweet.html }}
+                />
+              ))
+            : // Skeleton loader while tweets are loading
+              [...Array(3)].map((_, idx) => (
+                <div
+                  key={idx}
+                  className="min-w-[260px] max-w-[300px] h-[180px] rounded-lg bg-[#222] animate-pulse"
+                />
+              ))}
         </div>
         {/* How it works header and subhead */}
         <div className="w-full flex flex-col items-center mb-2">
-          <h3 className="text-base sm:text-lg font-sans font-normal tracking-normal text-[#7EDFCD] mb-0.5 uppercase">How it works</h3>
+          <h3 className="text-base sm:text-lg font-sans font-normal tracking-normal text-[#7EDFCD] mb-0.5 uppercase">
+            How it works
+          </h3>
           <div className="text-[#C7D1CC] text-sm font-medium">Simply</div>
         </div>
         {/* How it works - vertical stepper */}
@@ -86,19 +113,47 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
           <div className="flex flex-col items-center">
             <div className="w-9 h-9 rounded-full border border-[#7EDFCD] flex items-center justify-center mb-1">
               {/* Paper plane icon */}
-              <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M22 2L11 13" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                className="w-5 h-5 text-[#7EDFCD]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M22 2L11 13"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M22 2L15 22L11 13L2 9L22 2Z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
-            <div className="text-white text-base font-semibold mb-0.5 text-center">Initiate Transaction</div>
-            <div className="text-[#C7D1CC] text-xs text-center mb-2">Initiate your transaction as usual through your preferred wallet</div>
+            <div className="text-white text-base font-semibold mb-0.5 text-center">
+              Initiate Transaction
+            </div>
+            <div className="text-[#C7D1CC] text-xs text-center mb-2">
+              Initiate your transaction as usual through your preferred wallet
+            </div>
           </div>
           {/* Arrow + Divider */}
           <div className="flex flex-col items-center">
             <div className="h-6 w-px bg-gradient-to-b from-[#7EDFCD]/60 to-transparent" />
-            <svg className="w-4 h-4 text-[#7EDFCD] my-[-2px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M12 6v12M12 18l4-4M12 18l-4-4" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              className="w-4 h-4 text-[#7EDFCD] my-[-2px]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M12 6v12M12 18l4-4M12 18l-4-4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             <div className="h-6 w-px bg-gradient-to-b from-transparent to-[#7EDFCD]/60" />
           </div>
@@ -106,19 +161,43 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
           <div className="flex flex-col items-center">
             <div className="w-9 h-9 rounded-full border border-[#7EDFCD] flex items-center justify-center mb-1">
               {/* User check icon */}
-              <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg
+                className="w-5 h-5 text-[#7EDFCD]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
                 <circle cx="12" cy="12" r="8" />
-                <path d="M9.5 12.5l2 2l3-3" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M9.5 12.5l2 2l3-3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
-            <div className="text-white text-base font-semibold mb-0.5 text-center">Receiver Verification</div>
-            <div className="text-[#C7D1CC] text-xs text-center mb-2">Receiver signs a message verifying address correctness</div>
+            <div className="text-white text-base font-semibold mb-0.5 text-center">
+              Receiver Verification
+            </div>
+            <div className="text-[#C7D1CC] text-xs text-center mb-2">
+              Receiver signs a message verifying address correctness
+            </div>
           </div>
           {/* Arrow + Divider */}
           <div className="flex flex-col items-center">
             <div className="h-6 w-px bg-gradient-to-b from-[#7EDFCD]/60 to-transparent" />
-            <svg className="w-4 h-4 text-[#7EDFCD] my-[-2px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M12 6v12M12 18l4-4M12 18l-4-4" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              className="w-4 h-4 text-[#7EDFCD] my-[-2px]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M12 6v12M12 18l4-4M12 18l-4-4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             <div className="h-6 w-px bg-gradient-to-b from-transparent to-[#7EDFCD]/60" />
           </div>
@@ -126,19 +205,43 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
           <div className="flex flex-col items-center">
             <div className="w-9 h-9 rounded-full border border-[#7EDFCD] flex items-center justify-center mb-1">
               {/* Checkmark icon */}
-              <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg
+                className="w-5 h-5 text-[#7EDFCD]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
                 <circle cx="12" cy="12" r="8" />
-                <path d="M9.5 12.5l2 2l3-3" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M9.5 12.5l2 2l3-3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
-            <div className="text-white text-base font-semibold mb-0.5 text-center">Confirmation</div>
-            <div className="text-[#C7D1CC] text-xs text-center mb-2">Sender confirms the transaction details and state</div>
+            <div className="text-white text-base font-semibold mb-0.5 text-center">
+              Confirmation
+            </div>
+            <div className="text-[#C7D1CC] text-xs text-center mb-2">
+              Sender confirms the transaction details and state
+            </div>
           </div>
           {/* Arrow + Divider */}
           <div className="flex flex-col items-center">
             <div className="h-6 w-px bg-gradient-to-b from-[#7EDFCD]/60 to-transparent" />
-            <svg className="w-4 h-4 text-[#7EDFCD] my-[-2px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M12 6v12M12 18l4-4M12 18l-4-4" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              className="w-4 h-4 text-[#7EDFCD] my-[-2px]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M12 6v12M12 18l4-4M12 18l-4-4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             <div className="h-6 w-px bg-gradient-to-b from-transparent to-[#7EDFCD]/60" />
           </div>
@@ -146,68 +249,136 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
           <div className="flex flex-col items-center">
             <div className="w-9 h-9 rounded-full border border-[#7EDFCD] flex items-center justify-center mb-1">
               {/* Arrow icon */}
-              <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg
+                className="w-5 h-5 text-[#7EDFCD]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
                 <circle cx="12" cy="12" r="8" />
-                <path d="M12 8v8M12 16l4-4-4-4" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M12 8v8M12 16l4-4-4-4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
-            <div className="text-white text-base font-semibold mb-0.5 text-center">Safe Arrival</div>
-            <div className="text-[#C7D1CC] text-xs text-center">Funds arrive safely at their intended destination</div>
+            <div className="text-white text-base font-semibold mb-0.5 text-center">
+              Safe Arrival
+            </div>
+            <div className="text-[#C7D1CC] text-xs text-center">
+              Funds arrive safely at their intended destination
+            </div>
           </div>
         </div>
         {/* Guarantees */}
         <div className="w-full flex flex-col items-center mt-8">
-          <h3 className="text-base sm:text-lg font-sans font-normal tracking-normal text-[#7EDFCD] mb-2 uppercase">Guarantees</h3>
+          <h3 className="text-base sm:text-lg font-sans font-normal tracking-normal text-[#7EDFCD] mb-2 uppercase">
+            Guarantees
+          </h3>
           <div className="flex flex-col gap-4 w-full items-center">
             {/* Card 1: Address Verification */}
             <div className="border border-[#7EDFCD]/30 rounded-xl p-3 bg-[#10191A]/60 h-40 min-h-[10rem] w-full max-w-xs mx-auto flex flex-col justify-center">
               <div className="flex items-center gap-2 mb-1">
                 {/* Shield icon */}
-                <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5 text-[#7EDFCD]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M12 3l8 4v5c0 5.25-3.5 9.74-8 11-4.5-1.26-8-5.75-8-11V7l8-4z" />
-                  <path d="M9 12l2 2l4-4" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M9 12l2 2l4-4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
-                <div className="text-sm text-white font-semibold uppercase tracking-tight">Address Verification</div>
+                <div className="text-sm text-white font-semibold uppercase tracking-tight">
+                  Address Verification
+                </div>
               </div>
-              <div className="text-[#C7D1CC] text-xs">Confirms the receiver address before any transaction, ensuring your funds go exactly where intended.</div>
+              <div className="text-[#C7D1CC] text-xs">
+                Confirms the receiver address before any transaction, ensuring
+                your funds go exactly where intended.
+              </div>
             </div>
             {/* Card 2: Network Protection */}
             <div className="border border-[#7EDFCD]/30 rounded-xl p-3 bg-[#10191A]/60 h-40 min-h-[10rem] w-full max-w-xs mx-auto flex flex-col justify-center">
               <div className="flex items-center gap-2 mb-1">
                 {/* Network icon */}
-                <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5 text-[#7EDFCD]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
                   <circle cx="12" cy="12" r="3" />
                   <path d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.36 6.36l-2.12-2.12M6.36 6.36l2.12 2.12m0 6.12l-2.12 2.12m10.6-10.6l-2.12 2.12" />
                 </svg>
-                <div className="text-sm text-white font-semibold uppercase tracking-tight">Network Protection</div>
+                <div className="text-sm text-white font-semibold uppercase tracking-tight">
+                  Network Protection
+                </div>
               </div>
-              <div className="text-[#C7D1CC] text-xs">Automatically verifies the correct network and prevents cross-chain losses.</div>
+              <div className="text-[#C7D1CC] text-xs">
+                Automatically verifies the correct network and prevents
+                cross-chain losses.
+              </div>
             </div>
             {/* Card 3: Ownership Confirmation */}
             <div className="border border-[#7EDFCD]/30 rounded-xl p-3 bg-[#10191A]/60 h-40 min-h-[10rem] w-full max-w-xs mx-auto flex flex-col justify-center">
               <div className="flex items-center gap-2 mb-1">
                 {/* User check icon */}
-                <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5 text-[#7EDFCD]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
                   <circle cx="12" cy="12" r="8" />
-                  <path d="M9.5 12.5l2 2l3-3" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M9.5 12.5l2 2l3-3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
-                <div className="text-sm text-white font-semibold uppercase tracking-tight">Ownership Confirmation</div>
+                <div className="text-sm text-white font-semibold uppercase tracking-tight">
+                  Ownership Confirmation
+                </div>
               </div>
-              <div className="text-[#C7D1CC] text-xs">Verifies the receiver can actually access the funds interactively.</div>
+              <div className="text-[#C7D1CC] text-xs">
+                Verifies the receiver can actually access the funds
+                interactively.
+              </div>
             </div>
             {/* Card 4: ZK Proofed */}
             <div className="border border-[#7EDFCD]/30 rounded-xl p-3 bg-[#10191A]/60 h-40 min-h-[10rem] w-full max-w-xs mx-auto flex flex-col justify-center">
               <div className="flex items-center gap-2 mb-1">
                 {/* ZK Proof icon (lock with check) */}
-                <svg className="w-5 h-5 text-[#7EDFCD]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5 text-[#7EDFCD]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
                   <rect x="6" y="10" width="12" height="8" rx="2" />
                   <path d="M12 16v-2" />
                   <circle cx="12" cy="13" r="1" />
                   <path d="M9 10V7a3 3 0 0 1 6 0v3" />
                 </svg>
-                <div className="text-sm text-white font-semibold uppercase tracking-tight">ZK Proofed</div>
+                <div className="text-sm text-white font-semibold uppercase tracking-tight">
+                  ZK Proofed
+                </div>
               </div>
-              <div className="text-[#C7D1CC] text-xs">Receiver confirmation attestation is cryptographically programmable and provable.</div>
+              <div className="text-[#C7D1CC] text-xs">
+                Receiver confirmation attestation is cryptographically
+                programmable and provable.
+              </div>
             </div>
           </div>
         </div>
@@ -216,4 +387,4 @@ const LandingOverlay: React.FC<LandingOverlayProps> = ({ show, onClose, fetchedT
   );
 };
 
-export default LandingOverlay; 
+export default LandingOverlay;
