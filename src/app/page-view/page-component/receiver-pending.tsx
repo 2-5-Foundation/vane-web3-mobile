@@ -7,23 +7,36 @@ import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
-import { Wifi, WifiOff, AlertCircle, CheckCircle } from "lucide-react";
+import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getTokenLabel, TxTimer } from "./sender-pending";
 
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
-  const { recvTransactions, receiverConfirmTransaction, isWasmInitialized } = useTransactionStore()
+  const { recvTransactions, receiverConfirmTransaction, isWasmInitialized, fetchPendingUpdates } = useTransactionStore()
   
   // Use store transactions
   const displayTransactions = recvTransactions;
   
   console.log('ReceiverPending - recvTransactions:', recvTransactions);
-  console.log('ReceiverPending - displayTransactions:', displayTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
   const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
   const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const INITIAL_SECONDS = 9 * 60 + 50; // 9:50
   const STORAGE_PREFIX = 'recvTimer:';
+
+  // Only display transactions that haven't expired or have been approved
+  const visibleTransactions = useMemo(() => {
+    if (!displayTransactions) return [] as typeof displayTransactions;
+    return displayTransactions.filter((tx) => {
+      const key = String(tx.txNonce);
+      const isApproved = approvedTransactions.has(key);
+      const remaining = remainingByTx[key] ?? INITIAL_SECONDS;
+      const isExpired = remaining === 0;
+      return isApproved || !isExpired;
+    });
+  }, [displayTransactions, approvedTransactions, remainingByTx, INITIAL_SECONDS]);
 
   const getExpiryFromStorage = (key: string): number | null => {
     try {
@@ -42,6 +55,19 @@ export default function ReceiverPending() {
       window.localStorage.setItem(STORAGE_PREFIX + key, String(expiryMs));
     } catch {
       /* ignore */
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchPendingUpdates();
+      toast.success('Transactions refreshed');
+    } catch (e) {
+      console.error('Error refreshing transactions:', e);
+      toast.error('Failed to refresh transactions');
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -106,28 +132,7 @@ export default function ReceiverPending() {
     return `${m}:${s}`;
   };
 
-  // Helper function to convert wei to ETH (decimal format)
-  const formatAmount = (amount: any): string => {
-    if (!amount) return '0';
-    
-    let amountValue: bigint | number;
-    
-    if (typeof amount === 'bigint') {
-      amountValue = amount;
-    } else if (typeof amount === 'number') {
-      amountValue = BigInt(Math.floor(amount));
-    } else if (typeof amount === 'string') {
-      amountValue = BigInt(amount);
-    } else {
-      return '0';
-    }
-    
-    // Convert wei to ETH (divide by 10^18)
-    const ethValue = Number(amountValue) / Math.pow(10, 18);
-    
-    // Format to remove unnecessary trailing zeros
-    return ethValue.toString().replace(/\.?0+$/, '');
-  };
+ 
 
   const handleApprove = async (transaction: TxStateMachine) => {
     try {
@@ -175,9 +180,9 @@ export default function ReceiverPending() {
   }
 
   // Show empty state when no pending transactions
-  if (!displayTransactions || displayTransactions.length === 0) {
+  if (!visibleTransactions || visibleTransactions.length === 0) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3 pb-24">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-6">
             <div className="text-center">
@@ -185,7 +190,25 @@ export default function ReceiverPending() {
                 <Wifi className="h-4 w-4" />
                 <span className="text-sm">Connected and listening</span>
               </div>
-              <p className="text-[#9EB2AD] text-sm">No pending transactions found • Try refreshing</p>
+              <p className="text-[#9EB2AD] text-sm inline-flex items-center gap-1 whitespace-nowrap">
+                <span>No pending transactions found •</span>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="inline-flex items-center px-2 py-0.5 text-[#7EDFCD] border border-[#4A5853]/40 rounded hover:text-[#7EDFCD]/80 hover:border-[#7EDFCD]/60 focus:outline-none focus:ring-1 focus:ring-[#7EDFCD]/60 disabled:text-gray-500 disabled:border-gray-600"
+                  aria-label="Refresh pending transactions"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleRefresh();
+                    }
+                  }}
+                >
+                  Try refreshing
+                </button>
+              </p>
               </div>
           </CardContent>
         </Card>
@@ -194,84 +217,74 @@ export default function ReceiverPending() {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Connection Status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {isWasmInitialized() ? (
-            <div className="flex items-center gap-1 text-green-400">
-              <Wifi className="h-3 w-3" />
-              <span className="text-xs">Connected</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-yellow-400">
-              <WifiOff className="h-3 w-3" />
-              <span className="text-xs">Connecting...</span>
-            </div>
-          )}
-        </div>
-        <span className="text-xs text-[#9EB2AD]">
-          {displayTransactions.length} pending
-        </span>
+    <div className="pt-2 space-y-3 pb-24">
+      {/* Header with Refresh */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          variant="outline"
+          className="h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50"
+          aria-label="Refresh pending transactions"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
       </div>
 
       {/* Pending Transactions */}
-      {displayTransactions.map((transaction) => (
+      {visibleTransactions.map((transaction) => (
         <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
-            {/* Timer in top right corner */}
+            {/* Timer in top right corner (shared component) */}
             <div className="absolute top-3 right-3">
-              <div className={`px-2 py-0.5 rounded text-xs font-medium ${ (remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ? 'text-[#7EDFCD] bg-[#7EDFCD]/10' : 'text-red-400 bg-red-500/10' }`}>
-                {(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) > 0 ?
-                  formatTime(remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) :
-                  'Expired'}
-              </div>
+              <TxTimer txKey={String(transaction.txNonce)} />
             </div>
             
             <div className="space-y-2">
               {/* Sender Address */}
               <div>
                 <span className="text-xs text-[#9EB2AD] font-medium">Sender Address</span>
-                <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
+                <p className="font-sans text-xs text-white break-all">{transaction.senderAddress}</p>
               </div>
               
               {/* Receiver Address */}
               <div>
                 <span className="text-xs text-[#9EB2AD] font-medium">Receiver Address</span>
-                <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
+                <p className="font-sans text-xs text-white break-all">{transaction.receiverAddress}</p>
               </div>
               
               {/* Networks Row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="flex justify-between gap-3">
+                <div className="flex-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                  <p className="text-xs text-white font-medium">{transaction.senderAddressNetwork || 'Ethereum'}</p>
+                  <p className="text-xs text-white font-medium">{transaction.senderAddressNetwork}</p>
                 </div>
-                <div>
+                <div className="flex-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                  <p className="text-xs text-white font-medium">{transaction.receiverAddressNetwork || 'Ethereum'}</p>
+                  <p className="text-xs text-white font-medium">{transaction.receiverAddressNetwork}</p>
                 </div>
               </div>
               
               {/* Amount and Asset Row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="flex justify-between gap-3">
+                <div className="flex-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                  <p className="text-sm text-white font-semibold">{formatAmount(transaction.amount)}</p>
+                  <p className="text-sm text-white font-semibold">{transaction.amount}</p>
                 </div>
-                <div>
+                <div className="flex-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
-                  <p className="text-sm text-white font-semibold">ETH</p>
+                  <p className="text-sm text-white font-medium">{getTokenLabel((transaction as TxStateMachine).token)}</p>
                 </div>
               </div>
               
               {/* Codeword */}
               <div>
                 <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                <p className="font-mono text-xs text-white mt-1">{transaction.codeWord}</p>
+                <p className="font-sans text-xs text-white mt-1">{transaction.codeWord}</p>
               </div>
               {/* Status Row */}
-              <div className={`flex items-center gap-2 border rounded-lg px-2 py-1 mt-2 ${
+              <div className={`flex items-center gap-2 border rounded-lg px-2 mt-10 py-2 ${
                 approvedTransactions.has(String(transaction.txNonce))
                   ? 'text-green-400 border-green-400'
                   : ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'text-red-400 border-red-400' : 'text-[#FFA500] border-[#FFA500]')

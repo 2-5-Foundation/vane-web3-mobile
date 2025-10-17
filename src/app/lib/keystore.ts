@@ -70,9 +70,20 @@ export type Envelope = {
     let dir = root;
     for (const p of parts) dir = await dir.getDirectoryHandle(p, { create: true });
     const fh = await dir.getFileHandle(file, { create: true });
-    const w = await fh.createWritable();
-    await w.write(new Blob([JSON.stringify(obj)]));
-    await w.close();
+    
+    // Safari-compatible OPFS write using FileSystemSyncAccessHandle
+    try {
+      // Try sync access handle first (Safari preferred)
+      const syncHandle = await fh.createSyncAccessHandle();
+      const data = new TextEncoder().encode(JSON.stringify(obj));
+      syncHandle.write(data);
+      syncHandle.close();
+    } catch (syncError) {
+      // Fallback to createWritable for browsers that support it
+      const w = await fh.createWritable();
+      await w.write(new Blob([JSON.stringify(obj)]));
+      await w.close();
+    }
   }
   async function readJSON<T>(path: string): Promise<T | null> {
     try {
@@ -82,8 +93,21 @@ export type Envelope = {
       let dir = root;
       for (const p of parts) dir = await dir.getDirectoryHandle(p);
       const fh = await dir.getFileHandle(file);
-      const blob = await fh.getFile();
-      return JSON.parse(await blob.text()) as T;
+      
+      // Safari-compatible OPFS read using FileSystemSyncAccessHandle
+      try {
+        const syncHandle = await fh.createSyncAccessHandle();
+        const size = syncHandle.getSize();
+        const data = new Uint8Array(size);
+        syncHandle.read(data);
+        syncHandle.close();
+        const text = new TextDecoder().decode(data);
+        return JSON.parse(text) as T;
+      } catch (syncError) {
+        // Fallback to getFile for browsers that support it
+        const blob = await fh.getFile();
+        return JSON.parse(await blob.text()) as T;
+      }
     } catch { return null; }
   }
   
@@ -93,28 +117,12 @@ export type Envelope = {
   type SignatureCache = Record<string, string>; // keyIdentifier -> signature hex
   
   async function getSignatureCache(): Promise<SignatureCache> {
-    // Try OPFS first, fallback to localStorage
     const opfsCache = await readJSON<SignatureCache>(SIGNATURE_CACHE_PATH);
-    if (opfsCache) return opfsCache;
-    
-    if (typeof window !== 'undefined') {
-      try {
-        const local = localStorage.getItem('vane-signature-cache');
-        return local ? JSON.parse(local) : {};
-      } catch { return {}; }
-    }
-    return {};
+    return opfsCache || {};
   }
   
   async function saveSignatureCache(cache: SignatureCache): Promise<void> {
-    try {
-      await writeJSON(SIGNATURE_CACHE_PATH, cache);
-    } catch {
-      // Fallback to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vane-signature-cache', JSON.stringify(cache));
-      }
-    }
+    await writeJSON(SIGNATURE_CACHE_PATH, cache);
   }
   
   export async function cacheSignature(keyIdentifier: string, signatureBytes: Uint8Array): Promise<void> {
@@ -139,9 +147,6 @@ export type Envelope = {
       await saveSignatureCache(cache);
     } else {
       await saveSignatureCache({});
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('vane-signature-cache');
-      }
     }
   }
   

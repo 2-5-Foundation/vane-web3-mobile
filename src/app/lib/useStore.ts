@@ -37,6 +37,7 @@ import {
   isInitialized,
   LogLevel,
   NodeConnectionStatus,
+  addAccount,
   
 } from '@/lib/vane_lib/main'
 
@@ -106,6 +107,7 @@ export interface TransactionState {
   
   // WASM transaction methods
   initiateTransaction: (sender: string, receiver: string, amount: bigint, token: Token, codeWord: string, senderNetwork: ChainSupported, receiverNetwork: ChainSupported) => Promise<TxStateMachine>;
+  addAccount: (accountId: string, network: string) => Promise<void>;
   senderConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
   receiverConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
   revertTransaction: (tx: TxStateMachine, reason?: string) => Promise<void>;
@@ -316,7 +318,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       // Zeroize sensitive material
       if (libp2pSecret32) libp2pSecret32.fill(0);
     } catch (error) {
-      console.error('Failed to initialize WASM node:', error);
+      toast.error('Failed to initialize app');
+      console.error('Failed to initialize app:', error);
       throw error;
     }
   },
@@ -377,6 +380,20 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     } catch (error) {
       console.error('Error initiating transaction:', error);
       throw error;
+    }
+  },
+  addAccount: async (accountId: string, network: string) => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+    try {
+      await addAccount(accountId, network);
+      console.log('Account added successfully');
+      toast.success('Account added successfully');
+
+    } catch (error) {
+      console.error('Error adding account:', error);
+      toast.error('Error adding account');
     }
   },
   getNodeConnectionStatus: async (): Promise<NodeConnectionStatus> => {
@@ -483,6 +500,40 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         const stored = localStorage.getItem('vane-storage-export');
         if (stored) {
           const parsed = JSON.parse(stored);
+
+          // Normalize types: revive bigint fields expected by WASM (u128)
+          // Specifically: DbTxStateMachine.amount should be bigint
+          try {
+            if (parsed && typeof parsed === 'object') {
+              const reviveAmount = (arr: any[]) => {
+                if (!Array.isArray(arr)) return [];
+                return arr.map((tx) => {
+                  if (tx && typeof tx === 'object') {
+                    if (typeof tx.amount === 'string') {
+                      // Convert serialized bigint string back to BigInt
+                      tx.amount = BigInt(tx.amount);
+                    }
+                  }
+                  return tx;
+                });
+              };
+
+              if (parsed.success_transactions) {
+                parsed.success_transactions = reviveAmount(parsed.success_transactions);
+              }
+              if (parsed.failed_transactions) {
+                parsed.failed_transactions = reviveAmount(parsed.failed_transactions);
+              }
+
+              // Ensure numeric counters are numbers
+              if (typeof parsed.nonce === 'string') parsed.nonce = Number(parsed.nonce);
+              if (typeof parsed.total_value_success === 'string') parsed.total_value_success = Number(parsed.total_value_success);
+              if (typeof parsed.total_value_failed === 'string') parsed.total_value_failed = Number(parsed.total_value_failed);
+            }
+          } catch (e) {
+            console.warn('Warning: failed to fully normalize stored storage export. Proceeding with raw parsed object.', e);
+          }
+
           console.log('Loaded storage data from localStorage:', parsed);
           return parsed;
         }

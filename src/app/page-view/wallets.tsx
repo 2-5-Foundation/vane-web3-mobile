@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { bytesToHex, hexToBytes } from "viem";
 import { useTransactionStore } from "@/app/lib/useStore";
-import { getKdfMessageBytes, cacheSignature, getCachedSignature, loadEnvelopeOrThrow, unlockCEKWithSignature, addWalletWrapWithSignatures } from "@/app/lib/keystore";
+import { getKdfMessageBytes, cacheSignature, getCachedSignature, loadEnvelopeOrThrow, unlockCEKWithSignature, addWalletWrapWithSignatures, setupKeystoreWithSignature } from "@/app/lib/keystore";
 
 
 export default function Wallets() {
@@ -17,13 +17,16 @@ export default function Wallets() {
   const userWallets = useUserWallets();
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
   const [isConnectingNode, setIsConnectingNode] = useState(false);
+  const [connectingCountdown, setConnectingCountdown] = useState<number>(0);
   const [nodeConnectionStatus, setNodeConnectionStatus] = useState<{ relay_connected: boolean } | null>(null);
   const initializeWasm = useTransactionStore((s) => s.initializeWasm);
   const isWasmInitialized = useTransactionStore((s) => s.isWasmInitialized);
   const startWatching = useTransactionStore((s) => s.startWatching);
   const getNodeConnectionStatus = useTransactionStore((s) => s.getNodeConnectionStatus);
+  const addAccount = useTransactionStore((s) => s.addAccount);
   const userProfile = useTransactionStore((s) => s.userProfile);
 
+  
   // Pending link helpers
   const setPendingLink = (fromKeyId: string, toKeyId: string) => {
     if (typeof window === 'undefined') return;
@@ -52,110 +55,190 @@ export default function Wallets() {
     return `${prefix}:${userProfile.account}`;
   }, [userProfile.account, userProfile.network]);
 
+  // Normalize signatures coming from different wallets (hex string, base64 string, or Uint8Array)
+  const normalizeSignatureToBytes = (signature: unknown): Uint8Array => {
+    if (signature instanceof Uint8Array) return signature;
+    if (typeof signature === 'string') {
+      const str = signature.trim();
+      if (str.startsWith('0x')) {
+        const hex = str.slice(2);
+        if (/^[0-9a-fA-F]+$/.test(hex)) return hexToBytes(str as `0x${string}`);
+      }
+      // Try base64 (including url-safe variants)
+      try {
+        const cleaned = str.replace(/-/g, '+').replace(/_/g, '/');
+        const binary = atob(cleaned);
+        return Uint8Array.from(binary, c => c.charCodeAt(0));
+      } catch {}
+    }
+    throw new Error('Unsupported signature format from wallet');
+  };
+
   const handleConnectNode = async () => {
     if (!primaryWallet || !userProfile.account || !userProfile.network) {
       toast.error('Please connect a wallet first');
       return;
     }
 
+    // Helper: poll relay connection until true or timeout
+    const waitForRelayConnected = async (maxSeconds = 60) => {
+      for (let i = 0; i < maxSeconds; i++) {
+        const status = await getNodeConnectionStatus();
+        setNodeConnectionStatus(status);
+        if (status.relay_connected) return true;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      return false;
+    };
+
+    // Use the selected wallet address as the unique key (fallback to profile account)
+    const addressKey = (selectedWallet || userProfile.account || '').toLowerCase();
+
     setIsConnectingNode(true);
+    setConnectingCountdown(10);
     try {
       // 1) Try to open existing keystore
-      let env: any | null = null;
-      try {
-        env = await loadEnvelopeOrThrow();
-      } catch {
-        env = null;
-      }
+      // We no longer rely on a global envelope discovery here.
+      // Envelope creation/usage is decided by localStorage flags below.
 
       // 2) Ensure we have a signature (cache first, otherwise sign now)
-      let sigBytes = await getCachedSignature(keyIdentifier);
+      let sigBytes = await getCachedSignature(addressKey);
       if (!sigBytes) {
         const messageBytes = getKdfMessageBytes();
         const msgHex = bytesToHex(messageBytes) as `0x${string}`;
-        const wallet = primaryWallet as unknown as { signMessage: (m: `0x${string}`) => Promise<`0x${string}`> };
-        const sigHex = await wallet.signMessage(msgHex);
-        sigBytes = hexToBytes(sigHex);
-        await cacheSignature(keyIdentifier, sigBytes);
-        toast.success('Wallet signature cached');
+        const wallet = primaryWallet as unknown as { signMessage: (m: `0x${string}`) => Promise<string | `0x${string}`> };
+        const signature = await wallet.signMessage(msgHex);
+        sigBytes = normalizeSignatureToBytes(signature);
+        await cacheSignature(addressKey, sigBytes);
       }
 
-      if (env) {
-        const activeKeyId = env.activeKeyIdentifier as string;
-
-        // 3) Try unlock with current wallet signature
-        let canUnlock = true;
-        try {
-          await unlockCEKWithSignature(env, keyIdentifier, sigBytes);
-        } catch {
-          canUnlock = false;
-        }
-
-        // 4) If cannot unlock, prompt to connect original wallet to link
-        if (!canUnlock) {
-          const [, originalAddr] = activeKeyId.split(':');
-          setPendingLink(activeKeyId, keyIdentifier);
-          toast.info(`Keystore locked with ${originalAddr}. Please connect that wallet to link your current wallet.`);
-          return;
-        }
-
-        // 5) If different active key, try to link using cached original signature
-        if (activeKeyId !== keyIdentifier) {
-          const originalSig = await getCachedSignature(activeKeyId);
-          if (originalSig) {
-            await addWalletWrapWithSignatures(env, activeKeyId, originalSig, keyIdentifier, sigBytes);
-            clearPendingLink();
-            toast.success('Wallets linked successfully!');
-          } else {
-            setPendingLink(activeKeyId, keyIdentifier);
-            toast.info('Please connect the original wallet to link accounts');
-            return;
-          }
-        } else {
-          // active == current; check if there is a pending link target and we have its signature cached
-          const { from, to } = getPendingLink();
-          if (from && to && from === keyIdentifier) {
-            const otherSig = await getCachedSignature(to);
-            const mySig = await getCachedSignature(from);
-            if (otherSig && mySig) {
-              await addWalletWrapWithSignatures(env, from, mySig, to, otherSig);
-              clearPendingLink();
-              toast.success('Wallets linked successfully!');
-            }
-          }
-        }
-      }
+      // 3) Decide envelope usage via localStorage flag per wallet
+      const envelopeFlagKey = `vane-envelope:${addressKey}`;
+      let hasPerWalletEnvelope = false;
+      try { hasPerWalletEnvelope = (localStorage.getItem(envelopeFlagKey) === 'true'); } catch {}
 
       // 6) Initialize node if not already initialized
       if (!isWasmInitialized()) {
+        if (!hasPerWalletEnvelope) {
+          // Create a brand-new 32-byte libp2p secret and store an envelope for this wallet
+          const secret = crypto.getRandomValues(new Uint8Array(32));
+          await setupKeystoreWithSignature(secret, addressKey, sigBytes);
+          try { localStorage.setItem(envelopeFlagKey, 'true'); } catch {}
+        } else {
+          // If we have a flag, attempt to load and unlock existing single-envelope
+          try {
+            const envExisting = await loadEnvelopeOrThrow();
+            await unlockCEKWithSignature(envExisting, addressKey, sigBytes);
+          } catch {
+            // If unlock fails despite flag, create a fresh envelope for safety
+            const secret = crypto.getRandomValues(new Uint8Array(32));
+            await setupKeystoreWithSignature(secret, addressKey, sigBytes);
+            try { localStorage.setItem(envelopeFlagKey, 'true'); } catch {}
+          }
+        }
+
         await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, userProfile.account, userProfile.network, sigBytes);
         await startWatching();
-        
-        // Check connection status after initialization
-        const status = await getNodeConnectionStatus();
-        setNodeConnectionStatus(status);
-        
-        if (status.relay_connected) {
-          toast.success('Node connected successfully!');
-        } else {
-          toast.warning('Node initialized but not connected to relay');
+        const connected = await waitForRelayConnected();
+        if (connected) {
+          toast.success('App connected successfully!');
         }
       } else {
-        // Check existing connection status
-        const status = await getNodeConnectionStatus();
-        setNodeConnectionStatus(status);
-        
-        if (status.relay_connected) {
-          toast.info('Node already connected');
-        } else {
-          toast.warning('Node initialized but not connected to relay');
-        }
+        // Already initialized; keep loading animation until connected
+        await waitForRelayConnected();
       }
     } catch (err) {
       console.error(err);
-      toast.error(`Failed to connect node: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to connect app: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsConnectingNode(false);
+      setConnectingCountdown(0);
+    }
+  };
+  // Countdown effect while connecting
+  useEffect(() => {
+    if (!isConnectingNode) return;
+    if (connectingCountdown <= 0) return;
+    const id = setInterval(() => {
+      setConnectingCountdown((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isConnectingNode, connectingCountdown]);
+
+  const handleAddAccount = async () => {
+    try {
+      if (!primaryWallet) {
+        toast.error('Connect a wallet first');
+        return;
+      }
+      if (!selectedWallet) {
+        toast.error('Select the account to add');
+        return;
+      }
+      if (!userProfile.network) {
+        toast.error('Select a network first');
+        return;
+      }
+
+      // Find the wallet object for the selected address
+      const target = userWallets.find((w) => w.address === selectedWallet);
+      if (!target) {
+        toast.error('Selected wallet not found');
+        return;
+      }
+
+      // 1) Build identifiers and gather signatures (old + new)
+      const toPrefix = (n: string) => {
+        const normalized = (n || '').toLowerCase();
+        if ([ 'ethereum', 'base', 'polygon', 'optimism', 'arbitrum', 'bnb', 'bsc', 'evm' ].includes(normalized)) return 'evm';
+        if (normalized.includes('sol')) return 'sol';
+        if (normalized.includes('btc')) return 'btc';
+        if (normalized.includes('dot') || normalized.includes('polkadot')) return 'dot';
+        if (normalized.includes('tron')) return 'tron';
+        return normalized || 'evm';
+      };
+
+      // Ensure existing envelope present (used later to rewrap)
+      const envelope = await loadEnvelopeOrThrow();
+      const currentKeyId = envelope.activeKeyIdentifier;
+      const newKeyId = `${toPrefix(userProfile.network)}:${selectedWallet}`;
+
+      // Old signature: try cache, else sign with current primary wallet
+      let oldSig = await getCachedSignature(currentKeyId);
+      if (!oldSig) {
+        const msgBytes = getKdfMessageBytes();
+        const msgHex = bytesToHex(msgBytes) as `0x${string}`;
+        const signer = primaryWallet as unknown as { signMessage: (m: `0x${string}`) => Promise<string | `0x${string}`> };
+        const signature = await signer.signMessage(msgHex);
+        oldSig = normalizeSignatureToBytes(signature);
+        await cacheSignature(currentKeyId, oldSig);
+      }
+
+      // New signature: must be produced by the wallet we are adding
+      const msgBytesNew = getKdfMessageBytes();
+      const msgHexNew = bytesToHex(msgBytesNew) as `0x${string}`;
+      const selectedSigner = (target as unknown as { signMessage?: (m: `0x${string}`) => Promise<string | `0x${string}`> });
+      if (!selectedSigner || typeof selectedSigner.signMessage !== 'function') {
+        toast.error('Selected wallet cannot sign messages');
+        return;
+      }
+      const newSignature = await selectedSigner.signMessage(msgHexNew);
+      const newSigBytes = normalizeSignatureToBytes(newSignature);
+      await cacheSignature(newKeyId, newSigBytes);
+
+      // 2) First call WASM to register account with the node
+      await addAccount(selectedWallet, userProfile.network);
+
+      // 3) After WASM succeeds, update OPFS keystore (add wrap for the new account)
+      await addWalletWrapWithSignatures(envelope, currentKeyId, oldSig, newKeyId, newSigBytes);
+
+      // Mark the newly linked address as having an envelope
+      try { localStorage.setItem(`vane-envelope:${selectedWallet.toLowerCase()}`, 'true'); } catch {}
+
+      toast.success('Account added and linked to keystore');
+    } catch (error) {
+      console.error('Add account failed:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to add account');
     }
   };
 
@@ -214,7 +297,7 @@ export default function Wallets() {
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-3">
                         <span className="text-white">{wallet.connector?.name || 'Unknown'}</span>
-                        <span className="text-[#4A5853] text-xs">{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}</span>
+                        <span className="text-[#4A5853] text-xs">{wallet.address.slice(0, 13)}...{wallet.address.slice(-13)}</span>
                       </div>
                     </div>
                   </div>
@@ -223,10 +306,12 @@ export default function Wallets() {
             ))}
           </RadioGroup>
 
-          <DynamicConnectButton
-           buttonContainerClassName="w-full h-10 flex justify-center items-center bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 rounded-lg">
-           {primaryWallet ? "Change Wallet" : "Connect Wallet"}
-          </DynamicConnectButton>
+          {!primaryWallet && (
+            <DynamicConnectButton
+             buttonContainerClassName="w-full h-10 flex justify-center items-center bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 rounded-lg">
+             Connect Wallet
+            </DynamicConnectButton>
+          )}
 
           {/* Connect Node Button - only show when wallet is connected */}
           {primaryWallet && (
@@ -242,15 +327,16 @@ export default function Wallets() {
               {isConnectingNode ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
-                  Connecting Node...
+                  {`Connecting${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
                 </>
               ) : nodeConnectionStatus?.relay_connected === true ? (
-                'Node Connected'
+                'App Connected'
               ) : (
-                'Connect Node'
+                'Connect App'
               )}
             </Button>
           )}
+
           
 {/* 
           <Button 

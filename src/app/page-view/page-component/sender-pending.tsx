@@ -24,7 +24,7 @@ const getTxKey = (tx: TxStateMachine | { receiverAddress: string; amount: number
 };
 
 // Timer component
-const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }) => {
+export const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }) => {
   // duration in seconds (default 10 min)
   const [remaining, setRemaining] = useState(duration);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -37,13 +37,9 @@ const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }
     const now = Math.floor(Date.now() / 1000);
     if (expiry) {
       expiryTimestamp = parseInt(expiry, 10);
-      // If expired, reset for new initiated transaction
-      if (expiryTimestamp < now) {
-        expiryTimestamp = now + duration;
-        localStorage.setItem(storageKey, String(expiryTimestamp));
-      }
+      // Do NOT reset on refresh/navigation. Keep existing expiry even if expired.
     } else {
-      // Set expiry to now + duration
+      // Set expiry to now + duration on first mount for this txKey
       expiryTimestamp = now + duration;
       localStorage.setItem(storageKey, String(expiryTimestamp));
     }
@@ -63,133 +59,110 @@ const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }
   // Format mm:ss or show 'expired'
   if (remaining <= 0) {
     return (
-      <span className="ml-2 px-2 py-0.5 rounded bg-[#1A2A2A] text-red-400 text-xs font-mono min-w-[44px] text-center">
-        expired
+      <span className="px-2 py-0.5 rounded bg-[#1A2A2A] text-red-400 text-xs font-mono min-w-[44px] text-center">
+        Expired
       </span>
     );
   }
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(remaining % 60).padStart(2, "0");
   return (
-    <span className="ml-2 px-2 py-0.5 rounded bg-[#1A2A2A] text-[#7EDFCD] text-xs font-mono min-w-[44px] text-center">
+    <span className="px-2 py-0.5 rounded bg-[#1A2A2A] text-[#7EDFCD] text-xs font-mono min-w-[44px] text-center">
       {mm}:{ss}
     </span>
   );
 };
 
+export const getTokenLabel = (token: Token): string => {
+  if ('Ethereum' in token) {
+    const ethereumVariant = token.Ethereum;
+    if (typeof ethereumVariant === 'string') {
+      if (ethereumVariant === 'ETH') return 'ETH';
+    } else if ('ERC20' in ethereumVariant) {
+      return ethereumVariant.ERC20.name;
+    }
+  }
+
+  if ('Bnb' in token) {
+    const bnbVariant = token.Bnb; 
+    if (typeof bnbVariant === 'string') {
+      if (bnbVariant === 'BNB') return 'BNB';
+    } else if ('BEP20' in bnbVariant) {
+      return bnbVariant.BEP20.name;
+    }
+  }
+
+  if ('Polkadot' in token) {
+    const polkadotVariant = token.Polkadot; 
+    if (typeof polkadotVariant === 'string') {
+      if (polkadotVariant === 'DOT') return 'DOT';
+    } else if ('Asset' in polkadotVariant) {
+      return polkadotVariant.Asset.name;
+    }
+  }
+
+  if ('Solana' in token) {
+    const solanaVariant = token.Solana; 
+    if (typeof solanaVariant === 'string') {
+      if (solanaVariant === 'SOL') return 'SOL';
+    } else if ('SPL' in solanaVariant) {
+      return solanaVariant.SPL.name;
+    }
+  }
+
+  if ('Tron' in token) {
+    const tronVariant = token.Tron; 
+    if (typeof tronVariant === 'string') {
+      if (tronVariant === 'TRX') return 'TRX';
+    } else if ('TRC20' in tronVariant) {
+      return tronVariant.TRC20.name;
+    }
+  }
+
+  if ('Optimism' in token) {
+    const optimismVariant = token.Optimism; 
+    if (typeof optimismVariant === 'string') {
+      if (optimismVariant === 'ETH') return 'ETH';
+    } else if ('ERC20' in optimismVariant) {
+      return optimismVariant.ERC20.name;
+    }
+  }
+
+  if ('Arbitrum' in token) {
+    const arbitrumVariant = token.Arbitrum; 
+    if (typeof arbitrumVariant === 'string') {
+      if (arbitrumVariant === 'ETH') return 'ETH';
+    } else if ('ERC20' in arbitrumVariant) {
+      return arbitrumVariant.ERC20.name;
+    }
+  }
+
+  if ('Polygon' in token) {
+    const polygonVariant = token.Polygon; 
+    if (typeof polygonVariant === 'string') {
+      if (polygonVariant === 'POL') return 'POL';
+    } else if ('ERC20' in polygonVariant) {
+      return polygonVariant.ERC20.name;
+    }
+  }
+
+  if ('Base' in token) {
+    const baseVariant = token.Base; 
+    if (typeof baseVariant === 'string') {
+      if (baseVariant === 'ETH') return 'ETH';
+    } else if ('ERC20' in baseVariant) {
+      return baseVariant.ERC20.name;
+    }
+  }
+
+  if ('Bitcoin' in token) {
+    const bitcoinVariant = token.Bitcoin; 
+    if (bitcoinVariant === 'BTC') return 'BTC';
+  }
+};
+
 export default function SenderPending() {
-  const getTokenLabel = (token: Token): string => {
-    if ('Ethereum' in token) {
-      const ethereumVariant = token.Ethereum;
-      if (typeof ethereumVariant === 'string') {
-        if (ethereumVariant === 'ETH') return 'ETH';
-      } else if ('ERC20' in ethereumVariant) {
-        return ethereumVariant.ERC20.name;
-      }
-    }
-  
-    if ('Bnb' in token) {
-      const bnbVariant = token.Bnb; 
-      if (typeof bnbVariant === 'string') {
-        if (bnbVariant === 'BNB') return 'BNB';
-      } else if ('BEP20' in bnbVariant) {
-        return bnbVariant.BEP20.name;
-      }
-    }
-  
-    if ('Polkadot' in token) {
-      const polkadotVariant = token.Polkadot; 
-      if (typeof polkadotVariant === 'string') {
-        if (polkadotVariant === 'DOT') return 'DOT';
-      } else if ('Asset' in polkadotVariant) {
-        return polkadotVariant.Asset.name;
-      }
-    }
-  
-    if ('Solana' in token) {
-      const solanaVariant = token.Solana; 
-      if (typeof solanaVariant === 'string') {
-        if (solanaVariant === 'SOL') return 'SOL';
-      } else if ('SPL' in solanaVariant) {
-        return solanaVariant.SPL.name;
-      }
-    }
-  
-    if ('Tron' in token) {
-      const tronVariant = token.Tron; 
-      if (typeof tronVariant === 'string') {
-        if (tronVariant === 'TRX') return 'TRX';
-      } else if ('TRC20' in tronVariant) {
-        return tronVariant.TRC20.name;
-      }
-    }
-  
-    if ('Optimism' in token) {
-      const optimismVariant = token.Optimism; 
-      if (typeof optimismVariant === 'string') {
-        if (optimismVariant === 'ETH') return 'ETH';
-      } else if ('ERC20' in optimismVariant) {
-        return optimismVariant.ERC20.name;
-      }
-    }
-  
-    if ('Arbitrum' in token) {
-      const arbitrumVariant = token.Arbitrum; 
-      if (typeof arbitrumVariant === 'string') {
-        if (arbitrumVariant === 'ETH') return 'ETH';
-      } else if ('ERC20' in arbitrumVariant) {
-        return arbitrumVariant.ERC20.name;
-      }
-    }
-  
-    if ('Polygon' in token) {
-      const polygonVariant = token.Polygon; 
-      if (typeof polygonVariant === 'string') {
-        if (polygonVariant === 'POL') return 'POL';
-      } else if ('ERC20' in polygonVariant) {
-        return polygonVariant.ERC20.name;
-      }
-    }
-  
-    if ('Base' in token) {
-      const baseVariant = token.Base; 
-      if (typeof baseVariant === 'string') {
-        if (baseVariant === 'ETH') return 'ETH';
-      } else if ('ERC20' in baseVariant) {
-        return baseVariant.ERC20.name;
-      }
-    }
-  
-    if ('Bitcoin' in token) {
-      const bitcoinVariant = token.Bitcoin; 
-      if (bitcoinVariant === 'BTC') return 'BTC';
-    }
-  };
-  
-
-  // Helper function to convert wei to ETH (decimal format)
-  const formatAmount = (amount: any): string => {
-    if (!amount) return '0';
-    
-    let amountValue: bigint | number;
-    
-    if (typeof amount === 'bigint') {
-      amountValue = amount;
-    } else if (typeof amount === 'number') {
-      amountValue = BigInt(Math.floor(amount));
-    } else if (typeof amount === 'string') {
-      amountValue = BigInt(amount);
-    } else {
-      return '0';
-    }
-    
-    // Convert wei to ETH (divide by 10^18)
-    const ethValue = Number(amountValue) / Math.pow(10, 18);
-    
-    // Format to remove unnecessary trailing zeros
-    return ethValue.toString().replace(/\.?0+$/, '');
-  };
-
+ 
   const formatStatus = (status: string): string => {
     if (!status) return 'Unknown';
     
@@ -556,7 +529,7 @@ export default function SenderPending() {
   };
 
   // Helper to get status colors and messages
-  const getStatusInfo = (statusType: string, transaction?: any) => {
+  const getStatusInfo = (statusType: string, transaction?: TxStateMachine) => {
     switch (statusType) {
       case 'Genesis':
         return {
@@ -586,16 +559,18 @@ export default function SenderPending() {
           message: 'Receiver confirmation passed, make sure you did communicate'
         };
       case 'TxSubmissionPassed':
+        if (transaction?.status?.type === 'TxSubmissionPassed') {
         const txHash = transaction?.status?.data?.hash ? 
           `0x${Array.from(transaction.status.data.hash).map((b: number) => b.toString(16).padStart(2, '0')).join('')}` : 
           'N/A';
-        const truncatedHash = txHash.length > 20 ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}` : txHash;
-        return {
-          color: 'text-green-400 border-green-400',
-          iconColor: 'text-green-400',
-          message: `Transaction passed: ${truncatedHash}`,
-          fullHash: txHash
-        };
+          const truncatedHash = txHash.length > 20 ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}` : txHash;
+          return {
+            color: 'text-green-400 border-green-400',
+            iconColor: 'text-green-400',
+            message: `Transaction passed: ${truncatedHash}`,
+            fullHash: txHash
+          };
+        }
       case 'Reverted':
         return {
           color: 'text-red-400 border-red-400',
@@ -603,12 +578,14 @@ export default function SenderPending() {
           message: 'Transaction cancelled'
         };
       case 'TxError':
-        const errorData = transaction?.status?.data || 'Unknown error';
-        return {
-          color: 'text-red-400 border-red-400',
-          iconColor: 'text-red-400',
-          message: `Unexpected transaction error: ${errorData}`
-        };
+        if (transaction?.status?.type === 'TxError') {
+          const errorData = transaction?.status?.data || 'Unknown error';
+          return {
+            color: 'text-red-400 border-red-400',
+            iconColor: 'text-red-400',
+            message: `Unexpected transaction error: ${errorData}`
+          };
+        }
       default:
         return {
           color: 'text-[#FFA500] border-[#FFA500]',
@@ -646,7 +623,7 @@ export default function SenderPending() {
   // Show loading state while fetching transactions
   if (isLoadingTransactions) {
     return (
-      <div className="pt-2 px-4 max-w-sm mx-auto space-y-3">
+      <div className="pt-2 px-4 space-y-3 pb-24">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-3">
             <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
@@ -660,7 +637,7 @@ export default function SenderPending() {
   }
 
   return (
-    <div className="pt-2 px-4 max-w-sm mx-auto space-y-3">
+    <div className="pt-2 space-y-3 pb-24">
       {/* Header with Refresh */}
       <div className="flex justify-end">
         <Button
@@ -690,48 +667,52 @@ export default function SenderPending() {
       ) : (
         <>
           {/* Render all real transactions */}
-      {fetchedTransactions?.filter((transaction) => {
+      {senderPendingTransactions?.filter((transaction) => {
         // Check if status is an object with 'Reverted' property
         const isReverted = transaction.status && typeof transaction.status === 'object' && 'Reverted' in transaction.status;
         // Don't display reverted transactions
         return !isReverted;
       }).map((transaction) => {
-        const txKey = String(transaction.txNonce || transaction.receiverAddress);
+        const txKey = String(transaction.txNonce);
         const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
         const statusInfo = getStatusInfo(statusType, transaction);
         const isExpanded = expandedCards.has(txKey);
         
         return (
-          <Card key={txKey} className="bg-[#0D1B1B] border-white/10 relative">
+          <Card key={txKey} className="w-full bg-[#0D1B1B] border-r-2 border-white/10 relative">
             <CardContent className="p-3">
+              {/* Timer in top right corner */}
+              <div className="flex justify-end">
+                <TxTimer txKey={txKey} />
+              </div>
               {/* Collapsed View - Always visible */}
               <div className="space-y-2">
                 {/* Sender Address */}
                 <div>
                   <span className="text-xs text-[#9EB2AD] font-medium">Sender Address</span>
-                  <p className="font-mono text-xs text-white break-all">{transaction.senderAddress}</p>
+                  <p className="font-sans text-xs text-white break-all">{transaction.senderAddress}</p>
                 </div>
                 
                 {/* Receiver Address */}
                 <div>
                   <span className="text-xs text-[#9EB2AD] font-medium">Receiver Address</span>
-                  <p className="font-mono text-xs text-white break-all">{transaction.receiverAddress}</p>
+                  <p className="font-sans text-xs text-white break-all">{transaction.receiverAddress}</p>
                 </div>
                 
                 {/* Networks Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+                <div className="flex justify-between gap-3">
+                  <div className="flex-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Sender Network</span>
-                    <p className="text-xs text-white font-medium">{transaction.senderAddressNetwork || 'Ethereum'}</p>
+                    <p className="text-xs text-white font-medium">{transaction.senderAddressNetwork}</p>
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <span className="text-xs text-[#9EB2AD] font-medium">Receiver Network</span>
-                    <p className="text-xs text-white font-medium">Ethereum</p>
+                    <p className="text-xs text-white font-medium">{transaction.receiverAddressNetwork}</p>
                   </div>
                 </div>
                 
                 {/* Status Alert */}
-                <div className={`flex items-center gap-2 ${statusInfo.color} border rounded-lg px-2 py-1`}>
+                <div className={`flex items-center gap-2 ${statusInfo.color} border rounded-lg px-2 mt-10 py-2`}>
                   <AlertCircle className={`h-4 w-4 ${statusInfo.iconColor}`} />
                   {statusType === 'TxSubmissionPassed' && statusInfo.fullHash ? (
                     <div className="flex items-center gap-1">
@@ -751,84 +732,70 @@ export default function SenderPending() {
                     <span className="text-xs">{statusInfo.message}</span>
                   )}
                 </div>
-                
-                {/* Expand/Collapse Button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleCardExpansion(txKey)}
-                  className="w-full h-8 text-[#7EDFCD] hover:bg-[#7EDFCD]/10 flex items-center justify-center gap-2"
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="h-4 w-4" />
-                      Collapse
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-4 w-4" />
-                      Expand
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Expanded View - Only visible when expanded */}
-              {isExpanded && (
-                <div className="mt-4 space-y-3 border-t border-white/10 pt-3 relative">
-                  {/* Timer in top right corner */}
-                  {statusType !== 'TxSubmissionPassed' && (
-                    <div className="absolute top-3 right-0">
-                      <TxTimer txKey={getTxKey(transaction)} />
-                    </div>
-                  )}
-                  
-                  {/* Amount and Asset */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                      <p className="text-sm text-white font-semibold">
-                        {formatAmount(transaction.amount)}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
-                      <p className="text-sm text-white font-semibold">
-                        {getTokenLabel((transaction as TxStateMachine).token)}
-                      </p>
-                    </div>
+ 
+                 {/* Expand/Collapse Button */}
+                 <div className="mt-2 flex items-center justify-center">
+                   <Button
+                     onClick={() => toggleCardExpansion(txKey)}
+                     variant="ghost"
+                     className="w-full h-8 text-[#7EDFCD] hover:bg-[#1a2628]"
+                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                   >
+                     {isExpanded ? (
+                       <>
+                         <ChevronUp className="h-4 w-4 mr-1" /> Collapse
+                       </>
+                     ) : (
+                       <>
+                         <ChevronDown className="h-4 w-4 mr-1" /> Expand
+                       </>
+                     )}
+                   </Button>
+                 </div>
+                  {/* Gradient Separator */}
+                  <div className="relative h-[3px] mt-6 mb-3">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#4A5853]/20 to-transparent" />
                   </div>
-                  
-                  {/* Fees and Codeword */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
-                      <p className="text-sm text-white">
-                        {transaction.feesAmount}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
-                      <p className="font-mono text-xs text-white mt-1">{transaction.codeWord}</p>
-                    </div>
-                  </div>
-
-                  {/* Transaction Errors Row */}
-                  {transaction.status && typeof transaction.status === 'object' && 'type' in transaction.status && (transaction.status as any).type === 'TxError' && (
-                    <div className="space-y-1">
-                      <span className="text-xs text-[#9EB2AD] font-medium">Transaction Error</span>
-                      <div className="bg-red-100 px-3 py-2 rounded border border-red-300">
-                        <span className="text-sm text-red-600 font-medium">{(transaction.status as any).data}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Dynamic Action Buttons */}
-                  <div className="w-full mt-4">
-                    {renderActionButtons(transaction)}
-                  </div>
-                </div>
-              )}
+            
+                 {isExpanded && (
+                   <div className="mt-3 space-y-3 relative">
+                     {/* Amount and Asset */}
+                     <div className="flex justify-between gap-3">
+                       <div className="flex-1">
+                         <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
+                         <p className="text-sm text-white font-semibold">
+                           {transaction.amount}
+                         </p>
+                       </div>
+                       <div className="flex-1">
+                         <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>
+                         <p className="text-sm text-white font-medium">
+                           {getTokenLabel((transaction as TxStateMachine).token)}
+                         </p>
+                       </div>
+                     </div>
+                     
+                     {/* Fees and Codeword */}
+                     <div className="flex justify-between gap-3">
+                       <div className="flex-1">
+                         <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
+                         <p className="text-sm text-white">
+                           {transaction.feesAmount}
+                         </p>
+                       </div>
+                       <div className="flex-1">
+                         <span className="text-xs text-[#9EB2AD] font-medium">Codeword</span>
+                         <p className="font-sans text-xs text-white mt-1">{transaction.codeWord}</p>
+                       </div>
+                     </div>
+ 
+                     {/* Dynamic Action Buttons */}
+                     <div className="w-full mt-4">
+                       {renderActionButtons(transaction)}
+                     </div>
+                   </div>
+                 )}
+               </div>
             </CardContent>
           </Card>
         );
