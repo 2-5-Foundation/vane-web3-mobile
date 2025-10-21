@@ -185,11 +185,13 @@ export default function SenderPending() {
   const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
   const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
+  const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
   // ------------- Wallet ---------------------------------------
   const {primaryWallet}  = useDynamicContext()
   
   // Effect to fetch transactions on mount
   useEffect(() => {
+    if(!isWasmInitialized()) return;
     const fetchTransactions = async () => {
       setIsLoadingTransactions(true);
       try {

@@ -33,6 +33,8 @@ function getWalletNetworkFromId(networkId: number): ChainSupported {
       return ChainSupported.Arbitrum;
     case 56:
       return ChainSupported.Bnb;
+    case 101:
+      return ChainSupported.Solana;
     default:
       console.warn(`Unknown network ID: ${networkId}, defaulting to Ethereum`);
       throw new Error(`Unknown network ID: ${networkId}`);
