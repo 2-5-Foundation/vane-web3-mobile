@@ -297,7 +297,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
 
       setTransferStatus('Genesis');
       console.log("Transaction initiated successfully");
-      
+      toast.success('Check your outgoing pending transactions for updates');
       // Clear form after successful submission and reset to step 1
       setFormData({
         recipient: '',

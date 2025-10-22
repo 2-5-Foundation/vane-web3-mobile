@@ -14,6 +14,7 @@ export default function ClientAuthProvider({ children }: { children: React.React
   return (
     <DynamicContextProvider
       settings={{
+        mobileExperience: 'redirect',
         environmentId: process.env.NEXT_PUBLIC_DYNAMIC_API_KEY!,
         walletConnectors: [BitcoinWalletConnectors, EthereumWalletConnectors, SolanaWalletConnectors],
         handlers: {

@@ -2,45 +2,33 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { hexToBytes } from "viem"
+import { bytesToHex, hexToBytes } from "viem"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getTokenLabel, TxTimer } from "./sender-pending";
+import { useSignMessagePhantomRedirect } from "@/app/lib/signUniversal";
 
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
   const { recvTransactions, receiverConfirmTransaction, isWasmInitialized, fetchPendingUpdates } = useTransactionStore()
-  
-  // Use store transactions
-  const displayTransactions = recvTransactions;
-  
-  console.log('ReceiverPending - recvTransactions:', recvTransactions);
+  const { execute, signature, errorCode, errorMessage } = useSignMessagePhantomRedirect();
+
+  // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
   const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const INITIAL_SECONDS = 9 * 60 + 50; // 9:50
   const STORAGE_PREFIX = 'recvTimer:';
 
-  // Only display transactions that haven't expired or have been approved
-  const visibleTransactions = useMemo(() => {
-    if (!displayTransactions) return [] as typeof displayTransactions;
-    return displayTransactions.filter((tx) => {
-      const key = String(tx.txNonce);
-      const isApproved = approvedTransactions.has(key);
-      const remaining = remainingByTx[key] ?? INITIAL_SECONDS;
-      const isExpired = remaining === 0;
-      return isApproved || !isExpired;
-    });
-  }, [displayTransactions, approvedTransactions, remainingByTx, INITIAL_SECONDS]);
-
-  const getExpiryFromStorage = (key: string): number | null => {
+  // Helper functions for localStorage timer management
+  const getExpiryFromStorage = (txNonce: string): number | null => {
     try {
-      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_PREFIX + key) : null;
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_PREFIX + txNonce) : null;
       if (!raw) return null;
       const parsed = parseInt(raw, 10);
       return Number.isFinite(parsed) ? parsed : null;
@@ -49,14 +37,27 @@ export default function ReceiverPending() {
     }
   };
 
-  const setExpiryInStorage = (key: string, expiryMs: number) => {
+  const setExpiryInStorage = (txNonce: string, expiryMs: number) => {
     try {
       if (typeof window === 'undefined') return;
-      window.localStorage.setItem(STORAGE_PREFIX + key, String(expiryMs));
+      window.localStorage.setItem(STORAGE_PREFIX + txNonce, String(expiryMs));
     } catch {
-      /* ignore */
+      console.error('Error setting expiry in storage');
     }
   };
+
+  // Only display transactions that haven't expired or have been approved
+  const visibleTransactions = useMemo(() => {
+    if (!recvTransactions) return [];
+    return recvTransactions.filter((tx) => {
+      const txNonce = String(tx.txNonce);
+      const isApproved = approvedTransactions.has(txNonce);
+      const remaining = remainingByTx[txNonce] ?? INITIAL_SECONDS;
+      const isExpired = remaining === 0;
+      return isApproved || !isExpired;
+    });
+  }, [recvTransactions, approvedTransactions, remainingByTx, INITIAL_SECONDS]);
+
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -71,69 +72,64 @@ export default function ReceiverPending() {
     }
   };
 
-  // Initialize timers for any new transactions (persist using localStorage expiry timestamps)
+  // Initialize timers for new transactions using txNonce as key
   useEffect(() => {
-    if (!displayTransactions) return;
+    if (!recvTransactions) return;
+    
     setExpiryByTx(prev => {
       const next: Record<string, number> = { ...prev };
-      for (const tx of displayTransactions) {
-        const key = String(tx.txNonce);
-        let expiry = getExpiryFromStorage(key);
-        if (!expiry) {
-          expiry = Date.now() + INITIAL_SECONDS * 1000;
-          setExpiryInStorage(key, expiry);
+      for (const tx of recvTransactions) {
+        const txNonce = String(tx.txNonce);
+        if (!next[txNonce]) {
+          let expiry = getExpiryFromStorage(txNonce);
+          if (!expiry) {
+            // Only set expiry if it doesn't exist (new transaction)
+            expiry = Date.now() + INITIAL_SECONDS * 1000;
+            setExpiryInStorage(txNonce, expiry);
+          }
+          next[txNonce] = expiry;
         }
-        next[key] = expiry;
       }
       return next;
     });
 
     setRemainingByTx(prev => {
       const next: Record<string, number> = { ...prev };
-      for (const tx of displayTransactions) {
-        const key = String(tx.txNonce);
-        const stored = getExpiryFromStorage(key);
-        const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
-        const baseRemaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
-        // If this tx existed before (has stored expiry), subtract 5s to compensate for refresh gap
-        next[key] = Math.max(0, baseRemaining - (stored ? 5 : 0));
+      for (const tx of recvTransactions) {
+        const txNonce = String(tx.txNonce);
+        if (!next[txNonce]) {
+          const stored = getExpiryFromStorage(txNonce);
+          const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
+          const baseRemaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+          next[txNonce] = Math.max(0, baseRemaining);
+        }
       }
       return next;
     });
-  }, [displayTransactions, INITIAL_SECONDS]);
+  }, [recvTransactions, INITIAL_SECONDS]);
 
   // Tick down once per second
   useEffect(() => {
     const id = setInterval(() => {
       setRemainingByTx(prev => {
         const next: Record<string, number> = {};
-        const keys = new Set<string>([
-          ...Object.keys(prev),
-          ...Object.keys(expiryByTx)
-        ]);
         const now = Date.now();
-        keys.forEach(key => {
-          const expiry = expiryByTx[key] ?? getExpiryFromStorage(key);
+        
+        Object.keys(prev).forEach(txNonce => {
+          const expiry = expiryByTx[txNonce] ?? getExpiryFromStorage(txNonce);
           if (!expiry) {
-            next[key] = INITIAL_SECONDS; // fallback
+            next[txNonce] = INITIAL_SECONDS; // fallback
           } else {
-            next[key] = Math.max(0, Math.floor((expiry - now) / 1000));
+            next[txNonce] = Math.max(0, Math.floor((expiry - now) / 1000));
           }
         });
+        
         return next;
       });
     }, 1000);
     return () => clearInterval(id);
   }, [expiryByTx, INITIAL_SECONDS]);
-
-  const formatTime = (totalSeconds: number) => {
-    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const s = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
- 
-
+  
   const handleApprove = async (transaction: TxStateMachine) => {
     try {
       if (!isWasmInitialized()) {
@@ -146,9 +142,16 @@ export default function ReceiverPending() {
         return;
       }
 
-      const signature = await primaryWallet.signMessage(transaction.receiverAddress);
+      await execute(transaction.receiverAddress);
+      if(errorCode || errorMessage){
+        toast.error(`Failed to sign transaction: ${errorMessage}`);
+        return;
+      }
+      if(!signature) return;
+
+      const hex = typeof signature === "string" ? (signature as `0x${string}`) : (bytesToHex(signature) as `0x${string}`);
       const txManager = new TxStateMachineManager(transaction);
-      txManager.setReceiverSignature(hexToBytes(signature as `0x${string}`));
+      txManager.setReceiverSignature(hexToBytes(hex));
       const updatedTx = txManager.getTx();
       await receiverConfirmTransaction(updatedTx);
       
@@ -236,7 +239,7 @@ export default function ReceiverPending() {
       {visibleTransactions.map((transaction) => (
         <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
-            {/* Timer in top right corner (shared component) */}
+            {/* Timer in top right corner */}
             <div className="absolute top-3 right-3">
               <TxTimer txKey={String(transaction.txNonce)} />
             </div>

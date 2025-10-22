@@ -6,11 +6,12 @@ import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
-import { Token, TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main'
+import { ChainSupported, Token, TokenManager, TxStateMachine, TxStateMachineManager, TxStatus } from '@/lib/vane_lib/main'
 import { bytesToHex, hexToBytes } from 'viem';
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertTitle } from "@/components/ui/alert";
+import { useSignMessagePhantomRedirect } from "@/app/lib/signUniversal"
 
 // Helper to generate a unique key for a transaction
 const getTxKey = (tx: TxStateMachine | { receiverAddress: string; amount: number; asset: string; codeword: string }) => {
@@ -177,26 +178,50 @@ export default function SenderPending() {
   const [showActionConfirmMap, setShowActionConfirmMap] = useState<Record<string, boolean>>({});
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
-  const [fetchedTransactions, setFetchedTransactions] = useState<TxStateMachine[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
-  const removeTransaction = useTransactionStore(state => state.removeTransaction)
-  const addTransaction = useTransactionStore(state => state.addTransaction)
-  const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
+  const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
+  const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
+  const INITIAL_SECONDS = 9 * 60 + 50; // 9:50
+  const STORAGE_PREFIX = 'senderTimer:';
   const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
+  const removeTransaction = useTransactionStore(state => state.removeTransaction)
+  const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
+  // const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
   const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
+  const exportStorageData = useTransactionStore(state => state.exportStorageData)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
   const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
-  // ------------- Wallet ---------------------------------------
-  const {primaryWallet}  = useDynamicContext()
-  
+
+  const { execute, signature, errorCode, errorMessage } = useSignMessagePhantomRedirect();
+
+  // Helper functions for localStorage timer management
+  const getExpiryFromStorage = (txNonce: string): number | null => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_PREFIX + txNonce) : null;
+      if (!raw) return null;
+      const parsed = parseInt(raw, 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setExpiryInStorage = (txNonce: string, expiryMs: number) => {
+    try {
+      if (typeof window === 'undefined') return;
+      window.localStorage.setItem(STORAGE_PREFIX + txNonce, String(expiryMs));
+    } catch {
+      console.error('Error setting expiry in storage');
+    }
+  };
+
   // Effect to fetch transactions on mount
   useEffect(() => {
     if(!isWasmInitialized()) return;
     const fetchTransactions = async () => {
       setIsLoadingTransactions(true);
       try {
-        const transactions = await fetchPendingUpdates();
-        setFetchedTransactions(transactions);
+        await fetchPendingUpdates();
       } catch (error) {
         console.error('Error fetching transactions:', error);
         toast.error('Failed to load pending transactions');
@@ -206,13 +231,71 @@ export default function SenderPending() {
     };
     
     fetchTransactions();
-  }, [fetchPendingUpdates]);
+  }, [isWasmInitialized, fetchPendingUpdates]);
+
+  // Initialize timers for new transactions using txNonce as key
+  useEffect(() => {
+    if (!senderPendingTransactions) return;
+    
+    setExpiryByTx(prev => {
+      const next: Record<string, number> = { ...prev };
+      for (const tx of senderPendingTransactions) {
+        const txNonce = String(tx.txNonce);
+        if (!next[txNonce]) {
+          let expiry = getExpiryFromStorage(txNonce);
+          if (!expiry) {
+            // Only set expiry if it doesn't exist (new transaction)
+            expiry = Date.now() + INITIAL_SECONDS * 1000;
+            setExpiryInStorage(txNonce, expiry);
+          }
+          next[txNonce] = expiry;
+        }
+      }
+      return next;
+    });
+
+    setRemainingByTx(prev => {
+      const next: Record<string, number> = { ...prev };
+      for (const tx of senderPendingTransactions) {
+        const txNonce = String(tx.txNonce);
+        if (!next[txNonce]) {
+          const stored = getExpiryFromStorage(txNonce);
+          const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
+          const baseRemaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+          next[txNonce] = Math.max(0, baseRemaining);
+        }
+      }
+      return next;
+    });
+  }, [senderPendingTransactions, INITIAL_SECONDS]);
+
+  // Tick down once per second
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRemainingByTx(prev => {
+        const next: Record<string, number> = {};
+        const now = Date.now();
+        
+        Object.keys(prev).forEach(txNonce => {
+          const expiry = expiryByTx[txNonce] ?? getExpiryFromStorage(txNonce);
+          if (!expiry) {
+            next[txNonce] = INITIAL_SECONDS; // fallback
+          } else {
+            next[txNonce] = Math.max(0, Math.floor((expiry - now) / 1000));
+          }
+        });
+        
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [expiryByTx, INITIAL_SECONDS]);
 
   // Effect to handle 3-second delay for success components
   useEffect(() => {
     const timeouts: Record<string, ReturnType<typeof setTimeout>> = {};
     
-    fetchedTransactions.forEach(transaction => {
+    senderPendingTransactions.forEach(transaction => {
       const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
       const txKey = String(transaction.txNonce || transaction.receiverAddress);
       
@@ -228,7 +311,7 @@ export default function SenderPending() {
     return () => {
       Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
     };
-  }, [fetchedTransactions, showSuccessComponents]);
+  }, [senderPendingTransactions, showSuccessComponents]);
 
   const handleRevert = async (transaction) => {
     await revertTransaction(transaction, "User requested revert");
@@ -240,24 +323,38 @@ export default function SenderPending() {
     try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
-      const signature = await primaryWallet?.signMessage(bytesToHex(transaction.callPayload![0]))
+      await execute(bytesToHex(transaction.callPayload![0]))
+      if(errorCode || errorMessage){
+        toast.error(`Failed to sign transaction: ${errorMessage}`);
+        return;
+      }
+      if(!signature) return;
+
       const txManager = new TxStateMachineManager(transaction);
-      console.log(`signature:${signature}`)
-      txManager.setSignedCallPayload(hexToBytes(signature as `0x${string}`));
+      const hex = typeof signature === "string" ? (signature as `0x${string}`) : (bytesToHex(signature) as `0x${string}`);
+
+      console.log(`signature:${hex}`)
+      txManager.setSignedCallPayload(hexToBytes(hex));
       const updatedTransaction = txManager.getTx();
 
       await senderConfirmTransaction(updatedTransaction)
       
-      // THIS WAS FOR SIMULATION ONLY
-      // Create success transaction with TxSubmissionPassed status
-      const successTxManager = new TxStateMachineManager(updatedTransaction);
-      successTxManager.updateStatus({ type: 'TxSubmissionPassed', data: { hash: new Uint8Array(32) } });
-      const successTransaction = successTxManager.getTx();
-      
       // Remove the old transaction and add the success transaction
       removeTransaction(transaction.txNonce);
-      addTransaction(successTransaction);
       
+      // submit metrics
+      exportStorageData().then((storage) => {
+        if(storage.user_account?.multi_addr){
+          fetch("/api/submit-metrics", {
+            method: "POST",
+            body: JSON.stringify(storage),
+          })
+            .then(response => response.json())
+            .then(data => console.log(data))
+            .catch(error => console.error(error));
+        }
+      })
+
     } catch (error) {
       console.error('Error confirming transaction:', error);
       toast.error('Failed to confirm transaction');
@@ -269,13 +366,13 @@ export default function SenderPending() {
     removeTransaction(transaction.txNonce)
   }
 
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     
     try {
       // Call fetchPendingUpdates to get latest data
-      const transactions = await fetchPendingUpdates()
-      setFetchedTransactions(transactions)
+      await fetchPendingUpdates()
       toast.success('Transactions refreshed')
     } catch (error) {
       console.error('Error refreshing transactions:', error)
@@ -442,12 +539,13 @@ export default function SenderPending() {
         );
       case 'FailedToSubmitTxn':
         return (
-          <div className="space-y-2">
+          <div className="w-full">
             <Button
               onClick={() => handleComplete(transaction)}
-              className="w-full h-10 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-400/20 text-xs"
+              variant="outline"
+              className="w-full h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
             >
-              Transaction Submitted
+              Cancel
             </Button>
           </div>
         );
@@ -588,6 +686,15 @@ export default function SenderPending() {
             message: `Unexpected transaction error: ${errorData}`
           };
         }
+      case 'FailedToSubmitTxn':
+        if (transaction?.status?.type === 'FailedToSubmitTxn') {
+          const errorData = transaction?.status?.data || 'Transaction failed to submit';
+          return {
+            color: 'text-red-400 border-red-400',
+            iconColor: 'text-red-400',
+            message: `Transaction submission failed: ${errorData}`
+          };
+        }
       default:
         return {
           color: 'text-[#FFA500] border-[#FFA500]',
@@ -625,12 +732,12 @@ export default function SenderPending() {
   // Show loading state while fetching transactions
   if (isLoadingTransactions) {
     return (
-      <div className="pt-2 px-4 space-y-3 pb-24">
+      <div className="pt-2 px-2 space-y-3 pb-24">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-3">
             <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
               <RefreshCw className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Loading pending transactions…</span>
+              <span className="text-sm">Make a transaction to view pending outgoing</span>
             </div>
           </CardContent>
         </Card>
@@ -654,7 +761,7 @@ export default function SenderPending() {
         </Button>
       </div>
 
-      {(!fetchedTransactions || fetchedTransactions.length === 0) ? (
+      {(!senderPendingTransactions || senderPendingTransactions.length === 0) ? (
         <>
           <div className="">
             <Card className="w-full bg-[#0D1B1B] border-[#4A5853]/20">
@@ -673,7 +780,14 @@ export default function SenderPending() {
         // Check if status is an object with 'Reverted' property
         const isReverted = transaction.status && typeof transaction.status === 'object' && 'Reverted' in transaction.status;
         // Don't display reverted transactions
-        return !isReverted;
+        if (isReverted) return false;
+        
+        // Check if transaction has expired
+        const txNonce = String(transaction.txNonce);
+        const remaining = remainingByTx[txNonce] ?? INITIAL_SECONDS;
+        const isExpired = remaining === 0;
+        
+        return !isExpired;
       }).map((transaction) => {
         const txKey = String(transaction.txNonce);
         const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
@@ -782,7 +896,7 @@ export default function SenderPending() {
                        <div className="flex-1">
                          <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
                          <p className="text-sm text-white">
-                           {transaction.feesAmount}
+                          {transaction.feesAmount}
                          </p>
                        </div>
                        <div className="flex-1">
