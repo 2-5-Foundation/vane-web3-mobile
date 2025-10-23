@@ -443,7 +443,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                       onValueChange={handleAssetChange}
                     >
                       <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
-                        <SelectValue placeholder="ETH" className="text-white" />
+                        <SelectValue placeholder="select token" className="text-white" />
                       </SelectTrigger>
                       <SelectContent className="bg-[#253639] border-white/10">
                         {tokenList.length > 0 && tokenList.map((token) => (
