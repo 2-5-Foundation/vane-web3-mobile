@@ -12,6 +12,56 @@ import { useState, useEffect, useMemo } from "react";
 import { getTokenLabel} from "./sender-pending";
 import { useSignMessagePhantomRedirect } from "@/app/lib/signUniversal";
 
+// Skeleton loading component
+const TransactionSkeleton = () => (
+  <Card className="bg-[#0D1B1B] border-[#4A5853]/20 relative animate-pulse">
+    <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
+      <div className="space-y-3">
+        {/* Sender Address Skeleton */}
+        <div>
+          <div className="h-3 w-20 bg-gray-600 rounded mb-1"></div>
+          <div className="h-4 w-full bg-gray-600 rounded"></div>
+        </div>
+        
+        {/* Receiver Address Skeleton */}
+        <div>
+          <div className="h-3 w-24 bg-gray-600 rounded mb-1"></div>
+          <div className="h-4 w-full bg-gray-600 rounded"></div>
+        </div>
+        
+        {/* Networks Skeleton */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="h-3 w-16 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 w-20 bg-gray-600 rounded"></div>
+          </div>
+          <div>
+            <div className="h-3 w-16 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 w-20 bg-gray-600 rounded"></div>
+          </div>
+        </div>
+        
+        {/* Amount and Token Skeleton */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="h-3 w-12 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 w-16 bg-gray-600 rounded"></div>
+          </div>
+          <div>
+            <div className="h-3 w-8 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 w-12 bg-gray-600 rounded"></div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Action Button Skeleton */}
+      <div className="mt-4">
+        <div className="h-10 w-full bg-gray-600 rounded"></div>
+      </div>
+    </CardContent>
+  </Card>
+);
+
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
   const { recvTransactions, receiverConfirmTransaction, isWasmInitialized, fetchPendingUpdates } = useTransactionStore()
@@ -20,115 +70,38 @@ export default function ReceiverPending() {
   // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
-  const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
-  const INITIAL_SECONDS = 9 * 60 + 50; // 9:50
-  const STORAGE_PREFIX = 'recvTimer:';
+  const [showSkeleton, setShowSkeleton] = useState(false);
 
-  // Helper functions for localStorage timer management
-  const getExpiryFromStorage = (txNonce: string): number | null => {
-    try {
-      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_PREFIX + txNonce) : null;
-      if (!raw) return null;
-      const parsed = parseInt(raw, 10);
-      return Number.isFinite(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  };
 
-  const setExpiryInStorage = (txNonce: string, expiryMs: number) => {
-    try {
-      if (typeof window === 'undefined') return;
-      window.localStorage.setItem(STORAGE_PREFIX + txNonce, String(expiryMs));
-    } catch {
-      console.error('Error setting expiry in storage');
-    }
-  };
-
-  // Only display transactions that haven't expired or have been approved
+  // Display all transactions
   const visibleTransactions = useMemo(() => {
+    console.log('ReceiverPending - recvTransactions:', recvTransactions);
     if (!recvTransactions) return [];
-    return recvTransactions.filter((tx) => {
-      const txNonce = String(tx.txNonce);
-      const isApproved = approvedTransactions.has(txNonce);
-      const remaining = remainingByTx[txNonce] ?? INITIAL_SECONDS;
-      const isExpired = remaining === 0;
-      return isApproved || !isExpired;
-    });
-  }, [recvTransactions, approvedTransactions, remainingByTx, INITIAL_SECONDS]);
+    return recvTransactions;
+  }, [recvTransactions]);
 
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setShowSkeleton(true);
+    
     try {
-      await fetchPendingUpdates();
+      // Show skeleton for 1 second minimum
+      await Promise.all([
+        fetchPendingUpdates(),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ]);
       toast.success('Transactions refreshed');
     } catch (e) {
       console.error('Error refreshing transactions:', e);
       toast.error('Failed to refresh transactions');
     } finally {
       setIsRefreshing(false);
+      setShowSkeleton(false);
     }
   };
 
-  // Initialize timers for new transactions using txNonce as key
-  useEffect(() => {
-    if (!recvTransactions) return;
-    
-    setExpiryByTx(prev => {
-      const next: Record<string, number> = { ...prev };
-      for (const tx of recvTransactions) {
-        const txNonce = String(tx.txNonce);
-        if (!next[txNonce]) {
-          let expiry = getExpiryFromStorage(txNonce);
-          if (!expiry) {
-            // Only set expiry if it doesn't exist (new transaction)
-            expiry = Date.now() + INITIAL_SECONDS * 1000;
-            setExpiryInStorage(txNonce, expiry);
-          }
-          next[txNonce] = expiry;
-        }
-      }
-      return next;
-    });
 
-    setRemainingByTx(prev => {
-      const next: Record<string, number> = { ...prev };
-      for (const tx of recvTransactions) {
-        const txNonce = String(tx.txNonce);
-        if (!next[txNonce]) {
-          const stored = getExpiryFromStorage(txNonce);
-          const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
-          const baseRemaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
-          next[txNonce] = Math.max(0, baseRemaining);
-        }
-      }
-      return next;
-    });
-  }, [recvTransactions, INITIAL_SECONDS]);
-
-  // Tick down once per second
-  useEffect(() => {
-    const id = setInterval(() => {
-      setRemainingByTx(prev => {
-        const next: Record<string, number> = {};
-        const now = Date.now();
-        
-        Object.keys(prev).forEach(txNonce => {
-          const expiry = expiryByTx[txNonce] ?? getExpiryFromStorage(txNonce);
-          if (!expiry) {
-            next[txNonce] = INITIAL_SECONDS; // fallback
-          } else {
-            next[txNonce] = Math.max(0, Math.floor((expiry - now) / 1000));
-          }
-        });
-        
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [expiryByTx, INITIAL_SECONDS]);
   
   const handleApprove = async (transaction: TxStateMachine) => {
     try {
@@ -227,7 +200,7 @@ export default function ReceiverPending() {
           onClick={handleRefresh}
           disabled={isRefreshing}
           variant="outline"
-          className="h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50"
+          className={`h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50 ${isRefreshing ? 'animate-pulse' : ''}`}
           aria-label="Refresh pending transactions"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -236,7 +209,14 @@ export default function ReceiverPending() {
       </div>
 
       {/* Pending Transactions */}
-      {visibleTransactions.map((transaction) => (
+      {showSkeleton ? (
+        <>
+          {/* Show skeleton loading animation */}
+          {[...Array(2)].map((_, index) => (
+            <TransactionSkeleton key={`skeleton-${index}`} />
+          ))}
+        </>
+      ) : visibleTransactions.map((transaction) => (
         <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">            
             
@@ -286,17 +266,17 @@ export default function ReceiverPending() {
               <div className={`flex items-center gap-2 border rounded-lg px-2 mt-10 py-2 ${
                 approvedTransactions.has(String(transaction.txNonce))
                   ? 'text-green-400 border-green-400'
-                  : ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'text-red-400 border-red-400' : 'text-[#FFA500] border-[#FFA500]')
+                  : 'text-[#FFA500] border-[#FFA500]'
               }`}>
                 {approvedTransactions.has(String(transaction.txNonce)) ? (
                   <CheckCircle className="h-4 w-4 text-green-400" />
                 ) : (
-                  <AlertCircle className={`h-4 w-4 ${((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0) ? 'text-red-400' : 'text-[#FFA500]'}`} />
+                  <AlertCircle className="h-4 w-4 text-[#FFA500]" />
                 )}
                 <span className="text-xs">
                   {approvedTransactions.has(String(transaction.txNonce))
                     ? 'Confirmed, waiting for sender\'s approval'
-                    : ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'Request expired' : 'Waiting for your confirmation…')
+                    : 'Waiting for your confirmation…'
                   }
                 </span>
               </div>
@@ -306,12 +286,12 @@ export default function ReceiverPending() {
               <div className="mt-4 flex flex-col items-center">
                 <Button
                   onClick={() => handleApprove(transaction)}
-                  disabled={!isWasmInitialized() || !primaryWallet || (remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0}
+                  disabled={!isWasmInitialized() || !primaryWallet}
                   className="w-full h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium disabled:bg-gray-500 disabled:text-gray-300"
                 >
                   {!isWasmInitialized() ? 'Connecting...' :
                    !primaryWallet ? 'Connect Wallet' :
-                   ((remainingByTx[String(transaction.txNonce)] ?? INITIAL_SECONDS) === 0 ? 'Expired' : 'Confirm')}
+                   'Confirm'}
                 </Button>
               </div>
             )}

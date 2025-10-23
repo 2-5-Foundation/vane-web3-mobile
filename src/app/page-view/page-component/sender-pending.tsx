@@ -25,6 +25,47 @@ const getTxKey = (tx: TxStateMachine | { receiverAddress: string; amount: number
 };
 
 
+// Skeleton loading component
+const TransactionSkeleton = () => (
+  <Card className="w-full bg-[#0D1B1B] border-r-2 border-white/10 relative animate-pulse">
+    <CardContent className="p-3">
+      <div className="space-y-3">
+        {/* Sender Address Skeleton */}
+        <div>
+          <div className="h-3 w-20 bg-gray-600 rounded mb-1"></div>
+          <div className="h-4 w-full bg-gray-600 rounded"></div>
+        </div>
+        
+        {/* Receiver Address Skeleton */}
+        <div>
+          <div className="h-3 w-24 bg-gray-600 rounded mb-1"></div>
+          <div className="h-4 w-full bg-gray-600 rounded"></div>
+        </div>
+        
+        {/* Networks Skeleton */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="h-3 w-16 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 w-20 bg-gray-600 rounded"></div>
+          </div>
+          <div>
+            <div className="h-3 w-16 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 w-20 bg-gray-600 rounded"></div>
+          </div>
+        </div>
+        
+        {/* Status Skeleton */}
+        <div className="h-8 w-full bg-gray-600 rounded"></div>
+        
+        {/* Expand Button Skeleton */}
+        <div className="flex justify-center">
+          <div className="h-6 w-16 bg-gray-600 rounded"></div>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
+
 export const getTokenLabel = (token: Token): string => {
   if ('Ethereum' in token) {
     const ethereumVariant = token.Ethereum;
@@ -125,6 +166,7 @@ export default function SenderPending() {
       .trim(); // Remove leading/trailing spaces
   };
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showSkeleton, setShowSkeleton] = useState(false)
   const [showCancelConfirmArr, setShowCancelConfirmArr] = useState<boolean[]>([]);
   const [showActionConfirmMap, setShowActionConfirmMap] = useState<Record<string, boolean>>({});
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
@@ -240,16 +282,21 @@ export default function SenderPending() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
+    setShowSkeleton(true)
     
     try {
-      // Call fetchPendingUpdates to get latest data
-      await fetchPendingUpdates()
+      // Show skeleton for 1 second minimum
+      await Promise.all([
+        fetchPendingUpdates(),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ])
       toast.success('Transactions refreshed')
     } catch (error) {
       console.error('Error refreshing transactions:', error)
       toast.error('Failed to refresh transactions')
     } finally {
       setIsRefreshing(false)
+      setShowSkeleton(false)
     }
   }
 
@@ -624,7 +671,7 @@ export default function SenderPending() {
           onClick={handleRefresh}
           disabled={isRefreshing}
           variant="outline"
-          className="h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50"
+          className={`h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50 ${isRefreshing ? 'animate-pulse' : ''}`}
           aria-label="Refresh pending transactions"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -632,7 +679,14 @@ export default function SenderPending() {
         </Button>
       </div>
 
-      {(!senderPendingTransactions || senderPendingTransactions.length === 0) ? (
+      {showSkeleton ? (
+        <>
+          {/* Show skeleton loading animation */}
+          {[...Array(2)].map((_, index) => (
+            <TransactionSkeleton key={`skeleton-${index}`} />
+          ))}
+        </>
+      ) : (!senderPendingTransactions || senderPendingTransactions.length === 0) ? (
         <>
           <div className="">
             <Card className="w-full bg-[#0D1B1B] border-[#4A5853]/20">
