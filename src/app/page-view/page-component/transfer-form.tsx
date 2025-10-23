@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, ArrowLeft, ArrowRight } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, DollarSign } from "lucide-react"
 import SenderPending from "./sender-pending"
 import { useEffect, useState } from "react"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
@@ -91,13 +91,31 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
   const [formData, setFormData] = useState<TransferFormData>({
     recipient: '',
     amount: 0,
-    asset: 'ETH',
-    network: 'Ethereum'
+    asset: '',
+    network: ''
   });
 
   const [currentStep, setCurrentStep] = useState<'recipient' | 'amount' | 'confirm'>('recipient');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [senderNetwork, setSenderNetwork] = useState<ChainSupported | null>(null);
+
+  // Function to get USD price from token balances
+  const getUsdPriceFromToken = (asset: string) => {
+    if (!tokenList || tokenList.length === 0) return null;
+    
+    const token = tokenList.find(t => 
+      t.symbol === asset || 
+      t.name === asset ||
+      t.tokenAddress === asset
+    );
+    
+    if (token && token.marketValue && token.balance) {
+      // Calculate price per unit: marketValue / balance
+      return token.marketValue / parseFloat(token.balance);
+    }
+    
+    return null;
+  };
 
   // WASM initialization is now handled at app level in page.tsx
 
@@ -121,6 +139,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       );
     }
   }, [senderPendingTransactions]);
+
 
   // Listen for custom events to remove initiated transactions
   useEffect(() => {
@@ -174,8 +193,25 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'amount' ? Number(value) : value
+      [name]: name === 'amount' ? (value === '' ? 0 : parseFloat(value) || 0) : value
     }));
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    console.log('handleAmountChange', value);
+    
+    // Allow empty string, decimal numbers, and handle edge cases
+    if (value === '') {
+      setFormData(prev => ({ ...prev, amount: 0 }));
+    } else if (value === '.') {
+      setFormData(prev => ({ ...prev, amount: 0 }));
+    } else {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        setFormData(prev => ({ ...prev, amount: numValue }));
+      }
+    }
   };
 
   const handleNextStep = () => {
@@ -290,7 +326,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         formData.recipient,
         BigInt(formData.amount),
         token,
-        primaryWallet.connector.name,
+        primaryWallet.connector.metadata.name,
         walletNetwork, // sender network from wallet
         selectedNetwork // receiver network from user selection
       );
@@ -302,14 +338,14 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       setFormData({
         recipient: '',
         amount: 0,
-        asset: 'ETH',
-        network: 'Ethereum'
+        asset: '',
+        network: ''
       });
       setCurrentStep('recipient');
       
     } catch (error) {
       console.error('Transaction failed:', error);
-      toast.error(`Transaction failed: ${error}`);
+      toast.error(`Transaction initiation failed`);
     } finally {
       setIsSubmitting(false);
     }
@@ -412,14 +448,27 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-gray-400 font-medium">Amount</Label>
-                    <Input 
-                      name="amount"
-                      type="number"
-                      value={formData.amount === 0 ? '' : formData.amount}
-                      onChange={handleTransferFormChange}
-                      placeholder="0.00"
-                      className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
-                    />
+                    <div className="relative">
+                      <Input 
+                        name="amount"
+                        type="number"
+                        step="any"
+                        value={formData.amount || ''}
+                        onChange={handleAmountChange}
+                        placeholder="0.00"
+                        className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8"
+                      />
+                      {/* USD Tooltip */}
+                      {formData.amount > 0 && formData.asset && (() => {
+                        const usdPrice = getUsdPriceFromToken(formData.asset);
+                        return usdPrice ? (
+                          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-gray-400">
+                            <DollarSign className="h-3 w-3" />
+                            <span>{(formData.amount * usdPrice).toFixed(2)}</span>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-gray-400 font-medium">Asset</Label>

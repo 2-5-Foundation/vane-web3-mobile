@@ -24,55 +24,6 @@ const getTxKey = (tx: TxStateMachine | { receiverAddress: string; amount: number
   ].join(":");
 };
 
-// Timer component
-export const TxTimer = ({ txKey, duration = 600 }: { txKey: string; duration?: number }) => {
-  // duration in seconds (default 10 min)
-  const [remaining, setRemaining] = useState(duration);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    // Check localStorage for expiry
-    const storageKey = `tx-timer-expiry-${txKey}`;
-    let expiryTimestamp: number;
-    const expiry = localStorage.getItem(storageKey);
-    const now = Math.floor(Date.now() / 1000);
-    if (expiry) {
-      expiryTimestamp = parseInt(expiry, 10);
-      // Do NOT reset on refresh/navigation. Keep existing expiry even if expired.
-    } else {
-      // Set expiry to now + duration on first mount for this txKey
-      expiryTimestamp = now + duration;
-      localStorage.setItem(storageKey, String(expiryTimestamp));
-    }
-
-    const update = () => {
-      const now = Math.floor(Date.now() / 1000);
-      const diff = expiryTimestamp - now;
-      setRemaining(diff > 0 ? diff : 0);
-    };
-    update();
-    intervalRef.current = setInterval(update, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [txKey, duration]);
-
-  // Format mm:ss or show 'expired'
-  if (remaining <= 0) {
-    return (
-      <span className="px-2 py-0.5 rounded bg-[#1A2A2A] text-red-400 text-xs font-mono min-w-[44px] text-center">
-        Expired
-      </span>
-    );
-  }
-  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
-  const ss = String(remaining % 60).padStart(2, "0");
-  return (
-    <span className="px-2 py-0.5 rounded bg-[#1A2A2A] text-[#7EDFCD] text-xs font-mono min-w-[44px] text-center">
-      {mm}:{ss}
-    </span>
-  );
-};
 
 export const getTokenLabel = (token: Token): string => {
   if ('Ethereum' in token) {
@@ -179,10 +130,6 @@ export default function SenderPending() {
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
-  const [remainingByTx, setRemainingByTx] = useState<Record<string, number>>({});
-  const [expiryByTx, setExpiryByTx] = useState<Record<string, number>>({});
-  const INITIAL_SECONDS = 9 * 60 + 50; // 9:50
-  const STORAGE_PREFIX = 'senderTimer:';
   const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
   const removeTransaction = useTransactionStore(state => state.removeTransaction)
   const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
@@ -194,26 +141,6 @@ export default function SenderPending() {
 
   const { execute, signature, errorCode, errorMessage } = useSignMessagePhantomRedirect();
 
-  // Helper functions for localStorage timer management
-  const getExpiryFromStorage = (txNonce: string): number | null => {
-    try {
-      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_PREFIX + txNonce) : null;
-      if (!raw) return null;
-      const parsed = parseInt(raw, 10);
-      return Number.isFinite(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const setExpiryInStorage = (txNonce: string, expiryMs: number) => {
-    try {
-      if (typeof window === 'undefined') return;
-      window.localStorage.setItem(STORAGE_PREFIX + txNonce, String(expiryMs));
-    } catch {
-      console.error('Error setting expiry in storage');
-    }
-  };
 
   // Effect to fetch transactions on mount
   useEffect(() => {
@@ -233,63 +160,7 @@ export default function SenderPending() {
     fetchTransactions();
   }, [isWasmInitialized, fetchPendingUpdates]);
 
-  // Initialize timers for new transactions using txNonce as key
-  useEffect(() => {
-    if (!senderPendingTransactions) return;
-    
-    setExpiryByTx(prev => {
-      const next: Record<string, number> = { ...prev };
-      for (const tx of senderPendingTransactions) {
-        const txNonce = String(tx.txNonce);
-        if (!next[txNonce]) {
-          let expiry = getExpiryFromStorage(txNonce);
-          if (!expiry) {
-            // Only set expiry if it doesn't exist (new transaction)
-            expiry = Date.now() + INITIAL_SECONDS * 1000;
-            setExpiryInStorage(txNonce, expiry);
-          }
-          next[txNonce] = expiry;
-        }
-      }
-      return next;
-    });
 
-    setRemainingByTx(prev => {
-      const next: Record<string, number> = { ...prev };
-      for (const tx of senderPendingTransactions) {
-        const txNonce = String(tx.txNonce);
-        if (!next[txNonce]) {
-          const stored = getExpiryFromStorage(txNonce);
-          const expiry = stored ?? (Date.now() + INITIAL_SECONDS * 1000);
-          const baseRemaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
-          next[txNonce] = Math.max(0, baseRemaining);
-        }
-      }
-      return next;
-    });
-  }, [senderPendingTransactions, INITIAL_SECONDS]);
-
-  // Tick down once per second
-  useEffect(() => {
-    const id = setInterval(() => {
-      setRemainingByTx(prev => {
-        const next: Record<string, number> = {};
-        const now = Date.now();
-        
-        Object.keys(prev).forEach(txNonce => {
-          const expiry = expiryByTx[txNonce] ?? getExpiryFromStorage(txNonce);
-          if (!expiry) {
-            next[txNonce] = INITIAL_SECONDS; // fallback
-          } else {
-            next[txNonce] = Math.max(0, Math.floor((expiry - now) / 1000));
-          }
-        });
-        
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [expiryByTx, INITIAL_SECONDS]);
 
   // Effect to handle 3-second delay for success components
   useEffect(() => {
@@ -782,12 +653,8 @@ export default function SenderPending() {
         // Don't display reverted transactions
         if (isReverted) return false;
         
-        // Check if transaction has expired
-        const txNonce = String(transaction.txNonce);
-        const remaining = remainingByTx[txNonce] ?? INITIAL_SECONDS;
-        const isExpired = remaining === 0;
-        
-        return !isExpired;
+        // Show all non-reverted transactions
+        return true;
       }).map((transaction) => {
         const txKey = String(transaction.txNonce);
         const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
@@ -797,10 +664,6 @@ export default function SenderPending() {
         return (
           <Card key={txKey} className="w-full bg-[#0D1B1B] border-r-2 border-white/10 relative">
             <CardContent className="p-3">
-              {/* Timer in top right corner */}
-              <div className="flex justify-end">
-                <TxTimer txKey={txKey} />
-              </div>
               {/* Collapsed View - Always visible */}
               <div className="space-y-2">
                 {/* Sender Address */}

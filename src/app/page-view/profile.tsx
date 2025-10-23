@@ -66,7 +66,6 @@ export default function Profile() {
           <User className="w-4 h-4 text-gray-300" />
         </div>
         <div>
-          <h2 className="text-sm font-medium text-white">Anonymous User</h2>
           <p className="text-xs text-gray-400 font-medium">Protected by VaneWeb3</p>
           <div className="flex items-center justify-center gap-2 mt-1">
             <div className={`w-2 h-2 rounded-full ${

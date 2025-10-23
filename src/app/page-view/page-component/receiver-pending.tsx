@@ -9,7 +9,7 @@ import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { getTokenLabel, TxTimer } from "./sender-pending";
+import { getTokenLabel} from "./sender-pending";
 import { useSignMessagePhantomRedirect } from "@/app/lib/signUniversal";
 
 export default function ReceiverPending() {
@@ -238,11 +238,7 @@ export default function ReceiverPending() {
       {/* Pending Transactions */}
       {visibleTransactions.map((transaction) => (
         <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
-          <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
-            {/* Timer in top right corner */}
-            <div className="absolute top-3 right-3">
-              <TxTimer txKey={String(transaction.txNonce)} />
-            </div>
+          <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">            
             
             <div className="space-y-2">
               {/* Sender Address */}

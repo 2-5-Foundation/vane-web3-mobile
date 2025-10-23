@@ -46,7 +46,7 @@ export default function Transfer() {
   const [balance, setBalance] = useState("0")
   const [network, setNetwork] = useState<string>("")
   const [availableTokens, setAvailableTokens] = useState<any[]>([])
-  const [selectedEVMNetwork, setSelectedEVMNetwork] = useState<string>("ethereum")
+  const [selectedEVMNetwork, setSelectedEVMNetwork] = useState<string>("")
   const [showNetworkDropdown, setShowNetworkDropdown] = useState<boolean>(false)
   const [currentNetworkId, setCurrentNetworkId] = useState<number | null>(null)
 
