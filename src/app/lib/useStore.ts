@@ -255,7 +255,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   // WASM initialization and management
-  initializeWasm: async (relayMultiAddr: string, account: string, network: string, authSignature?: Uint8Array, live: boolean = false) => {
+  initializeWasm: async (relayMultiAddr: string, account: string, network: string, authSignature?: Uint8Array, live: boolean = true) => {
     try {
       
       

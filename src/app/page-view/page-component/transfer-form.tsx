@@ -85,7 +85,6 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
   const { senderPendingTransactions, initiateTransaction, fetchPendingUpdates, isWasmInitialized } = useTransactionStore();
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
   
-  const [initiatedTransactions, setInitiatedTransactions] = useState<TxStateMachine[]>([]);
   const setCurrentView = useStore(state => state.setCurrentView);
 
   const [formData, setFormData] = useState<TransferFormData>({
@@ -125,39 +124,6 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       storeSetTransferFormData(formData);
     }
   }, [formData, storeSetTransferFormData]);
-
-  // Remove initiated transactions when they appear in the real transactions list
-  useEffect(() => {
-    if (senderPendingTransactions && senderPendingTransactions.length > 0) {
-      setInitiatedTransactions(prev => 
-        prev.filter(initiatedTx => 
-          !senderPendingTransactions.some(realTx => 
-            realTx.receiverAddress === initiatedTx.receiverAddress &&
-            realTx.amount.toString() === initiatedTx.amount.toString()
-          )
-        )
-      );
-    }
-  }, [senderPendingTransactions]);
-
-
-  // Listen for custom events to remove initiated transactions
-  useEffect(() => {
-    const handleRemoveInitiated = (event: CustomEvent<{ index: number }>) => {
-      setInitiatedTransactions(prev => {
-        const newArray = [...prev];
-        newArray.splice(event.detail.index, 1);
-        return newArray;
-      });
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('removeInitiatedTx', handleRemoveInitiated as EventListener);
-      return () => {
-        window.removeEventListener('removeInitiatedTx', handleRemoveInitiated as EventListener);
-      };
-    }
-  }, []);
 
   // Fetch pending transactions when WASM initializes
   useEffect(() => {
