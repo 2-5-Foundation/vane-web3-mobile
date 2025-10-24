@@ -11,18 +11,7 @@ import { bytesToHex, hexToBytes } from 'viem';
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { useSignMessagePhantomRedirect } from "@/app/lib/signUniversal"
 
-// Helper to generate a unique key for a transaction
-const getTxKey = (tx: TxStateMachine | { receiverAddress: string; amount: number; asset: string; codeword: string }) => {
-  // Use txNonce if available (for real tx), else composite key
-  if ('txNonce' in tx && tx.txNonce !== undefined && tx.txNonce !== null) return `nonce_${tx.txNonce}`;
-  return [
-    tx.receiverAddress,
-    tx.amount.toString(),
-    'codeword' in tx ? tx.codeword : tx.codeWord
-  ].join(":");
-};
 
 
 // Skeleton loading component
@@ -180,9 +169,7 @@ export default function SenderPending() {
   const exportStorageData = useTransactionStore(state => state.exportStorageData)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
   const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
-
-  const { execute, signature, errorCode, errorMessage } = useSignMessagePhantomRedirect();
-
+  const { primaryWallet } = useDynamicContext();
 
   // Effect to fetch transactions on mount
   useEffect(() => {
@@ -236,18 +223,40 @@ export default function SenderPending() {
     try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
-      await execute(bytesToHex(transaction.callPayload![0]))
-      if(errorCode || errorMessage){
-        toast.error(`Failed to sign transaction: ${errorMessage}`);
-        return;
-      }
-      if(!signature) return;
+      const signature = await primaryWallet.signMessage(bytesToHex(transaction.callPayload![0]))
 
       const txManager = new TxStateMachineManager(transaction);
-      const hex = typeof signature === "string" ? (signature as `0x${string}`) : (bytesToHex(signature) as `0x${string}`);
-
-      console.log(`signature:${hex}`)
-      txManager.setSignedCallPayload(hexToBytes(hex));
+      
+      // Handle different signature formats from different wallets
+      let signatureBytes: Uint8Array;
+      if (typeof signature === 'string') {
+        if (signature.startsWith('0x')) {
+          // Standard hex format (Phantom)
+          signatureBytes = hexToBytes(signature as `0x${string}`);
+        } else {
+          // Base64 or other format (MetaMask)
+          try {
+            // Try to decode as base64
+            const decoded = atob(signature);
+            signatureBytes = new Uint8Array(decoded.split('').map(char => char.charCodeAt(0)));
+          } catch {
+            // If base64 fails, try to convert string to bytes directly
+            signatureBytes = new TextEncoder().encode(signature);
+          }
+        }
+      } else {
+        // Already a Uint8Array
+        signatureBytes = signature;
+      }
+      
+      // Validate signature length - should be reasonable for any signature type
+      // Ed25519: 64 bytes, ECDSA: 64-65 bytes, SR25519: 64 bytes, etc.
+      if (signatureBytes.length < 32 || signatureBytes.length > 128) {
+        toast.error(`Invalid signature format. Signature length: ${signatureBytes.length} bytes`);
+        return;
+      }
+      
+      txManager.setSignedCallPayload(signatureBytes);
       const updatedTransaction = txManager.getTx();
 
       await senderConfirmTransaction(updatedTransaction)
@@ -285,11 +294,13 @@ export default function SenderPending() {
     setShowSkeleton(true)
     
     try {
+      
       // Show skeleton for 1 second minimum
       await Promise.all([
         fetchPendingUpdates(),
         new Promise(resolve => setTimeout(resolve, 1000))
       ])
+      
       toast.success('Transactions refreshed')
     } catch (error) {
       console.error('Error refreshing transactions:', error)
@@ -686,7 +697,9 @@ export default function SenderPending() {
             <TransactionSkeleton key={`skeleton-${index}`} />
           ))}
         </>
-      ) : (!senderPendingTransactions || senderPendingTransactions.length === 0) ? (
+      ) : (() => {
+        return (!senderPendingTransactions || senderPendingTransactions.length === 0);
+      })() ? (
         <>
           <div className="">
             <Card className="w-full bg-[#0D1B1B] border-[#4A5853]/20">

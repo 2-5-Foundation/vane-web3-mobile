@@ -95,7 +95,7 @@ export default function Wallets() {
     const addressKey = (selectedWallet || userProfile.account || '').toLowerCase();
 
     setIsConnectingNode(true);
-    setConnectingCountdown(10);
+    setConnectingCountdown(15);
     try {
       // 1) Try to open existing keystore
       // We no longer rely on a global envelope discovery here.

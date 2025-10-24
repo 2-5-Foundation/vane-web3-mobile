@@ -456,8 +456,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const updates = await fetchPendingTxUpdates();
       console.log('Fetched pending updates:', updates);
       
-      // Process updates
-      get().sortTransactionsUpdates(updates);
+      // If updates is empty, clear all transactions
+      if (!updates || updates.length === 0) {
+        console.log('No updates found, clearing transactions');
+        set((state) => ({
+          ...state,
+          senderPendingTransactions: [],
+          recvTransactions: []
+        }));
+      } else {
+        // Process updates
+        get().sortTransactionsUpdates(updates);
+      }
       
       return updates;
     } catch (error) {

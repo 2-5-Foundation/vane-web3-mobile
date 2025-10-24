@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { getTokenLabel} from "./sender-pending";
-import { useSignMessagePhantomRedirect } from "@/app/lib/signUniversal";
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -65,7 +64,6 @@ const TransactionSkeleton = () => (
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
   const { recvTransactions, receiverConfirmTransaction, isWasmInitialized, fetchPendingUpdates } = useTransactionStore()
-  const { execute, signature, errorCode, errorMessage } = useSignMessagePhantomRedirect();
 
   // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
@@ -115,17 +113,40 @@ export default function ReceiverPending() {
         return;
       }
 
-      await execute(transaction.receiverAddress);
-      if(errorCode || errorMessage){
-        toast.error(`Failed to sign transaction: ${errorMessage}`);
+      const signature = await primaryWallet.signMessage(transaction.receiverAddress);
+      const txManager = new TxStateMachineManager(transaction);
+      
+      // Handle different signature formats from different wallets
+      let signatureBytes: Uint8Array;
+      if (typeof signature === 'string') {
+        if (signature.startsWith('0x')) {
+          // Standard hex format (Phantom)
+          signatureBytes = hexToBytes(signature as `0x${string}`);
+        } else {
+          // Base64 or other format (MetaMask)
+          try {
+            // Try to decode as base64
+            const decoded = atob(signature);
+            signatureBytes = new Uint8Array(decoded.split('').map(char => char.charCodeAt(0)));
+          } catch {
+            // If base64 fails, try to convert string to bytes directly
+            signatureBytes = new TextEncoder().encode(signature);
+          }
+        }
+      } else {
+        // Already a Uint8Array
+        signatureBytes = signature;
+      }
+      
+      // Validate signature length - should be reasonable for any signature type
+      if (signatureBytes.length < 32 || signatureBytes.length > 128) {
+        toast.error(`Invalid signature format. Signature length: ${signatureBytes.length} bytes`);
         return;
       }
-      if(!signature) return;
-
-      const hex = typeof signature === "string" ? (signature as `0x${string}`) : (bytesToHex(signature) as `0x${string}`);
-      const txManager = new TxStateMachineManager(transaction);
-      txManager.setReceiverSignature(hexToBytes(hex));
+      
+      txManager.setReceiverSignature(signatureBytes);
       const updatedTx = txManager.getTx();
+      console.log('updatedTx signed by receiver', updatedTx.recvSignature);
       await receiverConfirmTransaction(updatedTx);
       
       // Mark this transaction as approved
