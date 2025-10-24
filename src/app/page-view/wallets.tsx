@@ -246,6 +246,13 @@ export default function Wallets() {
     setSelectedWallet(address);
   };
 
+  // Automatically set selectedWallet when primaryWallet changes
+  useEffect(() => {
+    if (primaryWallet && !selectedWallet) {
+      setSelectedWallet(primaryWallet.address);
+    }
+  }, [primaryWallet, selectedWallet]);
+
   // Check connection status on component mount
   useEffect(() => {
     const checkConnectionStatus = async () => {

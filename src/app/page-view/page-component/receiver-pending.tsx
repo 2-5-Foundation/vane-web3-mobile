@@ -71,12 +71,6 @@ export default function ReceiverPending() {
   const [showSkeleton, setShowSkeleton] = useState(false);
 
 
-  // Display all transactions
-  const visibleTransactions = useMemo(() => {
-    console.log('ReceiverPending - recvTransactions:', recvTransactions);
-    if (!recvTransactions) return [];
-    return recvTransactions;
-  }, [recvTransactions]);
 
 
   const handleRefresh = async () => {
@@ -89,6 +83,7 @@ export default function ReceiverPending() {
         fetchPendingUpdates(),
         new Promise(resolve => setTimeout(resolve, 1000))
       ]);
+      console.log('recvTransactions', recvTransactions);
       toast.success('Transactions refreshed');
     } catch (e) {
       console.error('Error refreshing transactions:', e);
@@ -177,7 +172,7 @@ export default function ReceiverPending() {
   }
 
   // Show empty state when no pending transactions
-  if (!visibleTransactions || visibleTransactions.length === 0) {
+  if (!recvTransactions || recvTransactions.length === 0) {
     return (
       <div className="space-y-3 pb-24">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
@@ -237,8 +232,8 @@ export default function ReceiverPending() {
             <TransactionSkeleton key={`skeleton-${index}`} />
           ))}
         </>
-      ) : visibleTransactions.map((transaction) => (
-        <Card key={transaction.txNonce} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
+      ) : recvTransactions.map((transaction, index) => (
+        <Card key={`${transaction.txNonce}-${index}`} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">            
             
             <div className="space-y-2">

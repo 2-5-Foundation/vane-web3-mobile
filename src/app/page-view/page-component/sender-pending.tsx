@@ -213,7 +213,8 @@ export default function SenderPending() {
     };
   }, [senderPendingTransactions, showSuccessComponents]);
 
-  const handleRevert = async (transaction) => {
+  const handleRevert = async (transaction:TxStateMachine) => {
+    console.log('transaction', transaction);
     await revertTransaction(transaction, "User requested revert");
     removeTransaction(transaction.txNonce);
     toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`);
@@ -527,6 +528,18 @@ export default function SenderPending() {
             </Button>
           </div>
         );
+      case 'TxError':
+        return (
+          <div className="space-y-2">
+            <Button
+              onClick={() => handleRevert(transaction)}
+              variant="outline"
+              className="w-full h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+            >
+              Cancel Transaction
+            </Button>
+          </div>
+        );
       default:
         return !showActionConfirmMap[transaction.txNonce] ? (
           <div className="w-full">
@@ -559,6 +572,7 @@ export default function SenderPending() {
 
   // Helper to get status colors and messages
   const getStatusInfo = (statusType: string, transaction?: TxStateMachine) => {
+    console.log('statusType', statusType);
     switch (statusType) {
       case 'Genesis':
         return {
@@ -612,7 +626,7 @@ export default function SenderPending() {
           return {
             color: 'text-red-400 border-red-400',
             iconColor: 'text-red-400',
-            message: `Unexpected transaction error: ${errorData}`
+            message: `${errorData}`
           };
         }
       case 'FailedToSubmitTxn':
@@ -714,7 +728,11 @@ export default function SenderPending() {
       ) : (
         <>
           {/* Render all real transactions */}
-      {senderPendingTransactions?.filter((transaction) => {
+      {senderPendingTransactions?.filter((transaction, index, self) => {
+        // Remove duplicates based on txNonce
+        const isDuplicate = self.findIndex(t => t.txNonce === transaction.txNonce) !== index;
+        if (isDuplicate) return false;
+        
         // Check if status is an object with 'Reverted' property
         const isReverted = transaction.status && typeof transaction.status === 'object' && 'Reverted' in transaction.status;
         // Don't display reverted transactions
@@ -724,7 +742,9 @@ export default function SenderPending() {
         return true;
       }).map((transaction) => {
         const txKey = String(transaction.txNonce);
-        const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
+        const statusType = transaction.status?.type || '';
+        
+        
         const statusInfo = getStatusInfo(statusType, transaction);
         const isExpanded = expandedCards.has(txKey);
         

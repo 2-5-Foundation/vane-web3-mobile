@@ -166,29 +166,24 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         // Use the utility method to get consistent status string
         const statusString = get().getTransactionStatus(update);
         
+        
         switch (statusString) {
             case 'Genesis':
                 const isSender = update.senderAddress === get().userProfile.account;
                 const isReceiver = update.receiverAddress === get().userProfile.account;
                 
                 if (isSender) {
-                    const alreadyInSender = state.senderPendingTransactions.some(tx => tx.txNonce === update.txNonce);
-                    if (!alreadyInSender) {
-                        return {
-                            ...state,
-                            senderPendingTransactions: [update, ...state.senderPendingTransactions]
-                        };
-                    }
+                    return {
+                        ...state,
+                        senderPendingTransactions: [update, ...state.senderPendingTransactions]
+                    };
                 }
                 
                 if (isReceiver) {
-                    const alreadyInRecv = state.recvTransactions.some(tx => tx.txNonce === update.txNonce);
-                    if (!alreadyInRecv) {
-                        return {
-                            ...state,
-                            recvTransactions: [update, ...state.recvTransactions]
-                        };
-                    }
+                    return {
+                        ...state,
+                        recvTransactions: [update, ...state.recvTransactions]
+                    };
                 }
                 
                 return state;
@@ -202,14 +197,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             case 'SenderConfirmationfailed':
             case 'FailedToSubmitTxn':
             case 'TxSubmissionPassed':
+            case 'TxError':
             case 'Reverted':
-                if (!state.senderPendingTransactions.some(tx => tx.txNonce === update.txNonce)) {
-                    return {
-                        ...state,
-                        senderPendingTransactions: [update, ...state.senderPendingTransactions]
-                    };
-                }
-                return state;
+                return {
+                    ...state,
+                    senderPendingTransactions: [update, ...state.senderPendingTransactions]
+                };
 
             default:
                 return state;
@@ -465,6 +458,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           recvTransactions: []
         }));
       } else {
+        // Clear existing transactions and process new updates
+        set((state) => ({
+          ...state,
+          senderPendingTransactions: [],
+          recvTransactions: []
+        }));
+        
         // Process updates
         get().sortTransactionsUpdates(updates);
       }
