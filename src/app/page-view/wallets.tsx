@@ -269,6 +269,31 @@ export default function Wallets() {
     checkConnectionStatus();
   }, [isWasmInitialized, getNodeConnectionStatus]);
 
+  // Add a ref to track previous connection status
+  const prevConnectionStatus = useRef<boolean | null>(null);
+
+  // Add this new useEffect to monitor connection status changes
+  useEffect(() => {
+    if (nodeConnectionStatus !== null) {
+      const isCurrentlyConnected = nodeConnectionStatus.relay_connected;
+      const wasPreviouslyConnected = prevConnectionStatus.current;
+      
+      // Check if we went from connected to disconnected
+      if (wasPreviouslyConnected === true && isCurrentlyConnected === false) {
+        toast.error('Node disconnected! Please check your connection and try reconnecting.', {
+          duration: 10000, // Show for 10 seconds since it's important
+          action: {
+            label: 'Reconnect',
+            onClick: () => handleConnectNode()
+          }
+        });
+      }
+      
+      // Update the previous status
+      prevConnectionStatus.current = isCurrentlyConnected;
+    }
+  }, [nodeConnectionStatus]);
+
 
   useWalletConnectorEvent(
     primaryWallet?.connector,
@@ -281,6 +306,17 @@ export default function Wallets() {
     },
   );
 
+  // Add this filtering logic before the userWallets.map
+  const filteredWallets = userWallets.filter((wallet) => {
+    // Filter out Turnkey HD accounts and other embedded wallets
+    const connectorName = wallet.connector?.name?.toLowerCase() || '';
+    const isTurnkeyHD = connectorName.includes('turnkey') || connectorName.includes('hd');
+    const isEmbeddedWallet = connectorName.includes('embedded') || connectorName.includes('managed');
+    
+    // Keep only the primary wallet (Phantom, Solflare, etc.) and exclude Turnkey HD
+    return !isTurnkeyHD && !isEmbeddedWallet;
+  });
+
 
   return (
     <IsBrowser>
@@ -290,7 +326,7 @@ export default function Wallets() {
         <div className="space-y-2">
           <RadioGroup value={selectedWallet || undefined} onValueChange={handleWalletSelect}>
             
-            {userWallets.map((wallet) => (
+            {filteredWallets.map((wallet) => (
               <Card key={wallet.address} className="bg-[#0D1B1B] border-[#4A5853]/20">
                 <CardContent className="p-3">
                   <div className="flex items-center space-x-3">
@@ -334,7 +370,7 @@ export default function Wallets() {
               {isConnectingNode ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
-                  {`Connecting${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
+                  {`Connecting.. dont refresh the page${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
                 </>
               ) : nodeConnectionStatus?.relay_connected === true ? (
                 'App Connected'
