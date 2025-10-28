@@ -58,11 +58,12 @@ import {
 } from './keystore';
 import { bytesToHex } from 'viem';
 import { toast } from 'sonner';
+import { toWire } from '@/lib/vane_lib/pkg/host_functions/networking';
 
 config();
 export interface TransferFormData {
   recipient: string;
-  amount: number; 
+  amount: number | string; 
   asset: string;
   network: string;
 }
@@ -291,10 +292,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
 
       // Optional: restore exported storage if available
-      const maybeStored = get().loadStorageData() as StorageExport | null;
-      if (maybeStored) {
-        console.log('Found storage export in browser storage; passing to initializeNode.');
-      }
+      // const maybeStored = get().loadStorageData() as StorageExport | null;
+      // if (maybeStored) {
+      //   console.log('Found storage export in browser storage; passing to initializeNode.');
+      // }
 
       console.log('Initializing WASM node...');
       await initializeNode({
@@ -303,8 +304,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         network,
         live,
         logLevel: LogLevel.Info,
-        libp2pKey: bytesToHex(libp2pSecret32!),
-        storage: maybeStored ?? undefined
+        libp2pKey: bytesToHex(libp2pSecret32!)
       });
       console.log('WASM node initialized successfully');
 
@@ -522,6 +522,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
                     if (typeof tx.amount === 'string') {
                       // Convert serialized bigint string back to BigInt
                       tx.amount = BigInt(tx.amount);
+                    } else if (typeof tx.amount === 'bigint') {
+                      // Convert BigInt to number for DbTxStateMachine
+                      tx.amount = Number(tx.amount);
                     }
                   }
                   return tx;
@@ -535,10 +538,27 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
                 parsed.failed_transactions = reviveAmount(parsed.failed_transactions);
               }
 
-              // Ensure numeric counters are numbers
+              // Ensure numeric counters are numbers (not BigInt)
               if (typeof parsed.nonce === 'string') parsed.nonce = Number(parsed.nonce);
+              if (typeof parsed.nonce === 'bigint') parsed.nonce = Number(parsed.nonce);
               if (typeof parsed.total_value_success === 'string') parsed.total_value_success = Number(parsed.total_value_success);
+              if (typeof parsed.total_value_success === 'bigint') parsed.total_value_success = Number(parsed.total_value_success);
               if (typeof parsed.total_value_failed === 'string') parsed.total_value_failed = Number(parsed.total_value_failed);
+              if (typeof parsed.total_value_failed === 'bigint') parsed.total_value_failed = Number(parsed.total_value_failed);
+              
+              // Convert any remaining BigInt fields to numbers
+              const convertBigIntToNumber = (obj: any) => {
+                if (obj && typeof obj === 'object') {
+                  for (const key in obj) {
+                    if (typeof obj[key] === 'bigint') {
+                      obj[key] = Number(obj[key]);
+                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                      convertBigIntToNumber(obj[key]);
+                    }
+                  }
+                }
+              };
+              convertBigIntToNumber(parsed);
             }
           } catch (e) {
             console.warn('Warning: failed to fully normalize stored storage export. Proceeding with raw parsed object.', e);

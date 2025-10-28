@@ -4,7 +4,6 @@ import {
   parseEther, 
   parseUnits,
   keccak256,
-  serializeTransaction as serializeEthTransaction,
   recoverPublicKey,
   type Address,
   type TransactionRequest,
@@ -21,7 +20,8 @@ import {
   getContract,
   erc20Abi,
   bytesToHex,
-  formatEther
+  formatEther,
+  hexToBytes
 } from 'viem';
 
 import type { TransactionSerializedEIP1559 } from 'viem';
@@ -31,25 +31,26 @@ import {
 } from 'viem/chains';
 import {
   Connection as SolanaConnection,
-  Transaction as SolanaTransaction,
   SystemProgram,
   LAMPORTS_PER_SOL,
-  Message,
   PublicKey,
   VersionedTransaction,
   TransactionMessage,
   VersionedMessage,
 } from "@solana/web3.js";
 import {
-  getAssociatedTokenAddress, createTransferCheckedInstruction, transfer,
+  getAssociatedTokenAddress, createTransferCheckedInstruction,
   createAssociatedTokenAccountInstruction,getMint,
   TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
 } from '@solana/spl-token';
 
+
+import bs58 from 'bs58';
+
 import { ChainSupported, type TxStateMachine, type Token } from '../../primitives';
 
 
-type UnsignedEip1559 = {
+export type UnsignedEip1559 = {
   to: Address;
   value: bigint;
   chainId: number;
@@ -62,7 +63,7 @@ type UnsignedEip1559 = {
   type: 'eip1559';
 };
 
-type UnsignedLegacy = {
+export type UnsignedLegacy = {
   to: Address;
   value: bigint;
   chainId: number;
@@ -151,27 +152,27 @@ export const hostNetworking = {
           const serializedTxBytes = 'ethereum' in tx.callPayload! ? tx.callPayload.ethereum.callPayload[1] : null;
           if (!serializedTxBytes) throw new Error('Invalid call payload for Ethereum transaction');
           const signatureBytes = tx.signedCallPayload;
-          const signedTransactionHex = reconstructSignedTransaction(serializedTxBytes, signatureBytes);
+          const signedTransactionHex = reconstructSignedTransaction(new Uint8Array(serializedTxBytes), new Uint8Array(signatureBytes));
           const hash = await publicClient.sendRawTransaction({ serializedTransaction: signedTransactionHex });
           // Ensure it's mined before returning (Anvil auto-mines, but wait for safety)
           await publicClient.waitForTransactionReceipt({ hash });
-          const hashBytes = new Uint8Array(hash.slice(2).match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+          const hashBytes = hexToBytes(hash);
           return hashBytes;
         }
 
         // Live mode: send txStateMachine to next API route handler
-        const resp = await fetch('/api/tx/submit-evm', {
+        const resp = await fetch('/api/submit-evm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ tx: { ...tx, amount: tx.amount.toString() } }),
+          body: JSON.stringify({ tx: toWire(tx) }),
         })
 
         if (!resp.ok) throw new Error(`API submitTx failed: ${resp.status}`);
         const data = await resp.json();
         const hashHex: string = data?.hash;
         if (!hashHex || typeof hashHex !== 'string') throw new Error('Invalid hash from API');
-        return new Uint8Array(hashHex.slice(2).match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16)));
+        return hexToBytes(hashHex as Hex);
       }
 
       if (family === 'bsc') {
@@ -182,27 +183,27 @@ export const hostNetworking = {
           const serializedTxBytes = 'bnb' in tx.callPayload! ? tx.callPayload.bnb.callPayload[1] : null;
           if (!serializedTxBytes) throw new Error('Invalid call payload for BSC transaction');
           const signatureBytes = tx.signedCallPayload;
-          const signedTransactionHex = reconstructSignedTransaction(serializedTxBytes, signatureBytes);
+          const signedTransactionHex = reconstructSignedTransaction(new Uint8Array(serializedTxBytes), new Uint8Array(signatureBytes));
           const hash = await publicClient.sendRawTransaction({ serializedTransaction: signedTransactionHex });
           // Wait for receipt to ensure balance updates are visible
           await publicClient.waitForTransactionReceipt({ hash });
-          const hashBytes = new Uint8Array(hash.slice(2).match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+          const hashBytes = hexToBytes(hash);
           return hashBytes;
         }
 
         // Live mode: send txStateMachine to next API route handler
-        const resp = await fetch('/api/tx/submit-bsc', {
+        const resp = await fetch('/api/submit-bsc', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ tx: { ...tx, amount: tx.amount.toString() } }),
+          body: JSON.stringify({ tx: toWire(tx) }),
         })
 
         if (!resp.ok) throw new Error(`API submitTx failed: ${resp.status}`);
         const data = await resp.json();
         const hashHex: string = data?.hash;
         if (!hashHex || typeof hashHex !== 'string') throw new Error('Invalid hash from API');
-        return new Uint8Array(hashHex.slice(2).match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16)));
+        return hexToBytes(hashHex as Hex);
       }
   
       if (family === 'polkadot') {
@@ -215,7 +216,7 @@ export const hostNetworking = {
           const rawSignatureBytes = new Uint8Array(tx.signedCallPayload!);
 
           if (!('solana' in tx.callPayload!)) throw new Error('Invalid call payload for Solana transaction');
-          const vmsg = VersionedMessage.deserialize(tx.callPayload.solana.callPayload);
+          const vmsg = VersionedMessage.deserialize(new Uint8Array(tx.callPayload.solana.callPayload));
           const lastValidBlockHeight = tx.callPayload.solana.latestBlockHeight;
           let vtx  = new VersionedTransaction(vmsg);
           if (rawSignatureBytes.length != 64) {
@@ -224,35 +225,36 @@ export const hostNetworking = {
 
           vtx.addSignature(new PublicKey(tx.senderAddress), rawSignatureBytes);
 
-          const sig = await connection.sendRawTransaction(vtx.serialize());
+          const sig = await connection.sendRawTransaction(vtx.serialize(), {maxRetries: 10});
           const result = await connection.confirmTransaction(
             {
               signature: sig,
               blockhash: vmsg.recentBlockhash,
               lastValidBlockHeight: lastValidBlockHeight,
             },
-            'confirmed'
+            'finalized'
           );
           if (!result.value) {
             throw new Error('Transaction failed in confirmation');
           }
 
-          return new Uint8Array(sig.slice(2).match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+          return bs58.decode(sig);
         }
 
-        const resp = await fetch("api/tx/submit-solana", {
+        const resp = await fetch("/api/submit-solana", {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ tx: { ...tx, amount: tx.amount.toString() } })
+          body: JSON.stringify({ tx: toWire(tx) })
         });
         
         if (!resp.ok) throw new Error(`API submitTx failed: ${resp.status}`);
         const data = await resp.json();
         const hashHex: string = data?.hash;
         if (!hashHex || typeof hashHex !== 'string') throw new Error('Invalid hash from API');
-        return new Uint8Array(hashHex.slice(2).match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16)));
+        return bs58.decode(hashHex);
       }
+  
   
       throw new Error(`Unhandled chain family: ${family}`);
       
@@ -282,13 +284,11 @@ export const hostNetworking = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ tx: { ...tx, amount: tx.amount.toString() } }),
+          body: JSON.stringify({ tx: toWire(tx) }),
         })
         if (!resp.ok) throw new Error(`API prepareCreateTx failed: ${resp.status}`);
         const data = await resp.json();
-        const prepared = data?.prepared as PreparedEthParams | undefined;
-        if (!prepared) throw new Error('Invalid prepared params from API');
-        return await createTxEthereumWithParams(tx, prepared);
+        return fromWire(data?.prepared)
       }
 
       if (family === 'bsc') {
@@ -303,13 +303,11 @@ export const hostNetworking = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ tx: { ...tx, amount: tx.amount.toString() } }),
+          body: JSON.stringify({ tx: toWire(tx) }),
         })
         if (!resp.ok) throw new Error(`API prepareCreateTx failed: ${resp.status}`);
         const data = await resp.json();
-        const prepared = data?.prepared as PreparedBSCParams | undefined;
-        if (!prepared) throw new Error('Invalid prepared params from API');
-        return await createTxBSCWithParams(tx, prepared);
+        return fromWire(data?.prepared)
       }
 
       if (family === 'solana') {
@@ -318,16 +316,16 @@ export const hostNetworking = {
         }
         // Live mode: get prepared chain data from server, then construct tx locally
         // Get latest blockhash
-        const resp = await fetch("api/tx/prepare-solana", {
+        const resp = await fetch("/api/prepare-solana", {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ tx: { ...tx, amount: tx.amount.toString() } })
+          body: JSON.stringify({ tx: toWire(tx) })
         });
 
         if (!resp.ok) throw new Error(`API prepareCreateTx failed: ${resp.status}`);
         const data = await resp.json();
-        return data?.prepared as TxStateMachine
+        return fromWire(data?.prepared)
       }
 
       throw new Error(`Unhandled chain family: ${family}`);
@@ -341,9 +339,11 @@ export const hostNetworking = {
 
 // ===== Family-specific createTx implementations =====
 export async function createTestTxEthereum(tx: TxStateMachine): Promise<TxStateMachine> {
+
+  // construct an unsigned ethereum transaction
   const chainConfig = CHAIN_CONFIGS[tx.senderAddressNetwork as keyof typeof CHAIN_CONFIGS];
   const publicClient = createPublicClient({ 
-    chain: mainnet, 
+    chain: chainConfig.chain, 
     transport: http(chainConfig.rpcUrl)
   });
 
@@ -363,31 +363,24 @@ export async function createTestTxEthereum(tx: TxStateMachine): Promise<TxStateM
 
   if (isNativeToken) {
     // Native token transfer (ETH)
-    const value = parseEther(tx.amount.toString());
     transactionData = {
       to: receiver,
-      value,
+      value: tx.amount,
       data: '0x'
     };
   } else {
     // ERC20 token transfer
-    const tokenAddress = await getTokenAddress(tx.token, tx.senderAddressNetwork);
-    if (!tokenAddress) {
+    const tokenInfo = await getTokenAddress(tx.token, tx.senderAddressNetwork);
+    if (!tokenInfo) {
       throw new Error(`Invalid ERC20 token address for ${JSON.stringify(tx.token)}`);
     }
+    const {address: tokenAddress, decimal} = tokenInfo;
 
-    const decimals = await publicClient.readContract({
-      address: tokenAddress as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'decimals',
-    });
-  
-    const value = parseUnits(String(tx.amount), decimals);
-
+   
     const data = encodeFunctionData({
       abi: erc20Abi,
       functionName: 'transfer',
-      args: [receiver, value]
+      args: [receiver, tx.amount]
     });
 
     transactionData = {
@@ -446,9 +439,9 @@ export async function createTestTxEthereum(tx: TxStateMachine): Promise<TxStateM
         ethUnsignedTxFields: fields,
         callPayload: [
           // digest as bytes (32)
-          new Uint8Array(digest.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
+          Array.from(hexToBytes(digest)),
           // unsigned payload bytes (what you hashed)
-          new Uint8Array(signingPayload.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
+          Array.from(hexToBytes(signingPayload)),
         ]
       }
     }
@@ -481,31 +474,23 @@ export async function createTestTxBSC(tx: TxStateMachine): Promise<TxStateMachin
 
   if (isNativeToken) {
     // Native token transfer (BNB)
-    const value = parseEther(tx.amount.toString());
     transactionData = {
       to: receiver,
-      value,
+      value: tx.amount,
       data: '0x'
     };
   } else {
     // BEP20 token transfer (reuse Ethereum helper)
-    const tokenAddress = await getTokenAddress(tx.token, tx.senderAddressNetwork);
-    if (!tokenAddress) {
+    const tokenInfo = await getTokenAddress(tx.token, tx.senderAddressNetwork);
+    if (!tokenInfo) {
       throw new Error(`Invalid BEP20 token address for ${JSON.stringify(tx.token)}`);
     }
-
-    const decimals = await publicClient.readContract({
-      address: tokenAddress as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'decimals',
-    });
-  
-    const value = parseUnits(String(tx.amount), decimals);
+    const {address: tokenAddress, decimal} = tokenInfo;
    
     const data = encodeFunctionData({
       abi: erc20Abi,
       functionName: 'transfer',
-      args: [receiver, value]
+      args: [receiver, tx.amount]
     });
 
     transactionData = {
@@ -554,9 +539,9 @@ export async function createTestTxBSC(tx: TxStateMachine): Promise<TxStateMachin
         bnbLegacyTxFields: fields,
         callPayload: [
           // digest as bytes (32)
-          new Uint8Array(digest.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
+          Array.from(hexToBytes(digest)),
           // unsigned payload bytes (what you hashed)
-          new Uint8Array(signingPayload.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
+          Array.from(hexToBytes(signingPayload)),
         ]
       }
     }
@@ -577,10 +562,12 @@ export async function createTestTxSolana(tx: TxStateMachine): Promise<TxStateMac
     const to   = new PublicKey(tx.receiverAddress);
   
     // Build the transfer instruction
-    const lamports =
-      typeof tx.amount === 'bigint'
-        ? tx.amount * BigInt(LAMPORTS_PER_SOL)
-        : Math.round(Number(tx.amount) * LAMPORTS_PER_SOL);
+    const lamports = tx.amount;
+    
+    // Safety check for lamports precision
+    if (lamports > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error('lamports exceed JS safe integer range');
+    }
   
     const transferIx = SystemProgram.transfer({
       fromPubkey: from,
@@ -606,7 +593,7 @@ export async function createTestTxSolana(tx: TxStateMachine): Promise<TxStateMac
       feesAmount: Number(feesInSol),
       callPayload: {
         solana: {
-          callPayload: messageBytes as Uint8Array,
+          callPayload: Array.from(messageBytes),
           latestBlockHeight: lastValidBlockHeight,
         }
       },
@@ -616,12 +603,13 @@ export async function createTestTxSolana(tx: TxStateMachine): Promise<TxStateMac
 
   } else {
     // SPL token transfer
-    const tokenAddress  = await getSPLTokenAddress(tx.token, tx.senderAddressNetwork);
-    if (!tokenAddress) {
+    const tokenInfo = await getTokenAddress(tx.token, tx.senderAddressNetwork);
+    if (!tokenInfo) {
       throw new Error(`Invalid SPL token address for ${JSON.stringify(tx.token)}`);
     }
-    const mint = new PublicKey(tokenAddress);
-    const connection = new SolanaConnection("http://localhost:8899", 'confirmed');
+    const {address: tokenAddress, decimal} = tokenInfo;
+
+    const mint = new PublicKey(tokenAddress as string);
     const info = await connection.getAccountInfo(mint);
     if (!info) throw new Error('Mint not found');
     const programId = info.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
@@ -643,12 +631,10 @@ export async function createTestTxSolana(tx: TxStateMachine): Promise<TxStateMac
       );
     }
 
-    const minInfo = await getMint(connection, mint, 'confirmed',programId);
-    const decimals = minInfo.decimals;
-    
+
     ixs.push(
       createTransferCheckedInstruction(
-        fromAta, mint, toAta, new PublicKey(tx.senderAddress), tx.amount * (10n ** BigInt(decimals)), decimals, [], programId
+        fromAta, new PublicKey(tokenAddress), toAta, new PublicKey(tx.senderAddress), tx.amount, decimal, [], programId
       )
     );
    
@@ -670,7 +656,7 @@ export async function createTestTxSolana(tx: TxStateMachine): Promise<TxStateMac
       feesAmount: Number(feesInSol),
       callPayload: {
         solana: {
-          callPayload: new Uint8Array(messageBytes),
+          callPayload: Array.from(messageBytes),
           latestBlockHeight: lastValidBlockHeight,
         }
       },
@@ -679,170 +665,7 @@ export async function createTestTxSolana(tx: TxStateMachine): Promise<TxStateMac
   }
 }
 
-// ===== Helper for live mode: construct tx using server-prepared chain data =====
-export type PreparedEthParams = {
-  nonce: number;
-  gas: bigint;
-  maxFeePerGas: bigint;
-  maxPriorityFeePerGas: bigint;
-  tokenAddress?: string | null; // required if ERC20
-  tokenDecimals?: number | null
-};
 
-export type PreparedBSCParams = {
-  nonce: number;
-  gas: bigint;
-  gasPrice: bigint;
-  tokenAddress?: string | null; // required if BEP20
-  tokenDecimals?: number | null; // required if BEP20
-};
-
-export type PreparedSolanaParams = {
-  blockhash: string;
-  lastValidBlockHeight: number;
-  feesAmount: number;
-
-};
-
-async function createTxEthereumWithParams(tx: TxStateMachine, params: PreparedEthParams): Promise<TxStateMachine> {
-  const chainConfig = CHAIN_CONFIGS[tx.senderAddressNetwork as keyof typeof CHAIN_CONFIGS];
-
-  const sender = tx.senderAddress as Address;
-  const receiver = tx.receiverAddress as Address;
-
-  // Determine if this is a native token or ERC20 token
-  const isNativeToken = isNativeEthereumToken(tx.token);
-
-  let transactionData: {
-    to: Address;
-    value: bigint;
-    data: Hex;
-  };
-
-  if (isNativeToken) {
-    const value = parseEther(tx.amount.toString());
-    transactionData = { to: receiver, value, data: '0x' };
-  } else {
-    const tokenAddress = params.tokenAddress;
-    if (!tokenAddress) throw new Error('Missing tokenAddress for ERC20 transfer');
-    
-    // Use decimals provided by server
-    const decimals = params.tokenDecimals!
-    const tokenAmount = parseUnits(tx.amount.toString(), decimals);
-    
-    const data = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'transfer',
-      args: [receiver, tokenAmount]
-    });
-    transactionData = { to: tokenAddress as Address, value: 0n, data };
-  }
-
-  const fields: UnsignedEip1559 = {
-    to: transactionData.to,
-    value: transactionData.value,
-    chainId: chainConfig.chainId,
-    nonce: params.nonce,
-    gas: params.gas,
-    maxFeePerGas: params.maxFeePerGas,
-    maxPriorityFeePerGas: params.maxPriorityFeePerGas,
-    data: transactionData.data,
-    accessList: [],
-    type: 'eip1559',
-  };
-
-  const feesInEth = formatEther(params.gas * params.maxFeePerGas);
-
-  const signingPayload = serializeTransaction(fields) as Hex;
-  if (!signingPayload.startsWith('0x02')) throw new Error('Expected 0x02 typed payload');
-  const digest = keccak256(signingPayload) as Hex;
-
-  const updated: TxStateMachine = {
-    ...tx,
-    feesAmount: Number(feesInEth),
-    callPayload: {
-      ethereum: {
-        ethUnsignedTxFields: fields,
-        callPayload: [
-          new Uint8Array(digest.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
-          new Uint8Array(signingPayload.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
-        ]
-      }
-    }
-  };
-
-  return updated;
-}
-
-
-async function createTxBSCWithParams(tx: TxStateMachine, params: PreparedBSCParams): Promise<TxStateMachine> {
-  const chainConfig = CHAIN_CONFIGS[tx.senderAddressNetwork as keyof typeof CHAIN_CONFIGS];
-
-  const receiver = tx.receiverAddress as Address;
-
-  // Determine if this is a native token or BEP20 token
-  const isNativeToken = isNativeBSCToken(tx.token);
-
-  let transactionData: {
-    to: Address;
-    value: bigint;
-    data: Hex;
-  };
-
-  if (isNativeToken) {
-    const value = parseEther(tx.amount.toString());
-    transactionData = { to: receiver, value, data: '0x' };
-  } else {
-    const tokenAddress = params.tokenAddress;
-    if (!tokenAddress) throw new Error('Missing tokenAddress for BEP20 transfer');
-    
-    // Use decimals provided by server
-    const decimals = params.tokenDecimals!;
-    const tokenAmount = parseUnits(tx.amount.toString(), decimals);
-    
-    const data = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'transfer',
-      args: [receiver, tokenAmount]
-    });
-    transactionData = { to: tokenAddress as Address, value: 0n, data };
-  }
-
-  const fields: UnsignedLegacy = {
-    to: transactionData.to,
-    value: transactionData.value,
-    chainId: chainConfig.chainId,
-    nonce: params.nonce,
-    gas: params.gas,
-    gasPrice: params.gasPrice,
-    data: transactionData.data,
-    type: 'legacy',
-  };
-
-  const feesInBNB = formatEther(params.gas * params.gasPrice);
-
-  const signingPayload = serializeTransaction(fields) as Hex;
-  if (!signingPayload.startsWith('0x')) throw new Error('Expected 0x legacy payload');
-  const digest = keccak256(signingPayload) as Hex;
-
-  
-
-  const updated: TxStateMachine = {
-    ...tx,
-    feesAmount: Number(feesInBNB),
-    callPayload: {
-      bnb: {
-        bnbLegacyTxFields: fields,
-        callPayload: [
-          new Uint8Array(digest.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
-          new Uint8Array(signingPayload.slice(2).match(/.{1,2}/g)!.map((b) => parseInt(b, 16))),
-        ]
-      }
-    }
-  };
-
-  return updated;
-}
 
 // Helper function to determine if a token is a native Ethereum token
 function isNativeEthereumToken(token: Token): boolean {
@@ -860,34 +683,35 @@ function isNativeBSCToken(token: Token): boolean {
 }
 
 // Helper function to get token contract address and validate it's a valid ERC20 contract
-async function getTokenAddress(token: Token, network: ChainSupported): Promise<string | null> {
+async function getTokenAddress(token: Token, network: ChainSupported): Promise<{address:string, decimal:number} | null> {
   // Support EVM-compatible networks: Ethereum & BSC (no on-chain validation)
   const isEthereum = network === ChainSupported.Ethereum;
   const isBsc = network === ChainSupported.Bnb;
   if (!isEthereum && !isBsc) return null;
-
   if ('Ethereum' in token && typeof token.Ethereum === 'object' && 'ERC20' in token.Ethereum) {
-    return token.Ethereum.ERC20.address || null;
+    return {
+      address: token.Ethereum.ERC20.address,
+      decimal: token.Ethereum.ERC20.decimals
+    };
   }
 
   if ('Bnb' in token && typeof token.Bnb === 'object' && 'BEP20' in token.Bnb) {
-    return token.Bnb.BEP20.address || null;
+    return {
+      address:token.Bnb.BEP20.address,
+      decimal:token.Bnb.BEP20.decimals
+    };
   }
-
-  return null;
-}
-
-async function getSPLTokenAddress(token: Token, network: ChainSupported): Promise<string | null> {
-  // Support Solana network only
-  const isSolana = network === ChainSupported.Solana;
-  if (!isSolana) return null;
 
   if ('Solana' in token && typeof token.Solana === 'object' && 'SPL' in token.Solana) {
-    return token.Solana.SPL.address || null;
+    return {
+      address: token.Solana.SPL.address,
+      decimal: token.Solana.SPL.decimals
+    };
   }
 
   return null;
 }
+
 
 
 // Helper function to determine if a token is native SOL
@@ -896,4 +720,122 @@ function isNativeSolToken(token: Token): boolean {
     return token.Solana === 'SOL';
   }
   return false;
+}
+
+
+// helper function to ensure TxStateMachine array types are converted back to correct types
+export function toWire(tx: TxStateMachine): any {
+  return {
+    ...tx,
+    amount: tx.amount.toString(),
+    // Convert Uint8Array fields to regular arrays
+    multiId: tx.multiId ? Array.from(tx.multiId) : null,
+    recvSignature: tx.recvSignature ? Array.from(tx.recvSignature) : null,
+    signedCallPayload: tx.signedCallPayload ? Array.from(tx.signedCallPayload) : null,
+    // Convert callPayload arrays with type safety
+    callPayload: tx.callPayload ? (() => {
+      if ('ethereum' in tx.callPayload) {
+        const f = tx.callPayload.ethereum.ethUnsignedTxFields;
+        return {
+          ethereum: {
+            ethUnsignedTxFields: {
+              ...f,
+              // Convert all bigints to strings for JSON serialization
+              value: f.value.toString(),
+              gas: f.gas.toString(),
+              maxFeePerGas: f.maxFeePerGas.toString(),
+              maxPriorityFeePerGas: f.maxPriorityFeePerGas.toString(),
+            },
+            callPayload: tx.callPayload.ethereum.callPayload ? [
+              Array.from(tx.callPayload.ethereum.callPayload[0]),
+              Array.from(tx.callPayload.ethereum.callPayload[1])
+            ] : null
+          }
+        };
+      } else if ('bnb' in tx.callPayload) {
+        const f = tx.callPayload.bnb.bnbLegacyTxFields;
+        return {
+          bnb: {
+            bnbLegacyTxFields: {
+              ...f,
+              // Convert all bigints to strings for JSON serialization
+              value: f.value.toString(),
+              gas: f.gas.toString(),
+              gasPrice: f.gasPrice.toString(),
+            },
+            callPayload: tx.callPayload.bnb.callPayload ? [
+              Array.from(tx.callPayload.bnb.callPayload[0]),
+              Array.from(tx.callPayload.bnb.callPayload[1])
+            ] : null
+          }
+        };
+      } else if ('solana' in tx.callPayload) {
+        return {
+          solana: {
+            ...tx.callPayload.solana,
+            callPayload: tx.callPayload.solana.callPayload ? Array.from(tx.callPayload.solana.callPayload) : null
+          }
+        };
+      }
+      return tx.callPayload;
+    })() : null
+  };
+}
+
+export function fromWire(wireTx: any): TxStateMachine {
+  return {
+    ...wireTx,
+    amount: BigInt(wireTx.amount),
+    // Convert arrays back to Uint8Array fields
+    multiId: wireTx.multiId ? new Uint8Array(wireTx.multiId) : null,
+    recvSignature: wireTx.recvSignature ? new Uint8Array(wireTx.recvSignature) : null,
+    signedCallPayload: wireTx.signedCallPayload ? new Uint8Array(wireTx.signedCallPayload) : null,
+    // Convert callPayload arrays back with type safety
+    callPayload: wireTx.callPayload ? (() => {
+      if ('ethereum' in wireTx.callPayload) {
+        const f = wireTx.callPayload.ethereum.ethUnsignedTxFields;
+        return {
+          ethereum: {
+            ethUnsignedTxFields: {
+              ...f,
+              // Convert strings back to bigints
+              value: BigInt(f.value),
+              gas: BigInt(f.gas),
+              maxFeePerGas: BigInt(f.maxFeePerGas),
+              maxPriorityFeePerGas: BigInt(f.maxPriorityFeePerGas),
+            },
+            callPayload: wireTx.callPayload.ethereum.callPayload ? [
+              new Uint8Array(wireTx.callPayload.ethereum.callPayload[0]),
+              new Uint8Array(wireTx.callPayload.ethereum.callPayload[1])
+            ] : null
+          }
+        };
+      } else if ('bnb' in wireTx.callPayload) {
+        const f = wireTx.callPayload.bnb.bnbLegacyTxFields;
+        return {
+          bnb: {
+            bnbLegacyTxFields: {
+              ...f,
+              // Convert strings back to bigints
+              value: BigInt(f.value),
+              gas: BigInt(f.gas),
+              gasPrice: BigInt(f.gasPrice),
+            },
+            callPayload: wireTx.callPayload.bnb.callPayload ? [
+              new Uint8Array(wireTx.callPayload.bnb.callPayload[0]),
+              new Uint8Array(wireTx.callPayload.bnb.callPayload[1])
+            ] : null
+          }
+        };
+      } else if ('solana' in wireTx.callPayload) {
+        return {
+          solana: {
+            ...wireTx.callPayload.solana,
+            callPayload: wireTx.callPayload.solana.callPayload ? new Uint8Array(wireTx.callPayload.solana.callPayload) : null
+          }
+        };
+      }
+      return wireTx.callPayload;
+    })() : null
+  } as TxStateMachine;
 }

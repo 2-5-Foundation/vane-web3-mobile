@@ -6,16 +6,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, ArrowLeft, ArrowRight, DollarSign } from "lucide-react"
-import SenderPending from "./sender-pending"
 import { useEffect, useState } from "react"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
 import { TxStateMachine } from '@/lib/vane_lib/main'
 import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { toast } from "sonner"
+import { TokenBalance } from "@dynamic-labs/sdk-api-core"
+
 
 interface TransferFormProps {
-  tokenList: any[]; // TokenBalance objects
+  tokenList: TokenBalance[]; // TokenBalance objects
 }
 
 // Helper function to convert network ID to ChainSupported
@@ -79,10 +80,34 @@ function isNativeTokenBySymbolAndAddress(symbol: string | undefined, address: st
 }
 
 
+function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
+  // 1) validate: up to 8 decimals
+  if (!/^\d+(\.\d{1,8})?$/.test(input.trim())) {
+    throw new Error("Amount must have at most 8 decimal places");
+  }
+
+  // 2) micro-units integer (8 decimal places)
+  const [i = "0", f = ""] = input.split(".");
+  const micro = BigInt(i) * 100000000n + BigInt((f + "00000000").slice(0, 8));
+
+  // 3) scale micro → base units
+  // base = 10^tokenDecimals; micro = 10^8 ⇒ multiply by 10^(decimals-8)
+  if (tokenDecimals >= 8) {
+    const pow = BigInt(10) ** BigInt(tokenDecimals - 8);
+    return micro * pow;
+  } else {
+    // Need to *round or reject* because base unit is coarser than 0.00000001
+    // Here we reject if micro isn't divisible by 10^(8-decimals).
+    const div = BigInt(10) ** BigInt(8 - tokenDecimals);
+    if (micro % div !== 0n) throw new Error("Too many decimals for this token");
+    return micro / div;
+  }
+}
+
 export default function TransferForm({ tokenList }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
-  const { senderPendingTransactions, initiateTransaction, fetchPendingUpdates, isWasmInitialized } = useTransactionStore();
+  const { initiateTransaction, fetchPendingUpdates, isWasmInitialized } = useTransactionStore();
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
   
   const setCurrentView = useStore(state => state.setCurrentView);
@@ -105,21 +130,21 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     const token = tokenList.find(t => 
       t.symbol === asset || 
       t.name === asset ||
-      t.tokenAddress === asset
+      t.address === asset
     );
     
     if (token && token.marketValue && token.balance) {
       // Calculate price per unit: marketValue / balance
-      return token.marketValue / parseFloat(token.balance);
+      return token.marketValue / parseFloat(token.balance.toString());
     }
     
     return null;
   };
 
-  // WASM initialization is now handled at app level in page.tsx
 
   useEffect(() => {
-    if (formData.amount > 0 && formData.recipient.trim() !== '') {
+    const amountValue = parseFloat(formData.amount.toString());
+    if (amountValue > 0 && formData.recipient.trim() !== '') {
       console.log('Storing form data:', formData);
       storeSetTransferFormData(formData);
     }
@@ -165,19 +190,24 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    console.log('handleAmountChange', value);
     
-    // Allow empty string, decimal numbers, and handle edge cases
+    // Allow empty string
     if (value === '') {
-      setFormData(prev => ({ ...prev, amount: 0 }));
-    } else if (value === '.') {
-      setFormData(prev => ({ ...prev, amount: 0 }));
-    } else {
-      const numValue = parseFloat(value);
-      if (!isNaN(numValue)) {
-        setFormData(prev => ({ ...prev, amount: numValue }));
-      }
+      setFormData(prev => ({ ...prev, amount: '' }));
+      return;
     }
+    
+    // Allow only numbers and decimal point
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = cleanValue.split('.');
+    if (parts.length > 2) {
+      return; // Don't update if more than one decimal point
+    }
+    
+    // Store the cleaned value (can be partial like "0." or ".90")
+    setFormData(prev => ({ ...prev, amount: cleanValue }));
   };
 
   const handleNextStep = () => {
@@ -186,7 +216,8 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         setCurrentStep('amount');
       }
     } else if (currentStep === 'amount') {
-      if (formData.amount > 0) {
+      const amountValue = parseFloat(formData.amount.toString());
+      if (amountValue > 0) {
         setCurrentStep('confirm');
       }
     }
@@ -214,7 +245,8 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     try {
       setIsSubmitting(true);
       
-      if (!formData.recipient || !formData.amount || !formData.asset || !formData.network) {
+      const amountValue = parseFloat(formData.amount.toString());
+      if (!formData.recipient || !amountValue || amountValue <= 0 || !formData.asset || !formData.network) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
@@ -250,6 +282,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       const tokenName = selectedToken?.name || formData.asset;
       const tokenAddress = selectedToken?.address;
       const tokenSymbol = selectedToken?.symbol;
+      const tokenDecimals = selectedToken?.decimals;
       
       // Check if it's a native token based on symbol and address patterns
       const isNativeToken = isNativeTokenBySymbolAndAddress(tokenSymbol, tokenAddress, selectedNetwork);
@@ -265,16 +298,16 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
           case ChainSupported.Polygon:
           case ChainSupported.Optimism:
             // All Ethereum-compatible chains use ERC20
-            token = TokenManager.createERC20Token(selectedNetwork, tokenName, tokenAddress);
+            token = TokenManager.createERC20Token(selectedNetwork, tokenName, tokenAddress, tokenDecimals);
             break;
           case ChainSupported.Bnb:
-            token = TokenManager.createBEP20Token(tokenName, tokenAddress);
+            token = TokenManager.createBEP20Token(tokenName, tokenAddress, tokenDecimals);
             break;
           case ChainSupported.Solana:
-            token = TokenManager.createSPLToken(tokenName, tokenAddress);
+            token = TokenManager.createSPLToken(tokenName, tokenAddress, tokenDecimals);
             break;
           case ChainSupported.Tron:
-            token = TokenManager.createTRC20Token(tokenName, tokenAddress);
+            token = TokenManager.createTRC20Token(tokenName, tokenAddress, tokenDecimals);
             break;
           default:
             throw new Error(`Unsupported network: ${selectedNetwork}`);
@@ -285,12 +318,14 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       const walletNetworkId = await primaryWallet.getNetwork();
       const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
       
+      // Convert amount string to base units using token decimals
+      const amountInBaseUnits = toBaseUnits8dp(formData.amount.toString(), tokenDecimals);
       
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
       await initiateTransaction(
         primaryWallet.address,
         formData.recipient,
-        BigInt(formData.amount),
+        amountInBaseUnits,
         token,
         primaryWallet.connector.metadata.name,
         walletNetwork, // sender network from wallet
@@ -319,6 +354,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
 
   // Determine if form should be disabled
   const isFormDisabled = !isWasmInitialized() || !primaryWallet;
+ 
 
   return (
     <div className="flex flex-col h-full">
@@ -417,20 +453,19 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                     <div className="relative">
                       <Input 
                         name="amount"
-                        type="number"
-                        step="any"
+                        type="text"
                         value={formData.amount || ''}
                         onChange={handleAmountChange}
                         placeholder="0.00"
                         className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8"
                       />
                       {/* USD Tooltip */}
-                      {formData.amount > 0 && formData.asset && (() => {
+                      {parseFloat(formData.amount.toString()) > 0 && formData.asset && (() => {
                         const usdPrice = getUsdPriceFromToken(formData.asset);
                         return usdPrice ? (
                           <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-gray-400">
                             <DollarSign className="h-3 w-3" />
-                            <span>{(formData.amount * usdPrice).toFixed(2)}</span>
+                            <span>{(parseFloat(formData.amount.toString()) * usdPrice).toFixed(2)}</span>
                           </div>
                         ) : null;
                       })()}
@@ -473,7 +508,7 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                   <Button 
                     className="flex-1 h-10 rounded-lg bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed"
                     onClick={submitInitiateTx}
-                    disabled={!formData.amount || formData.amount <= 0 || isSubmitting}
+                      disabled={!formData.amount || parseFloat(formData.amount.toString()) <= 0 || isSubmitting || isFormDisabled}
                   >
                     {isSubmitting ? 'Processing...' : 'Initiate Transfer'}
                   </Button>

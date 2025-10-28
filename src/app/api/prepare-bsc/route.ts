@@ -1,10 +1,15 @@
 // app/api/prepare-bsc/route.ts
 
-import { PreparedBSCParams } from '@/lib/vane_lib/pkg/host_functions/networking'
+import { fromWire, toWire, UnsignedLegacy } from '@/lib/vane_lib/pkg/host_functions/networking'
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  createPublicClient, http, parseEther, parseUnits, encodeFunctionData,
-  erc20Abi, type Address, type Hex, type PublicClient
+  createPublicClient, http, encodeFunctionData,
+  erc20Abi, type Address, type Hex, type PublicClient,
+  formatEther,
+  serializeTransaction,
+  keccak256,
+  TransactionSerializableLegacy,
+  hexToBytes
 } from 'viem'
 import { bsc } from 'viem/chains'
 import type { TxStateMachine } from '@/lib/vane_lib/primitives'
@@ -38,16 +43,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as { tx?: any } | null
   if (!body?.tx) return bad(400, 'Missing { tx }')
 
-  const tx = body.tx as TxStateMachine
+  const tx = fromWire(body.tx)
   if (tx.senderAddressNetwork !== 'Bnb') {
     return bad(400, 'Only BSC supported in this endpoint')
   }
-
-  // minimal rehydrate
-  tx.amount = toBig(tx.amount)
-  if (tx.recvSignature) tx.recvSignature = toU8(tx.recvSignature)
-  if (tx.signedCallPayload) tx.signedCallPayload = toU8(tx.signedCallPayload)
-  if (tx.callPayload) tx.callPayload = [toU8(tx.callPayload[0]), toU8(tx.callPayload[1])] as any
 
   const client = createPublicClient({ chain: bsc, transport: http(RPC_URL) })
 
@@ -61,11 +60,10 @@ export async function POST(req: NextRequest) {
   let value: bigint
   let data: Hex = '0x'
   let tokenAddress: string | null = null
-  let tokenDecimals: number | null = null
 
   if (isNative) {
     // BNB transfer
-    value = parseEther(String(tx.amount))
+    value = tx.amount
     to = receiver
   } else {
     // BEP-20 transfer
@@ -74,19 +72,11 @@ export async function POST(req: NextRequest) {
     if (!bep20) return bad(400, 'Missing BEP20 token address');
     if (!(await isContract(client, bep20 as Address))) return bad(400, 'Invalid BEP20 address (no code)');
 
-    // fetch decimals
-    tokenDecimals = await client.readContract({
-      address: bep20 as Address,
-      abi: erc20Abi,
-      functionName: 'decimals',
-    })
-
     // encode transfer(to, amount)
-    const amountWei = parseUnits(String(tx.amount), tokenDecimals)
     data = encodeFunctionData({
       abi: erc20Abi,
       functionName: 'transfer',
-      args: [receiver, amountWei],
+      args: [receiver, tx.amount],
     })
 
     to = bep20 as Address
@@ -101,13 +91,38 @@ export async function POST(req: NextRequest) {
     client.getGasPrice(),
   ])
 
-  const prepared: PreparedBSCParams = {
-    nonce,
-    gas,
-    gasPrice,
-    tokenAddress: isNative ? null : tokenAddress,
-    tokenDecimals: isNative ? null : tokenDecimals,
-  }
+  const fields: UnsignedLegacy = {
+    to: to,
+    value: value,
+    chainId: bsc.id,
+    nonce: nonce,
+    gas: gas,
+    gasPrice: gasPrice,
+    data: data,
+    type: 'legacy',
+  };
 
-  return NextResponse.json({ prepared })
+  const feesInBNB = formatEther(gas * gasPrice);
+
+  const signingPayload = serializeTransaction(fields as TransactionSerializableLegacy) as Hex;
+  if (!signingPayload.startsWith('0x00')) throw new Error('Expected 0x00 legacy payload');
+  const digest = keccak256(signingPayload) as Hex;
+
+  const updated: TxStateMachine = {
+    ...tx,
+    feesAmount: Number(feesInBNB),
+    callPayload: {
+      bnb: {
+        bnbLegacyTxFields: fields,
+        callPayload: [
+          // digest as bytes (32)
+          Array.from(hexToBytes(digest)),
+          // unsigned payload bytes (what you hashed)
+          Array.from(hexToBytes(signingPayload)),
+        ]
+      }
+    }
+  };
+
+  return NextResponse.json({ prepared: toWire(updated) })
 }

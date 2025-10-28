@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowUpRight, ArrowDownLeft } from "lucide-react"
 import SenderPending from "./page-component/sender-pending"
 import ReceiverPending from "./page-component/receiver-pending"
+
+
 export default function Pending() {
   const [activeTab, setActiveTab] = useState<'outgoing' | 'incoming'>('outgoing')
 

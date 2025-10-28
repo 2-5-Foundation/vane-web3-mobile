@@ -1,10 +1,14 @@
-import { PreparedEthParams } from '@/lib/vane_lib/pkg/host_functions/networking'
+import { fromWire, toWire, UnsignedEip1559 } from '@/lib/vane_lib/pkg/host_functions/networking'
 import { TxStateMachine } from '@/lib/vane_lib/primitives'
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  createPublicClient, http, parseEther, encodeFunctionData,
-  type Address, type Hex, type PublicClient, erc20Abi,
-  parseUnits
+  createPublicClient, http, encodeFunctionData,
+  type Address, type Hex, erc20Abi,
+  formatEther,
+  serializeTransaction,
+  keccak256,
+  TransactionSerializableEIP1559,
+  hexToBytes
 } from 'viem'
 import { mainnet } from 'viem/chains'
 
@@ -21,24 +25,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as { tx?: any } | null;
     if (!body?.tx) return bad(400, 'Missing { tx }');
   
-    const tx = body.tx as TxStateMachine;
+    const tx = fromWire(body.tx)
     if (tx.senderAddressNetwork !== 'Ethereum') {
       return bad(400, 'Only Ethereum/EVM supported in this endpoint');
     }
-  
-    // rehydrate minimal
-    const toU8 = (x: any) =>
-      x == null ? undefined
-      : x instanceof Uint8Array ? x
-      : Array.isArray(x) ? new Uint8Array(x)
-      : typeof x === 'object' ? Uint8Array.from(Object.values(x))
-      : undefined;
-    const toBig = (x: any) => (typeof x === 'string' ? BigInt(x) : x);
-  
-    tx.amount = toBig(tx.amount);
-    if (tx.recvSignature) tx.recvSignature = toU8(tx.recvSignature);
-    if (tx.signedCallPayload) tx.signedCallPayload = toU8(tx.signedCallPayload);
-    if (tx.callPayload) tx.callPayload = [toU8(tx.callPayload[0]), toU8(tx.callPayload[1])] as any;
   
     const client = createPublicClient({ chain: mainnet, transport: http(RPC_URL) });
   
@@ -52,29 +42,19 @@ export async function POST(req: NextRequest) {
     let value: bigint;
     let data: Hex = '0x';
     let tokenAddress: string | null = null;
-    let tokenDecimals: number | null = null;
   
     if (isNative) {
-      value = parseEther(String(tx.amount));
+      value = tx.amount;
       to = receiver;
     } else {
       tokenAddress = ("Ethereum" in tx.token && typeof tx.token.Ethereum === "object" && "ERC20" in tx.token.Ethereum) ?
         tx.token.Ethereum.ERC20.address : null;
       if (!tokenAddress) return bad(400, 'Missing ERC20 token address');
   
-      // read decimals
-      tokenDecimals = await client.readContract({
-        address: tokenAddress as Address,
-        abi: erc20Abi,
-        functionName: 'decimals',
-      });
-  
-      // encode transfer (amount scaling is irrelevant for PreparedEthParams, but needed for gas estimate)
-      const amountWei = parseUnits(String(tx.amount), tokenDecimals);
       data = encodeFunctionData({
         abi: erc20Abi,
         functionName: 'transfer',
-        args: [receiver, amountWei],
+        args: [receiver, tx.amount],
       });
   
       to = tokenAddress as Address;
@@ -90,14 +70,39 @@ export async function POST(req: NextRequest) {
       }),
     ]);
   
-    const prepared: PreparedEthParams = {
-      nonce,
-      gas,
-      maxFeePerGas:        fees!.maxFeePerGas!,
-      maxPriorityFeePerGas:fees!.maxPriorityFeePerGas!,
-      tokenAddress: isNative ? null : tokenAddress,
-      tokenDecimals: isNative ? null : tokenDecimals,
+
+    const fields: UnsignedEip1559 = {
+      to: to,
+      value: value,
+      chainId: mainnet.id,
+      nonce: nonce,
+      gas: gas,
+      maxFeePerGas: fees.maxFeePerGas,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+      data: data,
+      accessList: [],
+      type: 'eip1559',
     };
   
-    return NextResponse.json({ prepared });
+    const feesInEth = formatEther(gas * fees.maxFeePerGas);
+  
+    const signingPayload = serializeTransaction(fields as TransactionSerializableEIP1559) as Hex;
+    if (!signingPayload.startsWith('0x02')) throw new Error('Expected 0x02 typed payload');
+    const digest = keccak256(signingPayload) as Hex;
+  
+    const updated: TxStateMachine = {
+      ...tx,
+      feesAmount: Number(feesInEth),
+      callPayload: {
+        ethereum: {
+          ethUnsignedTxFields: fields,
+          callPayload: [
+            Array.from(hexToBytes(digest)),
+            Array.from(hexToBytes(signingPayload)),
+          ]
+        }
+      }
+    };  
+  
+    return NextResponse.json({ prepared: toWire(updated) });
   }

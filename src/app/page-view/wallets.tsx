@@ -149,7 +149,7 @@ export default function Wallets() {
       }
     } catch (err) {
       console.error(err);
-      toast.error(`Failed to connect app: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to connect app`);
     } finally {
       setIsConnectingNode(false);
       setConnectingCountdown(0);

@@ -1,3 +1,5 @@
+import { hexToBytes } from "viem/utils";
+
 export enum ChainSupported {
     Ethereum = "Ethereum",
     Polkadot = "Polkadot",
@@ -17,10 +19,11 @@ export enum EthereumToken {
     ERC20 = "ERC20"
 }
 
-/** ERC20 token with name and contract address */
+/** ERC20 token with name, contract address, and decimals */
 export interface ERC20Token {
     name: string;
     address: string;
+    decimals: number;
 }
 
 /** BNB Smart Chain ecosystem tokens */
@@ -29,10 +32,11 @@ export enum BnbToken {
     BEP20 = "BEP20"
 }
 
-/** BEP20 token with name and contract address */
+/** BEP20 token with name, contract address, and decimals */
 export interface BEP20Token {
     name: string;
     address: string;
+    decimals: number;
 }
 
 /** Polkadot ecosystem tokens */
@@ -53,10 +57,11 @@ export enum SolanaToken {
     SPL = "SPL"
 }
 
-/** SPL token with name and mint address */
+/** SPL token with name, mint address, and decimals */
 export interface SPLToken {
     name: string;
     address: string;
+    decimals: number;
 }
 
 /** TRON ecosystem tokens */
@@ -65,10 +70,11 @@ export enum TronToken {
     TRC20 = "TRC20"
 }
 
-/** TRC20 token with name and contract address */
+/** TRC20 token with name, contract address, and decimals */
 export interface TRC20Token {
     name: string;
     address: string;
+    decimals: number;
 }
 
 /** Optimism ecosystem tokens */
@@ -113,6 +119,36 @@ export type Token =
     | { Base: BaseToken | { ERC20: ERC20Token } }
     | { Bitcoin: BitcoinToken }
 
+
+export function getTokenDecimals(token: Token): number | null {
+  // NATIVE TOKENS
+  if ('Ethereum' in token && token.Ethereum === EthereumToken.ETH) {
+    return 18;
+  }
+  if ('Bnb' in token && token.Bnb === BnbToken.BNB) {
+    return 18;
+  }
+  if ('Solana' in token && token.Solana === SolanaToken.SOL) {
+    return 9;
+  }
+  if ('Tron' in token && token.Tron === TronToken.TRX) {
+    return 6;
+  }
+
+  // TOKENS
+  if ('Ethereum' in token && typeof token.Ethereum === 'object' && 'ERC20' in token.Ethereum) {
+    return token.Ethereum.ERC20.decimals;
+  }
+  if ('Bnb' in token && typeof token.Bnb === 'object' && 'BEP20' in token.Bnb) {
+    return token.Bnb.BEP20.decimals;
+  }
+  if ('Solana' in token && typeof token.Solana === 'object' && 'SPL' in token.Solana) {
+    return token.Solana.SPL.decimals;
+  }
+  if ('Tron' in token && typeof token.Tron === 'object' && 'TRC20' in token.Tron) {
+  }
+}
+
 /**
  * Token Manager - Utility for creating and managing tokens
  */
@@ -150,8 +186,8 @@ export class TokenManager {
   /**
    * Create an ERC-20 token for Ethereum-compatible chains
    */
-  static createERC20Token(chain: ChainSupported, name: string, address: string): Token {
-    const erc20Token: ERC20Token = { name, address };
+  static createERC20Token(chain: ChainSupported, name: string, address: string, decimals: number): Token {
+    const erc20Token: ERC20Token = { name, address, decimals };
     switch (chain) {
       case ChainSupported.Ethereum:
         return { Ethereum: { ERC20: erc20Token } };
@@ -171,24 +207,24 @@ export class TokenManager {
   /**
    * Create a BEP-20 token for BNB Smart Chain
    */
-  static createBEP20Token(name: string, address: string): Token {
-    const bep20Token: BEP20Token = { name, address };
+  static createBEP20Token(name: string, address: string, decimals: number): Token {
+    const bep20Token: BEP20Token = { name, address, decimals };
     return { Bnb: { BEP20: bep20Token } };
   }
 
   /**
    * Create an SPL token for Solana
    */
-  static createSPLToken(name: string, address: string): Token {
-    const splToken: SPLToken = { name, address };
+  static createSPLToken(name: string, address: string, decimals: number): Token {
+    const splToken: SPLToken = { name, address, decimals };
     return { Solana: { SPL: splToken } };
   }
 
   /**
    * Create a TRC-20 token for TRON
    */
-  static createTRC20Token(name: string, address: string): Token {
-    const trc20Token: TRC20Token = { name, address };
+  static createTRC20Token(name: string, address: string, decimals: number): Token {
+    const trc20Token: TRC20Token = { name, address, decimals };
     return { Tron: { TRC20: trc20Token } };
   }
 
@@ -301,10 +337,10 @@ export class TokenManager {
         const erc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (erc20Match) {
           const [, name, address] = erc20Match;
-          return { Ethereum: { ERC20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
         }
         // Fallback: treat as name only, address will need to be resolved elsewhere
-        return { Ethereum: { ERC20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
       
       case "BNB":
         if (symbol === "BNB") {
@@ -314,9 +350,9 @@ export class TokenManager {
         const bep20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (bep20Match) {
           const [, name, address] = bep20Match;
-          return { Bnb: { BEP20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse BEP20 token "${name}" without decimals. Use TokenManager.createBEP20Token() instead.`);
         }
-        return { Bnb: { BEP20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse BEP20 token "${symbol}" without decimals. Use TokenManager.createBEP20Token() instead.`);
       
       case "Polkadot":
         if (symbol === "DOT") {
@@ -338,9 +374,9 @@ export class TokenManager {
         const splMatch = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (splMatch) {
           const [, name, address] = splMatch;
-          return { Solana: { SPL: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse SPL token "${name}" without decimals. Use TokenManager.createSPLToken() instead.`);
         }
-        return { Solana: { SPL: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse SPL token "${symbol}" without decimals. Use TokenManager.createSPLToken() instead.`);
       
       case "TRON":
         if (symbol === "TRX") {
@@ -350,9 +386,9 @@ export class TokenManager {
         const trc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (trc20Match) {
           const [, name, address] = trc20Match;
-          return { Tron: { TRC20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse TRC20 token "${name}" without decimals. Use TokenManager.createTRC20Token() instead.`);
         }
-        return { Tron: { TRC20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse TRC20 token "${symbol}" without decimals. Use TokenManager.createTRC20Token() instead.`);
       
       case "Optimism":
         if (symbol === "ETH") {
@@ -362,9 +398,9 @@ export class TokenManager {
         const optimismErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (optimismErc20Match) {
           const [, name, address] = optimismErc20Match;
-          return { Optimism: { ERC20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
         }
-        return { Optimism: { ERC20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
       
       case "Arbitrum":
         if (symbol === "ETH") {
@@ -374,9 +410,9 @@ export class TokenManager {
         const arbitrumErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (arbitrumErc20Match) {
           const [, name, address] = arbitrumErc20Match;
-          return { Arbitrum: { ERC20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
         }
-        return { Arbitrum: { ERC20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
       
       case "Polygon":
         if (symbol === "POL") {
@@ -386,9 +422,9 @@ export class TokenManager {
         const polygonErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (polygonErc20Match) {
           const [, name, address] = polygonErc20Match;
-          return { Polygon: { ERC20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
         }
-        return { Polygon: { ERC20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
       
       case "Base":
         if (symbol === "ETH") {
@@ -398,9 +434,9 @@ export class TokenManager {
         const baseErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (baseErc20Match) {
           const [, name, address] = baseErc20Match;
-          return { Base: { ERC20: { name: name.trim(), address: address.trim() } } };
+          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
         }
-        return { Base: { ERC20: { name: symbol, address: "" } } };
+        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
       
       case "Bitcoin":
         if (symbol === "BTC") {
@@ -454,7 +490,7 @@ export class TokenManager {
 interface TxStatusData {
     FailedToSubmitTxn: string;
     TxError: string;
-    TxSubmissionPassed: { hash: Uint8Array };
+    TxSubmissionPassed: { hash: number[] };
     Reverted: string;
 }
    
@@ -502,18 +538,18 @@ export type ChainTransactionType =
     | {
         ethereum: {
             ethUnsignedTxFields: UnsignedEip1559;
-            callPayload: [Uint8Array, Uint8Array];
+            callPayload: [number[], number[]];
         };
     }
     | {
         solana: {
-            callPayload: Uint8Array;
+            callPayload: number[];
             latestBlockHeight: number;
         };
     }
     | {
         bnb: {
-            callPayload: [Uint8Array, Uint8Array];
+            callPayload: [number[], number[]];
             bnbLegacyTxFields: UnsignedBnbLegacy;
         };
     };
@@ -527,7 +563,7 @@ export interface TxStateMachine {
     /** Hashed sender and receiver address to bind the addresses while sending */
     multiId: number[]; // [u8; 32] in Rust -> number[] in TS
     /** Signature of the receiver id */
-    recvSignature?: Uint8Array;
+    recvSignature?: number[];
     /** Token type */
     token: Token;
     /** State Machine status */
@@ -539,7 +575,7 @@ export interface TxStateMachine {
     /** Fees amount */
     feesAmount: number; // u8 in Rust -> number in TS
     /** Signed call payload (signed hash of the transaction) */
-    signedCallPayload?: Uint8Array;
+    signedCallPayload?: number[];
     /** Call payload (hash of transaction and raw transaction bytes) */
     callPayload?: ChainTransactionType | null;
     /** Inbound Request id for p2p */
@@ -563,7 +599,7 @@ export class TxStateMachineManager {
       this.tx = tx;
     }
    
-    setReceiverSignature(signature: Uint8Array): void {
+    setReceiverSignature(signature: number[]): void {
       this.tx.recvSignature = signature;
     }
    
@@ -571,13 +607,25 @@ export class TxStateMachineManager {
       this.tx.callPayload = payload;
     }
    
-    setSignedCallPayload(payload: Uint8Array): void {
+    setSignedCallPayload(payload: number[]): void {
       this.tx.signedCallPayload = payload;
     }
     setRevertedReason(reason: string): void {
       this.tx.status = {type: "Reverted", data: reason};
     }
    
+    setTxSubmissionPassed(hash: number[]): void {
+      this.tx.status = {type: "TxSubmissionPassed", data: {hash: hash}};
+    }
+
+    setFeesAmount(amount: number): void {
+      this.tx.feesAmount = amount;
+    }
+
+    setTxSubmissionFailed(reason: string): void {
+      this.tx.status = {type: "FailedToSubmitTxn", data: reason};
+    }
+    
     updateStatus(status: TxStatus): void {
       this.tx.status = status;
     }
@@ -694,10 +742,10 @@ export interface StorageExport {
     failed_transactions: DbTxStateMachine[];
     
     /** Total value of all successful transactions (in wei/smallest unit) */
-    total_value_success: number; // u64 in Rust -> number in TS
+    total_value_success: bigint; // u128 in Rust -> bigint in TS
     
     /** Total value of all failed transactions (in wei/smallest unit) */
-    total_value_failed: number; // u64 in Rust -> number in TS
+    total_value_failed: bigint; // u128 in Rust -> bigint in TS
     
     /** 
      * Multiple saved peers, each with their own account IDs
@@ -854,8 +902,8 @@ export class StorageExportManager {
         failedTransactions: number;
         largestFailedTransactionAmount: number;
         successRate: string;
-        totalValueSuccess: number;
-        totalValueFailed: number;
+        totalValueSuccess: bigint;
+        totalValueFailed: bigint;
         networksUsed: ChainSupported[];
         peersCount: number;
         accountsCount: number;

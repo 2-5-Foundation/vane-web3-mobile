@@ -7,6 +7,7 @@ import {
   createAssociatedTokenAccountInstruction,getMint,
   TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
 } from '@solana/spl-token';
+import { fromWire, toWire } from '@/lib/vane_lib/pkg/host_functions/networking';
 
 
 export const runtime = 'nodejs'
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as { tx?: any } | null;
     if (!body?.tx) return bad(400, 'Missing { tx }');
   
-    const tx = body.tx as TxStateMachine;
+    const tx = fromWire(body.tx)
     const connection = new SolanaConnection(RPC_URL, "confirmed");
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
@@ -52,15 +53,17 @@ export async function POST(req: NextRequest) {
       const to   = new PublicKey(tx.receiverAddress);
     
       // Build the transfer instruction
-      const lamports =
-        typeof tx.amount === 'bigint'
-          ? tx.amount * BigInt(LAMPORTS_PER_SOL)
-          : Math.round(Number(tx.amount) * LAMPORTS_PER_SOL);
+      const lamports = tx.amount;
     
+      // Safety check for lamports precision
+      if (lamports > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error('lamports exceed JS safe integer range');
+      }
+  
       const transferIx = SystemProgram.transfer({
         fromPubkey: from,
         toPubkey: to,
-        lamports: Number(lamports),
+        lamports: lamports,
       });
     
       // Compile to a v0 message
@@ -81,14 +84,14 @@ export async function POST(req: NextRequest) {
         feesAmount: Number(feesInSol),
         callPayload: {
           solana: {
-            callPayload: messageBytes as Uint8Array,
+            callPayload: Array.from(messageBytes),
             latestBlockHeight: lastValidBlockHeight,
           }
         },
       };
       
       return NextResponse.json({
-        prepared: updated,
+        prepared: toWire(updated),
       })
   
     } else {
@@ -124,7 +127,7 @@ export async function POST(req: NextRequest) {
       
       ixs.push(
         createTransferCheckedInstruction(
-          fromAta, mint, toAta, new PublicKey(tx.senderAddress), tx.amount * (10n ** BigInt(decimals)), decimals, [], programId
+          fromAta, mint, toAta, new PublicKey(tx.senderAddress), tx.amount, decimals, [], programId
         )
       );
      
@@ -146,14 +149,14 @@ export async function POST(req: NextRequest) {
         feesAmount: Number(feesInSol),
         callPayload: {
           solana: {
-            callPayload: new Uint8Array(messageBytes),
+            callPayload: Array.from(messageBytes),
             latestBlockHeight: lastValidBlockHeight,
           }
         },
       };
 
       return NextResponse.json({
-        prepared: updated,
+        prepared: toWire(updated),
       })
       
     }

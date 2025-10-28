@@ -3,13 +3,13 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { bytesToHex, hexToBytes } from "viem"
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useTokenBalances } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore";
-import { TxStateMachine, TxStateMachineManager } from '@/lib/vane_lib/main';
+import { TxStateMachine, TxStateMachineManager, Token } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { getTokenLabel} from "./sender-pending";
+import { formatAmount, getTokenLabel} from "./sender-pending";
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -64,14 +64,26 @@ const TransactionSkeleton = () => (
 export default function ReceiverPending() {
   const { primaryWallet } = useDynamicContext()
   const { recvTransactions, receiverConfirmTransaction, isWasmInitialized, fetchPendingUpdates } = useTransactionStore()
+  const { tokenBalances } = useTokenBalances({
+    includeFiat: true,
+    includeNativeBalance: true
+  });
+
+  // Helper function to get token decimals
+  const getTokenDecimals = (token: Token): number | null => {
+    if (!tokenBalances || tokenBalances.length === 0) return null;
+    
+    const matchingToken = tokenBalances.find(balance => {
+      return balance.symbol === getTokenLabel(token);
+    });
+    
+    return matchingToken?.decimals || null;
+  };
 
   // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
-
-
-
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -93,7 +105,6 @@ export default function ReceiverPending() {
       setShowSkeleton(false);
     }
   };
-
 
   
   const handleApprove = async (transaction: TxStateMachine) => {
@@ -139,7 +150,7 @@ export default function ReceiverPending() {
         return;
       }
       
-      txManager.setReceiverSignature(signatureBytes);
+      txManager.setReceiverSignature(Array.from(signatureBytes));
       const updatedTx = txManager.getTx();
       console.log('updatedTx signed by receiver', updatedTx.recvSignature);
       await receiverConfirmTransaction(updatedTx);
@@ -265,7 +276,9 @@ export default function ReceiverPending() {
               <div className="flex justify-between gap-3">
                 <div className="flex-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
-                  <p className="text-sm text-white font-semibold">{transaction.amount}</p>
+                  <p className="text-sm text-white font-semibold">
+                    {formatAmount(transaction.amount, transaction.token)}
+                  </p>
                 </div>
                 <div className="flex-1">
                   <span className="text-xs text-[#9EB2AD] font-medium">Asset</span>

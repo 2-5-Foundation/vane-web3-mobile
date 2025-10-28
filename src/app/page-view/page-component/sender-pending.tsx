@@ -4,15 +4,24 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useTokenBalances } from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
-import { ChainSupported, Token, TokenManager, TxStateMachine, TxStateMachineManager, TxStatus } from '@/lib/vane_lib/main'
-import { bytesToHex, hexToBytes } from 'viem';
+import { ChainSupported, getTokenDecimals, Token, TokenManager, TxStateMachine, TxStateMachineManager, TxStatus } from '@/lib/vane_lib/main'
+import { bytesToHex, formatEther, hexToBytes } from 'viem';
+import { parseTransaction, serializeSignature } from 'viem';
+import bs58 from 'bs58';
+
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertTitle } from "@/components/ui/alert";
+import { isSolanaWallet } from '@dynamic-labs/solana';
+import { isEthereumWallet } from "@dynamic-labs/ethereum"
 
-
+import {
+  VersionedMessage,
+  VersionedTransaction,
+} from '@solana/web3.js';
+import { fromWire, toWire } from "@/lib/vane_lib/pkg/host_functions/networking"
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -143,33 +152,46 @@ export const getTokenLabel = (token: Token): string => {
   }
 };
 
+ // Helper function to get token decimals
+ export function formatAmount(amount: bigint, token: Token): number {
+  const decimals = getTokenDecimals(token);
+  if (!decimals) return 0;
+  return Number(amount) / Math.pow(10, decimals);
+};
+
 export default function SenderPending() {
  
-  const formatStatus = (status: string): string => {
-    if (!status) return 'Unknown';
-    
-    // Convert camelCase to readable format
-    return status
-      .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-      .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
-      .trim(); // Remove leading/trailing spaces
-  };
+ 
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showSkeleton, setShowSkeleton] = useState(false)
-  const [showCancelConfirmArr, setShowCancelConfirmArr] = useState<boolean[]>([]);
   const [showActionConfirmMap, setShowActionConfirmMap] = useState<Record<string, boolean>>({});
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  const [ networkId, setNetworkId] = useState<number | null>(null);
+
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const [communicationConfirmed, setCommunicationConfirmed] = useState<Record<string, boolean>>({});
   const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
   const removeTransaction = useTransactionStore(state => state.removeTransaction)
   const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
   // const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
   const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
-  const exportStorageData = useTransactionStore(state => state.exportStorageData)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
   const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
+
   const { primaryWallet } = useDynamicContext();
+
+
+  useEffect(() => {
+    const getNetworkId = async () => {
+      if (primaryWallet) {
+        const id = Number(await primaryWallet.getNetwork());
+        setNetworkId(id);
+      }
+    };
+    getNetworkId();
+  }, [primaryWallet]);
 
   // Effect to fetch transactions on mount
   useEffect(() => {
@@ -224,60 +246,76 @@ export default function SenderPending() {
     try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
-      const signature = await primaryWallet.signMessage(bytesToHex(transaction.callPayload![0]))
+      
+      // Check if callPayload exists and has data
+      const callPayload = ("ethereum" in transaction.callPayload) ? transaction.callPayload.ethereum.callPayload[0]
+      : ("solana" in transaction.callPayload) ? transaction.callPayload.solana.callPayload 
+      : ("bnb" in transaction.callPayload) ? transaction.callPayload.bnb.callPayload[0] : null;
+      
+      if (!callPayload) {
+        toast.error('Transaction payload is missing. Please try again.');
+        return;
+      }
 
       const txManager = new TxStateMachineManager(transaction);
-      
-      // Handle different signature formats from different wallets
-      let signatureBytes: Uint8Array;
-      if (typeof signature === 'string') {
-        if (signature.startsWith('0x')) {
-          // Standard hex format (Phantom)
-          signatureBytes = hexToBytes(signature as `0x${string}`);
+
+      if (transaction.senderAddressNetwork === ChainSupported.Solana) {
+
+        if (isSolanaWallet(primaryWallet)) {
+          const signer = await primaryWallet.getSigner();
+          const versionSolTx = new VersionedTransaction(VersionedMessage.deserialize(Uint8Array.from(callPayload)));
+          
+          const txSignature = (await signer.signAndSendTransaction(versionSolTx as any, {maxRetries: 10})).signature;
+          txManager.setTxSubmissionPassed(Array.from(bs58.decode(txSignature)));
+          txManager.setSignedCallPayload(Array.from(bs58.decode(txSignature)));
         } else {
-          // Base64 or other format (MetaMask)
-          try {
-            // Try to decode as base64
-            const decoded = atob(signature);
-            signatureBytes = new Uint8Array(decoded.split('').map(char => char.charCodeAt(0)));
-          } catch {
-            // If base64 fails, try to convert string to bytes directly
-            signatureBytes = new TextEncoder().encode(signature);
-          }
+          toast.error('Please use a Solana wallet to confirm this transaction');
+          return;
         }
-      } else {
-        // Already a Uint8Array
-        signatureBytes = signature;
-      }
-      
-      // Validate signature length - should be reasonable for any signature type
-      // Ed25519: 64 bytes, ECDSA: 64-65 bytes, SR25519: 64 bytes, etc.
-      if (signatureBytes.length < 32 || signatureBytes.length > 128) {
-        toast.error(`Invalid signature format. Signature length: ${signatureBytes.length} bytes`);
+
+      } else if(transaction.senderAddressNetwork === ChainSupported.Ethereum){
+
+        if (isEthereumWallet(primaryWallet)) {
+          const signer = await primaryWallet.getWalletClient();
+          const txFields = ("ethereum" in transaction.callPayload) ? transaction.callPayload.ethereum.ethUnsignedTxFields: null;
+          if (!txFields) {
+            toast.error('Invalid transaction fields');
+            return;
+          }
+
+          const receipt = (await signer.sendTransactionSync(txFields as any));
+          if (receipt.status === 'success') {
+
+            const txHash = receipt.transactionHash;
+            const signedCallPayload = hexToBytes(txHash as `0x${string}`);
+            txManager.setSignedCallPayload(Array.from(signedCallPayload));
+            txManager.setTxSubmissionPassed(Array.from(hexToBytes(txHash as `0x${string}`)));
+            const feesAmount = Number(formatEther(receipt.gasUsed * receipt.effectiveGasPrice));
+            txManager.setFeesAmount(feesAmount);
+
+          } else {
+
+            const signedCallPayload = hexToBytes(receipt.transactionHash as `0x${string}`);
+            txManager.setSignedCallPayload(Array.from(signedCallPayload));
+            txManager.setTxSubmissionFailed('Transaction failed to submit');
+            toast.error('Transaction failed to submit');
+
+          }
+          
+        } else {
+          toast.error('Please use an Ethereum wallet to confirm this transaction');
+          return;
+        }
+
+      }else{
+        toast.error('Unsupported chain');
         return;
       }
       
-      txManager.setSignedCallPayload(signatureBytes);
       const updatedTransaction = txManager.getTx();
-
+      console.log('updatedTransaction', updatedTransaction);
       await senderConfirmTransaction(updatedTransaction)
-      
-      // Remove the old transaction and add the success transaction
-      removeTransaction(transaction.txNonce);
-      
-      // submit metrics
-      exportStorageData().then((storage) => {
-        if(storage.user_account?.multi_addr){
-          fetch("/api/submit-metrics", {
-            method: "POST",
-            body: JSON.stringify(storage),
-          })
-            .then(response => response.json())
-            .then(data => console.log(data))
-            .catch(error => console.error(error));
-        }
-      })
-
+          
     } catch (error) {
       console.error('Error confirming transaction:', error);
       toast.error('Failed to confirm transaction');
@@ -316,6 +354,15 @@ export default function SenderPending() {
 
   const handleShowActionConfirm = (txKey: string, show: boolean) => {
     setShowActionConfirmMap(prev => ({ ...prev, [txKey]: show }));
+  };
+
+  const handleCommunicationConfirm = (txKey: string) => {
+    console.log('handleCommunicationConfirm called with txKey:', txKey);
+    setCommunicationConfirmed(prev => {
+      const newState = { ...prev, [txKey]: true };
+      console.log('Updated communicationConfirmed state:', newState);
+      return newState;
+    });
   };
 
   const toggleCardExpansion = (txKey: string) => {
@@ -392,40 +439,123 @@ export default function SenderPending() {
           </div>
         );
       case 'RecvAddrConfirmed':
+        const txKey = String(transaction.txNonce);
+        const isCommunicationConfirmed = communicationConfirmed[txKey];
+        
+        console.log('RecvAddrConfirmed case - txKey:', txKey, 'isCommunicationConfirmed:', isCommunicationConfirmed);
+        
+        if (!isCommunicationConfirmed) {
+          return (
+            <div className="space-y-3">
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-xs text-yellow-400 font-medium mb-2">
+                  ⚠️ Important: Before confirming this transaction
+                </p>
+                <p className="text-xs text-yellow-300">
+                  Did you communicate with the intended receiver and confirm they received your message?
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleRevert(transaction)}
+                  variant="outline"
+                  className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleCommunicationConfirm(txKey)}
+                  className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+                >
+                  Yes, Next
+                </Button>
+              </div>
+            </div>
+          );
+        }
+        
         return (
-          <div className="flex gap-2">
-            <Button
-              onClick={() => handleRevert(transaction)}
-              variant="outline"
-              className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => handleConfirm(transaction)}
-              className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
-            >
-              Confirm
-            </Button>
+          <div className="space-y-3">
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <p className="text-xs text-green-400 font-medium">
+                ✅ Communication confirmed. Ready to submit transaction.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleRevert(transaction)}
+                variant="outline"
+                className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleConfirm(transaction)}
+                className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+              >
+                Submit Transaction
+              </Button>
+            </div>
           </div>
         );
       case 'RecvAddrConfirmationPassed':
       case 'NetConfirmed':
+        const txKey2 = String(transaction.txNonce);
+        const isCommunicationConfirmed2 = communicationConfirmed[txKey2];
+        
+        
+        if (!isCommunicationConfirmed2) {
+          return (
+            <div className="space-y-3">
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-xs text-yellow-400 font-medium mb-2">
+                  ⚠️ Important: Before confirming this transaction
+                </p>
+                <p className="text-xs text-yellow-300">
+                  Did you communicate with the intended receiver and confirm they received your message?
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleRevert(transaction)}
+                  variant="outline"
+                  className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleCommunicationConfirm(txKey2)}
+                  className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+                >
+                  Yes, Next
+                </Button>
+              </div>
+            </div>
+          );
+        }
+        
         return (
-          <div className="flex gap-2">
-            <Button
-              onClick={() => handleRevert(transaction)}
-              variant="outline"
-              className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => handleConfirm(transaction)}
-              className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
-            >
-              Confirm
-            </Button>
+          <div className="space-y-3">
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <p className="text-xs text-green-400 font-medium">
+                Communication confirmed. Ready to submit transaction.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleRevert(transaction)}
+                variant="outline"
+                className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleConfirm(transaction)}
+                className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+              >
+                Submit Transaction
+              </Button>
+            </div>
           </div>
         );
       case 'SenderConfirmed':
@@ -435,7 +565,7 @@ export default function SenderPending() {
               className="w-full h-10 bg-[#4A5853]/20 text-[#7EDFCD] hover:bg-[#4A5853]/30 text-xs"
               disabled
             >
-              Processing...
+              Wait for completion
             </Button>
           </div>
         );
@@ -584,14 +714,19 @@ export default function SenderPending() {
         return {
           color: 'text-red-400 border-red-400',
           iconColor: 'text-red-400',
-          message: 'Receiver not registered to vane'
+          message: 'Receiver not using Vane yet'
         };
       case 'RecvAddrFailed':
-      case 'SenderConfirmationfailed':
         return {
           color: 'text-red-400 border-red-400',
           iconColor: 'text-red-400',
           message: 'Receiver confirmation failed, please revert'
+        };
+      case 'SenderConfirmationfailed':
+        return {
+          color: 'text-red-400 border-red-400 bg-transparent',
+          iconColor: 'text-red-400',
+          message: 'Sender confirmation failed, please check your account choice'
         };
       case 'RecvAddrConfirmed':
       case 'RecvAddrConfirmationPassed':
@@ -599,12 +734,18 @@ export default function SenderPending() {
         return {
           color: 'text-green-400 border-green-400',
           iconColor: 'text-green-400',
-          message: 'Receiver confirmation passed, make sure you did communicate'
+          message: 'Receiver confirmation passed'
+        };
+      case 'SenderConfirmed':
+        return {
+          color: 'text-green-400 border-green-400',
+          iconColor: 'text-green-400',
+          message: 'Transaction confirmed, processing...'
         };
       case 'TxSubmissionPassed':
         if (transaction?.status?.type === 'TxSubmissionPassed') {
-        const txHash = transaction?.status?.data?.hash ? 
-          `0x${Array.from(transaction.status.data.hash).map((b: number) => b.toString(16).padStart(2, '0')).join('')}` : 
+          const txHash = transaction?.status?.data?.hash ? 
+          bytesToHex(Uint8Array.from(transaction.status.data.hash)) : 
           'N/A';
           const truncatedHash = txHash.length > 20 ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}` : txHash;
           return {
@@ -647,16 +788,7 @@ export default function SenderPending() {
     }
   };
 
-  // Helper to toggle cancel confirmation for a card
-  const handleShowCancelConfirm = (idx: number, show: boolean) => {
-    setShowCancelConfirmArr(prev => {
-      const arr = [...prev];
-      arr[idx] = show;
-      return arr;
-    });
-  };
-
-
+ 
   // Listen for the removeAllInitiatedTx event
   useEffect(() => {
     const handleRemoveAllInitiated = () => {
@@ -830,7 +962,7 @@ export default function SenderPending() {
                        <div className="flex-1">
                          <span className="text-xs text-[#9EB2AD] font-medium">Amount</span>
                          <p className="text-sm text-white font-semibold">
-                           {transaction.amount}
+                           {formatAmount(transaction.amount, transaction.token)} 
                          </p>
                        </div>
                        <div className="flex-1">
@@ -846,7 +978,7 @@ export default function SenderPending() {
                        <div className="flex-1">
                          <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
                          <p className="text-sm text-white">
-                          {transaction.feesAmount}
+                          {transaction.feesAmount.toFixed(6)}
                          </p>
                        </div>
                        <div className="flex-1">
