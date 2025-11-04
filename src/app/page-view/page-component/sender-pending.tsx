@@ -3,17 +3,15 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
-import { useDynamicContext, useTokenBalances } from "@dynamic-labs/sdk-react-core";
+import { useState, useEffect} from "react"
+import { useDynamicContext} from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
-import { ChainSupported, getTokenDecimals, Token, TokenManager, TxStateMachine, TxStateMachineManager, TxStatus } from '@/lib/vane_lib/main'
+import { ChainSupported, getTokenDecimals, Token, TxStateMachine, TxStateMachineManager} from '@/lib/vane_lib/main'
 import { bytesToHex, formatEther, hexToBytes } from 'viem';
-import { parseTransaction, serializeSignature } from 'viem';
 import bs58 from 'bs58';
 
 import { toast } from "sonner"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+
 import { isSolanaWallet } from '@dynamic-labs/solana';
 import { isEthereumWallet } from "@dynamic-labs/ethereum"
 
@@ -21,7 +19,6 @@ import {
   VersionedMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { fromWire, toWire } from "@/lib/vane_lib/pkg/host_functions/networking"
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -303,7 +300,7 @@ export default function SenderPending() {
           }
           
         } else {
-          toast.error('Please use an Ethereum wallet to confirm this transaction');
+          toast.error('Please use an EVM wallet to confirm this transaction');
           return;
         }
 
@@ -384,6 +381,8 @@ export default function SenderPending() {
       : transaction.status?.type;
 
     switch (statusType) {
+      case 'TxSubmissionPending':
+        return null;
       case 'Genesis':
         return !showActionConfirmMap[transaction.txNonce] ? (
           <div className="w-full">
@@ -704,6 +703,12 @@ export default function SenderPending() {
   const getStatusInfo = (statusType: string, transaction?: TxStateMachine) => {
     console.log('statusType', statusType);
     switch (statusType) {
+      case 'TxSubmissionPending':
+        return {
+          color: 'text-[#FFA500] border-[#FFA500]',
+          iconColor: 'text-green-400',
+          message: 'Waiting for transaction receipt'
+        };
       case 'Genesis':
         return {
           color: 'text-[#FFA500] border-[#FFA500]',

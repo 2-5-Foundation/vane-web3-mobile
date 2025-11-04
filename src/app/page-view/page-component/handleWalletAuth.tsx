@@ -9,8 +9,8 @@ import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
 import { SolanaWalletConnectors } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
 
-export default function ClientAuthProvider({ children }: { children: React.ReactNode }) {
-const setUserProfile = useTransactionStore.getState().setUserProfile;
+export default function DynamicWalletClientAuthProvider({ children }: { children: React.ReactNode }) {
+const setUserProfile = useTransactionStore(state => state.setUserProfile);
 
   return (
     <DynamicContextProvider

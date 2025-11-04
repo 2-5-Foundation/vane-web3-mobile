@@ -8,7 +8,7 @@ import { Analytics } from '@vercel/analytics/next';
 
 
 // ----------- Wallet ----------------
-import ClientAuthProvider from "./page-view/page-component/handleWalletAuth";
+import DynamicWalletClientAuthProvider from "./page-view/page-component/handleWalletAuth";
 
 
 const geistSans = Geist({
@@ -45,17 +45,17 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        <ClientAuthProvider> 
+        <DynamicWalletClientAuthProvider> 
           <PWAProvider />
           <Frame>
             {children}
             <Analytics />
           </Frame>
-        </ClientAuthProvider>
+        </DynamicWalletClientAuthProvider>
         <Toaster 
           position="top-right" 
           theme="dark"
-          duration={5000}
+          duration={8000}
           closeButton
           toastOptions={{
             style: {

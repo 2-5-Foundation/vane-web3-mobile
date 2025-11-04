@@ -251,6 +251,21 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         setIsSubmitting(false);
         return;
       }
+      // Balance check: ensure user has enough of the selected token
+      const selectedTokenForBalance = tokenList.find(t => t.symbol === formData.asset || t.name === formData.asset || t.address === formData.asset);
+      if (selectedTokenForBalance) {
+        const available = Number(selectedTokenForBalance.balance ?? 0);
+        if (!Number.isFinite(available)) {
+          toast.error('Unable to read token balance');
+          setIsSubmitting(false);
+          return;
+        }
+        if (amountValue > available) {
+          toast.error('Insufficient balance for selected token');
+          setIsSubmitting(false);
+          return;
+        }
+      }
       
       // No need for custom ERC20 validation since we only show wallet tokens
       

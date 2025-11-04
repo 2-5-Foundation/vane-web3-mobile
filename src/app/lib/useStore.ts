@@ -80,7 +80,7 @@ export interface TransactionState {
   senderPendingTransactions: TxStateMachine[];  // Store all transaction updates
   // storing incoming transactions that serve as receiver notifications the receiver needs to confirm or reject
   recvTransactions: TxStateMachine[]
-  status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted';
+  status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'TxSubmissionPending' | 'ReceiverNotRegistered' | 'Reverted';
 
   // WASM state
   isWatchingUpdates: boolean;
@@ -89,7 +89,7 @@ export interface TransactionState {
   // Methods
   setUserProfile: (userProfile: UserProfile) => void;
   storeSetTransferFormData: (formData: TransferFormData) => void;
-  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted') => void;
+  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'TxSubmissionPending' | 'ReceiverNotRegistered' | 'Reverted') => void;
   txStatusSorter: (update:TxStateMachine) => void;
   sortTransactionsUpdates: (txs:TxStateMachine[]) => void;
   clearAllTransactions: () => void; 
@@ -159,7 +159,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
   storeSetTransferFormData: (formData: TransferFormData) => set({transferFormData: formData}),
 
-  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted') => set({status}),
+  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'TxSubmissionPending' | 'ReceiverNotRegistered' | 'Reverted') => set({status}),
   
   
   txStatusSorter: (update: TxStateMachine) => {
@@ -198,6 +198,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             case 'SenderConfirmationfailed':
             case 'FailedToSubmitTxn':
             case 'TxSubmissionPassed':
+            case 'TxSubmissionPending':
             case 'TxError':
             case 'Reverted':
                 return {
