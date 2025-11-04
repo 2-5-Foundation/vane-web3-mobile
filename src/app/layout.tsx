@@ -22,8 +22,28 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://app.vaneweb3.com'),
   title: "vaneweb3",
-  description: "Safety net for web3 transfers",
+  description: "Your safety net for crypto transactions",
+  openGraph: {
+    title: "vaneweb3",
+    description: "Your safety net for crypto transactions",
+    images: [
+      {
+        url: "/vane-safety-net.png",
+        width: 1200,
+        height: 630,
+        alt: "Vane Web3 - Your safety net for crypto transactions",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "vaneweb3",
+    description: "Your safety net for crypto transactions",
+    images: ["/vane-safety-net.png"],
+  },
 };
 
 export default function RootLayout({
