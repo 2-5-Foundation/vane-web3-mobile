@@ -1,7 +1,4 @@
-const getImageUrl = (relativePath: string): string => {
-    const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://vaneweb3.com';
-    return `${baseUrl}${relativePath.startsWith('/') ? relativePath : `/${relativePath}`}`;
-};
+const ROOT_URL = 'https://vaneweb3.com';
 
 const baseMiniAppManifest = {
     "accountAssociation": {  // these will be added in step 5
@@ -10,30 +7,24 @@ const baseMiniAppManifest = {
       "signature": ""
     },
     "baseBuilder": {
-      "ownerAddress": "0x" // add your Base Account address here
+        "ownerAddress": "0xd4D7db1Ca4C5DC58a5315d4CF0ca4bc0656f6827"
     },
     "miniapp": {
       "version": "1",
       "name": "vaneweb3",
       "homeUrl": "https://vaneweb3.com",
-      "iconUrl": getImageUrl('/vane-logo.png'),
-      "splashImageUrl": getImageUrl('/vane-safety-net.png'),
-      "splashBackgroundColor": "[#1a2628]",
-      "webhookUrl": "",
+      "iconUrl": `${ROOT_URL}/vane-logo.png`,
+      "splashImageUrl": `${ROOT_URL}/vane-safety-net.png`,
+      "splashBackgroundColor": "#141e20",
       "subtitle": "Your safety net for crypto transactions",
       "description": "Your safety net for crypto transactions",
-      "screenshotUrls": [
-        "",
-        "",
-        ""
-      ],
       "primaryCategory": "transaction safety and security",
       "tags": ["revert transaction", "miniapp", "baseapp", "fund lost", "recover", "wrong address", "wrong network", "cross chain"],
-      "heroImageUrl": getImageUrl('/vane-safety-net.png'),
+      "heroImageUrl": `${ROOT_URL}/vane-safety-net.png`,
       "tagline": "Your safety net for crypto transactions",
       "ogTitle": "VaneWeb3",
       "ogDescription": "Your safety net for crypto transactions",
-      "ogImageUrl": getImageUrl('/vane-safety-net.png'),
+      "ogImageUrl": `${ROOT_URL}/vane-safety-net.png`,
       "noindex": true
     }
   }
@@ -46,6 +37,8 @@ function withValidProperties(properties: Record<string, undefined | string | str
 }
 
 export async function GET() {
-    const URL = process.env.NEXT_PUBLIC_URL as string;
-    return Response.json(baseMiniAppManifest); 
+    // @ts-ignore
+    const validManifest = withValidProperties(baseMiniAppManifest);
+    
+    return Response.json(validManifest);
 }
