@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://app.vaneweb3.com'),
+  metadataBase: new URL('https://vaneweb3.com'),
   title: "vaneweb3",
   description: "Your safety net for crypto transactions",
   openGraph: {

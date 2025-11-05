@@ -18,5 +18,5 @@ self.addEventListener('push', function (event) {
   self.addEventListener('notificationclick', function (event) {
     console.log('Notification click received.')
     event.notification.close()
-    event.waitUntil(clients.openWindow('<https://app.vaneweb3.com>'))
+    event.waitUntil(clients.openWindow('<https://vaneweb3.com>'))
   })
