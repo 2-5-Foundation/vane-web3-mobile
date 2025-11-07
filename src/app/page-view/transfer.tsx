@@ -38,7 +38,11 @@ const TokenBalancesComponent = ({ networkId, onBalancesChange }: { networkId: nu
 // EVM Networks configuration
 const EVM_NETWORKS = [
   { id: 1, name: "Ethereum", value: "ethereum" },
-  { id: 56, name: "BNB Smart Chain", value: "bnb" }
+  { id: 56, name: "BNB Smart Chain", value: "bnb" },
+  { id: 137, name: "Polygon", value: "polygon" },
+  { id: 8453, name: "Base", value: "base" },
+  { id: 10, name: "Optimism", value: "optimism" },
+  { id: 42161, name: "Arbitrum", value: "arbitrum" },
 ]
 
 export default function Transfer() {
@@ -82,10 +86,10 @@ export default function Transfer() {
           setSelectedEVMNetwork("ethereum")
         } else if (networkId === 137) {
           setNetwork("Polygon")
-          setSelectedEVMNetwork("ethereum")
+          setSelectedEVMNetwork("polygon")
         } else if (networkId === 8453) {
           setNetwork("Base")
-          setSelectedEVMNetwork("ethereum")
+          setSelectedEVMNetwork("base")
         } else if (networkId === 56) {
           setNetwork("BNB Smart Chain")
           setSelectedEVMNetwork("bnb")
