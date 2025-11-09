@@ -1,10 +1,10 @@
 const ROOT_URL = 'https://vaneweb3.com';
 
 const baseMiniAppManifest = {
-    "accountAssociation": { 
-      "header": "",
-      "payload": "",
-      "signature": ""
+    "accountAssociation": {
+      "header": "eyJmaWQiOjIzODkwMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweEYzQzMwN0E2RTc5RkI0OEZiNkJkRDJBQWJEN2I4MmRCNDg5YWI1MzcifQ",
+      "payload": "eyJkb21haW4iOiJ2YW5ld2ViMy5jb20ifQ",
+      "signature": "CN6DB5Xd/RYNm9PHtr3wbyuuDbANDjf+c5GkhMia+Vl4ZRf3z+8381L3FiT78H7dnx9kkVJ9W4j0CyByLt6A+xs="
     },
     "baseBuilder": {
       "ownerAddress": "0xd4D7db1Ca4C5DC58a5315d4CF0ca4bc0656f6827" 
