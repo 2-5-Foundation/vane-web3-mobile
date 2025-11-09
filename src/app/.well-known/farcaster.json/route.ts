@@ -14,7 +14,7 @@ const baseMiniAppManifest = {
       "name": "Vane Web3",
       "homeUrl": "https://vaneweb3.com",
       "iconUrl": `${ROOT_URL}/vane-logo-icon.png`,
-      "splashImageUrl": `${ROOT_URL}/vane-logo-icon.png`,
+      "splashImageUrl": `${ROOT_URL}/vane-logo.png`,
       "splashBackgroundColor": "#0A1919",
       "subtitle": "Your safety net for transfers",
       "description": "Your safety net for transfers",
