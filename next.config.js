@@ -6,7 +6,7 @@ const nextConfig = {
   async headers() {
 
     const frameAncestors =
-    "frame-ancestors 'self' https://*.base.org https://build.base.org https://app.base.org https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com";
+      "frame-ancestors 'self' https://*.base.org https://base.org https://build.base.org https://app.base.org https://*.base.dev https://base.dev https://www.base.dev https://*.farcaster.xyz https://farcaster.xyz https://warpcast.com https://*.warpcast.com";
 
     return [
       {
