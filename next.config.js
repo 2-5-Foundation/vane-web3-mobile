@@ -4,6 +4,10 @@ const nextConfig = {
     domains: ['assets.coingecko.com'],
   },
   async headers() {
+
+    const frameAncestors =
+      "frame-ancestors 'self' https://*.base.org https://build.base.org https://app.base.org";
+
     return [
       {
         source: '/(.*)',
@@ -13,12 +17,12 @@ const nextConfig = {
             value: 'nosniff',
           },
           {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: frameAncestors,
           },
         ],
       },

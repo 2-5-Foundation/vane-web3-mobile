@@ -62,7 +62,7 @@ export async function generateMetadata(): Promise<Metadata> {
       }),
       },
   };
-  }
+}
 
 
 export default function RootLayout({
