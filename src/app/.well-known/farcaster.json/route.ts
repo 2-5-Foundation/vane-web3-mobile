@@ -22,7 +22,7 @@ const baseMiniAppManifest = {
       "tags": ["vane", "crypto", "transfers", "lostfunds"],
       "heroImageUrl": `${ROOT_URL}/vane-safety-net.png`,
       "tagline": "Safety net for your transfers",
-      "ogTitle": "vaneweb3",
+      "ogTitle": "vane",
       "ogDescription": "Your safety net for crypto transactions",
       "ogImageUrl": `${ROOT_URL}/vane-safety-net.png`,
       "noindex": true
