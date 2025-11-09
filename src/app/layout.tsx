@@ -55,7 +55,7 @@ export async function generateMetadata(): Promise<Metadata> {
                   type: 'launch_miniapp',
                   name: 'Vane Web3',
                   url: 'https://vaneweb3.com',
-                  splashImageUrl: 'https://vaneweb3.com/vane-safety-net.png',
+                  splashImageUrl: 'https://vaneweb3.com/vane-logo.png',
                   splashBackgroundColor: '#0A1919',
               },
           },
