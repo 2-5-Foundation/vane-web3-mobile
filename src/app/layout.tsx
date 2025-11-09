@@ -21,30 +21,49 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL('https://vaneweb3.com'),
-  title: "vaneweb3",
-  description: "Your safety net for crypto transactions",
-  openGraph: {
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: new URL('https://vaneweb3.com'),
     title: "vaneweb3",
     description: "Your safety net for crypto transactions",
-    images: [
-      {
-        url: "/vane-safety-net.png",
-        width: 1200,
-        height: 630,
-        alt: "Vane Web3 - Your safety net for crypto transactions",
+    openGraph: {
+      title: "vaneweb3",
+      description: "Your safety net for crypto transactions",
+      images: [
+        {
+          url: "/vane-safety-net.png",
+          width: 1200,
+          height: 630,
+          alt: "Vane Web3 - Your safety net for crypto transactions",
+        },
+      ],
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "vaneweb3",
+      description: "Your safety net for crypto transactions",
+      images: ["/vane-safety-net.png"],
+    },
+      other: {
+      'fc:miniapp': JSON.stringify({
+          version: 'next',
+          imageUrl: 'https://vaneweb3.com/vane-safety-net.png',
+          button: {
+              title: `Protect your next transaction`,
+              action: {
+                  type: 'launch_miniapp',
+                  name: 'Vane Web3',
+                  url: 'https://vaneweb3.com',
+                  splashImageUrl: 'https://vaneweb3.com/vane-safety-net.png',
+                  splashBackgroundColor: '#0A1919',
+              },
+          },
+      }),
       },
-    ],
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "vaneweb3",
-    description: "Your safety net for crypto transactions",
-    images: ["/vane-safety-net.png"],
-  },
-};
+  };
+  }
+
 
 export default function RootLayout({
   children,
