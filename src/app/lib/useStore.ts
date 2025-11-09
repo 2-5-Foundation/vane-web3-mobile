@@ -41,21 +41,7 @@ import {
   
 } from '@/lib/vane_lib/main'
 
-import {
-  mnemonicGenerate,
-  mnemonicValidate,
-  mnemonicToMiniSecret,
-  ed25519PairFromSeed
-} from '@polkadot/util-crypto';
-
 import { config } from 'dotenv';
-import { 
-  getKdfMessageBytes,
-  setupKeystoreWithSignature,
-  loadEnvelopeOrThrow,
-  unlockCEKWithSignature,
-  decryptLibp2pSecretWithCEK
-} from './keystore';
 import { bytesToHex } from 'viem';
 import { toast } from 'sonner';
 import { toWire } from '@/lib/vane_lib/pkg/host_functions/networking';
@@ -101,7 +87,7 @@ export interface TransactionState {
   removeRecvTransaction: (txNonce: number) => void;
   
   // WASM initialization and management
-  initializeWasm: (relayMultiAddr: string, account: string, network: string, authSignature?: Uint8Array, live?: boolean) => Promise<void>;
+  initializeWasm: (relayMultiAddr: string, account: string, network: string, live?: boolean) => Promise<void>;
   startWatching: () => Promise<void>;
   stopWatching: () => void;
   isWasmInitialized: () => boolean;
@@ -114,7 +100,7 @@ export interface TransactionState {
   revertTransaction: (tx: TxStateMachine, reason?: string) => Promise<void>;
   fetchPendingUpdates: () => Promise<TxStateMachine[]>;
   exportStorageData: () => Promise<StorageExport>;
-  loadStorageData: () => unknown | null;
+  loadStorageData: () => StorageExport | null;
   getNodeConnectionStatus: () => Promise<NodeConnectionStatus>;
 
   // Utility methods
@@ -250,67 +236,36 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   // WASM initialization and management
-  initializeWasm: async (relayMultiAddr: string, account: string, network: string, authSignature?: Uint8Array, live: boolean = true) => {
+  initializeWasm: async (relayMultiAddr: string, account: string, network: string, live: boolean = true) => {
     try {
-      
-      
       if (isInitialized()) {
         console.log('WASM already initialized');
         return;
       }
 
-      // Build a chain-agnostic key identifier like "evm:0x...", "sol:...", "btc:..."
-      const toPrefix = (n: string) => {
-        const normalized = (n || '').toLowerCase();
-        if ([
-          'ethereum', 'base', 'polygon', 'optimism', 'arbitrum', 'bnb', 'bsc', 'evm'
-        ].includes(normalized)) return 'evm';
-        if (normalized.includes('sol')) return 'sol';
-        if (normalized.includes('btc') || normalized.includes('bitcoin')) return 'btc';
-        if (normalized.includes('dot') || normalized.includes('polkadot')) return 'dot';
-        if (normalized.includes('tron')) return 'tron';
-        return normalized || 'evm';
-      };
-      const keyIdentifier = `${toPrefix(network)}:${account}`;
-
-      // ——— Keystore: first-time or unlock path ———
-      let libp2pSecret32: Uint8Array | null = null;
-      try {
-        const env = await loadEnvelopeOrThrow();
-        if (!authSignature) throw new Error('Missing auth signature to unlock keystore');
-        const CEK = await unlockCEKWithSignature(env, keyIdentifier, authSignature);
-        const secret = await decryptLibp2pSecretWithCEK(env, CEK);
-        CEK.fill(0);
-        libp2pSecret32 = secret;
-      } catch {
-        // First-time setup: derive a libp2p secret deterministically for now
-        if (!authSignature) throw new Error('Missing auth signature for first-time setup');
-        // Generate a new libp2p secret (32 bytes). Using polkadot util to derive from mnemonic.
-        const mnemonic = mnemonicGenerate();
-        const secret = mnemonicToMiniSecret(mnemonic);
-        await setupKeystoreWithSignature(secret, keyIdentifier, authSignature);
-        libp2pSecret32 = secret;
-      }
-
-      // Optional: restore exported storage if available
-      // const maybeStored = get().loadStorageData() as StorageExport | null;
-      // if (maybeStored) {
-      //   console.log('Found storage export in browser storage; passing to initializeNode.');
-      // }
-
       console.log('Initializing WASM node...');
+      
+      // Load storage export from localStorage if it exists
+      const storageExport = get().loadStorageData();
+      
+      if (storageExport) {
+        console.log('Loaded storage export from localStorage');
+      } else {
+        console.log('No storage export found in localStorage');
+      }
+      
       await initializeNode({
         relayMultiAddr,
         account,
         network,
         live,
         logLevel: LogLevel.Info,
-        libp2pKey: bytesToHex(libp2pSecret32!)
+        storage: storageExport ?? undefined
       });
       console.log('WASM node initialized successfully');
 
       // Zeroize sensitive material
-      if (libp2pSecret32) libp2pSecret32.fill(0);
+      
     } catch (error) {
       toast.error('Failed to initialize app');
       console.error('Failed to initialize app:', error);
@@ -403,6 +358,35 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       await senderConfirm(tx);
       console.info('Transaction confirmed by sender successfully');
       toast.success('Transaction confirmed by sender successfully');
+      
+      // Export storage and save to localStorage
+      const storageExport = await get().exportStorageData();
+      
+      // Submit metrics to API
+      try {
+        const response = await fetch('/api/submit-metrics', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(storageExport, (key, value) => {
+            // Handle BigInt serialization for API request
+            if (typeof value === 'bigint') {
+              return value.toString();
+            }
+            return value;
+          }),
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to submit metrics:', await response.text());
+        } else {
+          console.log('Metrics submitted successfully');
+        }
+      } catch (metricsError) {
+        console.error('Error submitting metrics:', metricsError);
+        // Don't throw - metrics submission failure shouldn't block the transaction confirmation
+      }
     } catch (error) {
       console.error('Error confirming transaction by sender:', error);
       toast.error('Error confirming transaction');
@@ -505,74 +489,82 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  loadStorageData: () => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('vane-storage-export');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-
-          // Normalize types: revive bigint fields expected by WASM (u128)
-          // Specifically: DbTxStateMachine.amount should be bigint
-          try {
-            if (parsed && typeof parsed === 'object') {
-              const reviveAmount = (arr: any[]) => {
-                if (!Array.isArray(arr)) return [];
-                return arr.map((tx) => {
-                  if (tx && typeof tx === 'object') {
-                    if (typeof tx.amount === 'string') {
-                      // Convert serialized bigint string back to BigInt
-                      tx.amount = BigInt(tx.amount);
-                    } else if (typeof tx.amount === 'bigint') {
-                      // Convert BigInt to number for DbTxStateMachine
-                      tx.amount = Number(tx.amount);
-                    }
-                  }
-                  return tx;
-                });
-              };
-
-              if (parsed.success_transactions) {
-                parsed.success_transactions = reviveAmount(parsed.success_transactions);
-              }
-              if (parsed.failed_transactions) {
-                parsed.failed_transactions = reviveAmount(parsed.failed_transactions);
-              }
-
-              // Ensure numeric counters are numbers (not BigInt)
-              if (typeof parsed.nonce === 'string') parsed.nonce = Number(parsed.nonce);
-              if (typeof parsed.nonce === 'bigint') parsed.nonce = Number(parsed.nonce);
-              if (typeof parsed.total_value_success === 'string') parsed.total_value_success = Number(parsed.total_value_success);
-              if (typeof parsed.total_value_success === 'bigint') parsed.total_value_success = Number(parsed.total_value_success);
-              if (typeof parsed.total_value_failed === 'string') parsed.total_value_failed = Number(parsed.total_value_failed);
-              if (typeof parsed.total_value_failed === 'bigint') parsed.total_value_failed = Number(parsed.total_value_failed);
-              
-              // Convert any remaining BigInt fields to numbers
-              const convertBigIntToNumber = (obj: any) => {
-                if (obj && typeof obj === 'object') {
-                  for (const key in obj) {
-                    if (typeof obj[key] === 'bigint') {
-                      obj[key] = Number(obj[key]);
-                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                      convertBigIntToNumber(obj[key]);
-                    }
-                  }
-                }
-              };
-              convertBigIntToNumber(parsed);
-            }
-          } catch (e) {
-            console.warn('Warning: failed to fully normalize stored storage export. Proceeding with raw parsed object.', e);
-          }
-
-          console.log('Loaded storage data from localStorage:', parsed);
-          return parsed;
-        }
-      } catch (error) {
-        console.error('Error loading storage data from localStorage:', error);
-      }
+  loadStorageData: (): StorageExport | null => {
+    if (typeof window === 'undefined') {
+      return null;
     }
-    return null;
+
+    try {
+      const stored = localStorage.getItem('vane-storage-export');
+      if (!stored) {
+        return null;
+      }
+
+      const parsed = JSON.parse(stored);
+      
+      if (!parsed || typeof parsed !== 'object') {
+        console.warn('Invalid storage data format in localStorage');
+        return null;
+      }
+
+      // Normalize types: revive bigint fields expected by WASM (u128)
+      // Specifically: DbTxStateMachine.amount should be bigint
+      const reviveTransactionAmount = (tx: any): any => {
+        if (!tx || typeof tx !== 'object') {
+          return tx;
+        }
+        
+        // Convert amount from string to BigInt if needed
+        if (tx.amount !== undefined) {
+          if (typeof tx.amount === 'string') {
+            try {
+              tx.amount = BigInt(tx.amount);
+            } catch (e) {
+              console.warn('Failed to convert amount to BigInt:', tx.amount, e);
+              return null; // Invalid transaction
+            }
+          } else if (typeof tx.amount === 'number') {
+            // Convert number to BigInt (shouldn't happen, but handle it)
+            tx.amount = BigInt(tx.amount);
+          }
+          // If already BigInt, keep it as is
+        }
+        
+        // Ensure tx_hash is an array of numbers
+        if (tx.tx_hash && Array.isArray(tx.tx_hash)) {
+          tx.tx_hash = tx.tx_hash.map((val: any) => typeof val === 'string' ? parseInt(val, 10) : Number(val));
+        }
+        
+        return tx;
+      };
+
+      const reviveTransactions = (transactions: any[]): any[] => {
+        if (!Array.isArray(transactions)) {
+          return [];
+        }
+        return transactions
+          .map(reviveTransactionAmount)
+          .filter((tx) => tx !== null);
+      };
+
+      // Revive transaction amounts
+      const storageExport: StorageExport = {
+        nonce: typeof parsed.nonce === 'string' 
+          ? Number(parsed.nonce) 
+          : typeof parsed.nonce === 'bigint' 
+          ? Number(parsed.nonce) 
+          : parsed.nonce ?? 0,
+        success_transactions: reviveTransactions(parsed.success_transactions || []),
+        failed_transactions: reviveTransactions(parsed.failed_transactions || []),
+        ...(parsed.user_account && { user_account: parsed.user_account }),
+      };
+
+      console.log('Loaded storage data from localStorage:', storageExport);
+      return storageExport;
+    } catch (error) {
+      console.error('Error loading storage data from localStorage:', error);
+      return null;
+    }
   },
 
   // Utility methods

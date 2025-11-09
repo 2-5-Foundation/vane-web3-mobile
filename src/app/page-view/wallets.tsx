@@ -5,11 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useDynamicContext, useUserWallets, IsBrowser, DynamicConnectButton, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { bytesToHex, hexToBytes } from "viem";
 import { useTransactionStore } from "@/app/lib/useStore";
-import { getKdfMessageBytes, cacheSignature, getCachedSignature, loadEnvelopeOrThrow, unlockCEKWithSignature, addWalletWrapWithSignatures, setupKeystoreWithSignature } from "@/app/lib/keystore";
 
 
 export default function Wallets() {
@@ -46,33 +44,6 @@ export default function Wallets() {
     localStorage.removeItem('pending-link-to');
   };
 
-  const keyIdentifier = useMemo(() => {
-    const normalized = (userProfile.network || '').toLowerCase();
-    let prefix = 'evm';
-    if (["ethereum","base","polygon","optimism","arbitrum","bnb","bsc"].includes(normalized)) prefix = 'evm';
-    else if (["solana","sol"].includes(normalized)) prefix = 'sol';
-    else if (["bitcoin","btc"].includes(normalized)) prefix = 'btc';
-    return `${prefix}:${userProfile.account}`;
-  }, [userProfile.account, userProfile.network]);
-
-  // Normalize signatures coming from different wallets (hex string, base64 string, or Uint8Array)
-  const normalizeSignatureToBytes = (signature: unknown): Uint8Array => {
-    if (signature instanceof Uint8Array) return signature;
-    if (typeof signature === 'string') {
-      const str = signature.trim();
-      if (str.startsWith('0x')) {
-        const hex = str.slice(2);
-        if (/^[0-9a-fA-F]+$/.test(hex)) return hexToBytes(str as `0x${string}`);
-      }
-      // Try base64 (including url-safe variants)
-      try {
-        const cleaned = str.replace(/-/g, '+').replace(/_/g, '/');
-        const binary = atob(cleaned);
-        return Uint8Array.from(binary, c => c.charCodeAt(0));
-      } catch {}
-    }
-    throw new Error('Unsupported signature format from wallet');
-  };
 
   const handleConnectNode = async () => {
     if (!primaryWallet || !userProfile.account || !userProfile.network) {
@@ -91,53 +62,12 @@ export default function Wallets() {
       return false;
     };
 
-    // Use the selected wallet address as the unique key (fallback to profile account)
-    const addressKey = (selectedWallet || userProfile.account || '').toLowerCase();
-
     setIsConnectingNode(true);
     setConnectingCountdown(15);
     try {
-      // 1) Try to open existing keystore
-      // We no longer rely on a global envelope discovery here.
-      // Envelope creation/usage is decided by localStorage flags below.
-
-      // 2) Ensure we have a signature (cache first, otherwise sign now)
-      let sigBytes = await getCachedSignature(addressKey);
-      if (!sigBytes) {
-        const messageBytes = getKdfMessageBytes();
-        const msgHex = bytesToHex(messageBytes) as `0x${string}`;
-        const wallet = primaryWallet as unknown as { signMessage: (m: `0x${string}`) => Promise<string | `0x${string}`> };
-        const signature = await wallet.signMessage(msgHex);
-        sigBytes = normalizeSignatureToBytes(signature);
-        await cacheSignature(addressKey, sigBytes);
-      }
-
-      // 3) Decide envelope usage via localStorage flag per wallet
-      const envelopeFlagKey = `vane-envelope:${addressKey}`;
-      let hasPerWalletEnvelope = false;
-      try { hasPerWalletEnvelope = (localStorage.getItem(envelopeFlagKey) === 'true'); } catch {}
-
-      // 6) Initialize node if not already initialized
+      // Initialize node if not already initialized
       if (!isWasmInitialized()) {
-        if (!hasPerWalletEnvelope) {
-          // Create a brand-new 32-byte libp2p secret and store an envelope for this wallet
-          const secret = crypto.getRandomValues(new Uint8Array(32));
-          await setupKeystoreWithSignature(secret, addressKey, sigBytes);
-          try { localStorage.setItem(envelopeFlagKey, 'true'); } catch {}
-        } else {
-          // If we have a flag, attempt to load and unlock existing single-envelope
-          try {
-            const envExisting = await loadEnvelopeOrThrow();
-            await unlockCEKWithSignature(envExisting, addressKey, sigBytes);
-          } catch {
-            // If unlock fails despite flag, create a fresh envelope for safety
-            const secret = crypto.getRandomValues(new Uint8Array(32));
-            await setupKeystoreWithSignature(secret, addressKey, sigBytes);
-            try { localStorage.setItem(envelopeFlagKey, 'true'); } catch {}
-          }
-        }
-
-        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, userProfile.account, userProfile.network, sigBytes);
+        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, userProfile.account, userProfile.network);
         await startWatching();
         const connected = await waitForRelayConnected();
         if (connected) {
@@ -187,55 +117,10 @@ export default function Wallets() {
         return;
       }
 
-      // 1) Build identifiers and gather signatures (old + new)
-      const toPrefix = (n: string) => {
-        const normalized = (n || '').toLowerCase();
-        if ([ 'ethereum', 'base', 'polygon', 'optimism', 'arbitrum', 'bnb', 'bsc', 'evm' ].includes(normalized)) return 'evm';
-        if (normalized.includes('sol')) return 'sol';
-        if (normalized.includes('btc')) return 'btc';
-        if (normalized.includes('dot') || normalized.includes('polkadot')) return 'dot';
-        if (normalized.includes('tron')) return 'tron';
-        return normalized || 'evm';
-      };
-
-      // Ensure existing envelope present (used later to rewrap)
-      const envelope = await loadEnvelopeOrThrow();
-      const currentKeyId = envelope.activeKeyIdentifier;
-      const newKeyId = `${toPrefix(userProfile.network)}:${selectedWallet}`;
-
-      // Old signature: try cache, else sign with current primary wallet
-      let oldSig = await getCachedSignature(currentKeyId);
-      if (!oldSig) {
-        const msgBytes = getKdfMessageBytes();
-        const msgHex = bytesToHex(msgBytes) as `0x${string}`;
-        const signer = primaryWallet as unknown as { signMessage: (m: `0x${string}`) => Promise<string | `0x${string}`> };
-        const signature = await signer.signMessage(msgHex);
-        oldSig = normalizeSignatureToBytes(signature);
-        await cacheSignature(currentKeyId, oldSig);
-      }
-
-      // New signature: must be produced by the wallet we are adding
-      const msgBytesNew = getKdfMessageBytes();
-      const msgHexNew = bytesToHex(msgBytesNew) as `0x${string}`;
-      const selectedSigner = (target as unknown as { signMessage?: (m: `0x${string}`) => Promise<string | `0x${string}`> });
-      if (!selectedSigner || typeof selectedSigner.signMessage !== 'function') {
-        toast.error('Selected wallet cannot sign messages');
-        return;
-      }
-      const newSignature = await selectedSigner.signMessage(msgHexNew);
-      const newSigBytes = normalizeSignatureToBytes(newSignature);
-      await cacheSignature(newKeyId, newSigBytes);
-
-      // 2) First call WASM to register account with the node
+      // Call WASM to register account with the node
       await addAccount(selectedWallet, userProfile.network);
 
-      // 3) After WASM succeeds, update OPFS keystore (add wrap for the new account)
-      await addWalletWrapWithSignatures(envelope, currentKeyId, oldSig, newKeyId, newSigBytes);
-
-      // Mark the newly linked address as having an envelope
-      try { localStorage.setItem(`vane-envelope:${selectedWallet.toLowerCase()}`, 'true'); } catch {}
-
-      toast.success('Account added and linked to keystore');
+      toast.success('Account added successfully');
     } catch (error) {
       console.error('Add account failed:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to add account');
