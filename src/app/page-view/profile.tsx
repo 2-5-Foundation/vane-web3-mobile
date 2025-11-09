@@ -1,52 +1,135 @@
 "use client"
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { User, Shield, TrendingUp, DollarSign, CreditCard } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTransactionStore } from "../lib/useStore";
-import { NodeConnectionStatus, StorageExport, StorageExportManager } from "@/lib/vane_lib/main";
+import { NodeConnectionStatus, StorageExportManager } from "@/lib/vane_lib/main";
+import { useTokenBalances } from '@dynamic-labs/sdk-react-core';
+import { TokenBalance, ChainEnum } from "@dynamic-labs/sdk-api-core";
+import { Token, getTokenDecimals, ChainSupported } from "@/lib/vane_lib/primitives";
+import { getTokenLabel } from "./page-component/sender-pending";
+
+// Map ChainSupported to networkId
+const CHAIN_TO_NETWORK_ID: Record<ChainSupported, number> = {
+  [ChainSupported.Ethereum]: 1,
+  [ChainSupported.Polygon]: 137,
+  [ChainSupported.Base]: 8453,
+  [ChainSupported.Optimism]: 10,
+  [ChainSupported.Arbitrum]: 42161,
+  [ChainSupported.Bnb]: 56,
+  [ChainSupported.Solana]: 101,
+  [ChainSupported.Polkadot]: 0,
+  [ChainSupported.Tron]: 0,
+  [ChainSupported.Bitcoin]: 0,
+};
+
+const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453];
 
 export default function Profile() {
   const { getNodeConnectionStatus, exportStorageData } = useTransactionStore();
   const [nodeConnectionStatus, setNodeConnectionStatus] = useState<NodeConnectionStatus | null>(null);
-  const [storageExport, setStorageExport] = useState<StorageExport | null>(null);
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [subscriptionType, setSubscriptionType] = useState('monthly');
+  const [primaryNetworkId, setPrimaryNetworkId] = useState<number | null>(null);
 
+  // Get token balances with network-specific parameters
+  const tokenBalanceArgs = useMemo(() => {
+    const base = { includeFiat: true, includeNativeBalance: true };
+    if (primaryNetworkId === 101) return { ...base, chainName: ChainEnum.Sol };
+    if (EVM_NETWORK_IDS.includes(primaryNetworkId!)) return { ...base, chainName: ChainEnum.Evm, networkId: primaryNetworkId };
+    return base;
+  }, [primaryNetworkId]);
+
+  const { tokenBalances } = useTokenBalances(tokenBalanceArgs);
+
+  // Calculate USD value for a transaction
+  const calculateTransactionValue = useCallback((amount: bigint, token: Token, balances: TokenBalance[] | undefined): number => {
+    if (!balances?.length) return 0;
+
+    const tokenSymbol = getTokenLabel(token);
+    if (!tokenSymbol) return 0;
+
+    const balance = balances.find(b => 
+      b.symbol?.toUpperCase() === tokenSymbol.toUpperCase() || 
+      b.name?.toUpperCase() === tokenSymbol.toUpperCase()
+    );
+    if (!balance) return 0;
+
+    const decimals = balance.decimals || getTokenDecimals(token) || 18;
+    const tokenAmount = Number(amount) / Math.pow(10, decimals);
+    const pricePerToken = balance.price || (balance.marketValue && balance.balance > 0 ? balance.marketValue / balance.balance : 0);
+    
+    return tokenAmount * pricePerToken;
+  }, []);
+
+  // Load profile data and determine network
   useEffect(() => {
-    loadProfileData();
-    getNodeConnectionStatus().then((status) => setNodeConnectionStatus(status));
-    exportStorageData().then((storage) => setStorageExport(storage));
-  }, [exportStorageData, getNodeConnectionStatus]);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const storageExport = await exportStorageData();
+        if (!storageExport) return;
 
-  // Reload profile data when storage export changes
-  useEffect(() => {
-    if (storageExport) {
-      loadProfileData();
-    }
-  }, [storageExport]);
-
-  const loadProfileData = async () => {
-    setIsLoading(true);
-    try {
-      // Use storage export data if available
-      if (storageExport) {
         const storageManager = new StorageExportManager(storageExport);
         const metrics = storageManager.getSummary();
-        
-        const realStats = {
-          protected_amount: metrics.totalValueSuccess,
-          largest_recovery: metrics.totalValueSuccess, // You might want to track largest single recovery
-          total_transactions: metrics.totalTransactions,
-          total_volume: metrics.totalValueSuccess + metrics.totalValueFailed
+        const allTransactions = [
+          ...(storageExport.failed_transactions || []),
+          ...(storageExport.success_transactions || [])
+        ];
+
+        // Determine primary network (most common sender_network)
+        if (allTransactions.length > 0 && !primaryNetworkId) {
+          const networkCounts = new Map<ChainSupported, number>();
+          allTransactions.forEach(tx => {
+            networkCounts.set(tx.sender_network, (networkCounts.get(tx.sender_network) || 0) + 1);
+          });
+          
+          const mostCommonNetwork = Array.from(networkCounts.entries())
+            .sort((a, b) => b[1] - a[1])[0]?.[0];
+          
+          if (mostCommonNetwork) {
+            const networkId = CHAIN_TO_NETWORK_ID[mostCommonNetwork];
+            if (networkId) setPrimaryNetworkId(networkId);
+          }
+        }
+
+        // Calculate transaction values
+        const calculateValues = (transactions: typeof storageExport.failed_transactions) => {
+          let total = 0;
+          let largest = 0;
+          transactions?.forEach(tx => {
+            const value = calculateTransactionValue(tx.amount, tx.token, tokenBalances);
+            total += value;
+            largest = Math.max(largest, value);
+          });
+          return { total, largest };
         };
-        setStats(realStats);
+
+        const failed = calculateValues(storageExport.failed_transactions);
+        const success = calculateValues(storageExport.success_transactions);
+
+        setStats({
+          protected_amount: success.total,
+          largest_recovery: success.largest,
+          total_transactions: metrics.totalTransactions,
+          total_volume: success.total + failed.total,
+          failed_amount: failed.total
+        });
+      } catch (error) {
+        console.error('Error loading profile data:', error);
+      } finally {
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+
+    loadData();
+  }, [exportStorageData, tokenBalances, calculateTransactionValue, primaryNetworkId]);
+
+  // Load node connection status separately
+  useEffect(() => {
+    getNodeConnectionStatus().then(setNodeConnectionStatus);
+  }, [getNodeConnectionStatus]);
 
   return (
     <div className="space-y-3 max-w-sm mx-auto px-4">
@@ -135,31 +218,20 @@ export default function Profile() {
               <CreditCard className="w-3 h-3 text-gray-400" />
               <span className="text-gray-400 text-[9px] font-medium uppercase tracking-wide">Subscription</span>
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${subscriptionType === 'monthly' ? 'bg-[#7EDFCD]' : 'bg-gray-500'}`}></div>
-                <span className="text-sm font-medium text-white">
-                  {subscriptionType === 'monthly' ? 'Monthly Plan' : 'Pay as you go'}
-                </span>
-              </div>
-              <button 
-                onClick={() => setSubscriptionType(subscriptionType === 'monthly' ? 'paygo' : 'monthly')}
-                className="text-xs text-[#7EDFCD] hover:text-[#7EDFCD]/80 transition-colors"
-              >
-                Switch
-              </button>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+              <span className="text-sm font-medium text-white">
+                Pay as you go
+              </span>
             </div>
-              <div className="mt-1">
-                <p className="text-[9px] text-gray-500">
-                  {subscriptionType === 'monthly' 
-                    ? '$15/month' 
-                    : '$0.50 per protected transaction'
-                  }
-                </p>
-                <p className="text-[9px] text-gray-500 mt-0.5">
-                  Current plan: Free
-                </p>
-              </div>
+            <div className="mt-1">
+              <p className="text-[9px] text-gray-500">
+                $0.05 per protected transaction
+              </p>
+              <p className="text-[9px] text-gray-500 mt-0.5">
+                Current plan: Free
+              </p>
+            </div>
           </motion.div>
 
         </>

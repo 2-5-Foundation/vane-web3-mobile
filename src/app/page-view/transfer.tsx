@@ -17,7 +17,7 @@ const TokenBalancesComponent = ({ networkId, onBalancesChange }: { networkId: nu
     
     if (networkId === 101) {
       return { ...base, chainName: ChainEnum.Sol };
-    } else if (networkId === 1 || networkId === 56) {
+    } else if (networkId === 1 || networkId === 56 || networkId === 10 || networkId === 42161) {
       return { ...base, chainName: ChainEnum.Evm, networkId };
     }
     

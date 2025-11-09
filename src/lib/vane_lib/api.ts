@@ -18,7 +18,6 @@ type InitOptions = {
   relayMultiAddr: string;
   account: string;
   network: string;
-  libp2pKey: string;
   storage?: StorageExport;
   live?: boolean;
   logLevel?: LogLevel | number;
@@ -40,7 +39,7 @@ async function ensureWasmInitialized(): Promise<void> {
  * @returns Promise that resolves to the initialized worker interface
  */
 export async function initializeNode(options: InitOptions): Promise<PublicInterfaceWorkerJs> {
-  const { relayMultiAddr, account, network, libp2pKey, live = false, logLevel, storage } = options;
+  const { relayMultiAddr, account, network, live = false, logLevel, storage } = options;
 
   await ensureWasmInitialized();
 
@@ -48,7 +47,7 @@ export async function initializeNode(options: InitOptions): Promise<PublicInterf
     hostLogging.setLogLevel(Number(logLevel));
   }
 
-  nodeWorker = await start_vane_web3(relayMultiAddr, account, network, live, libp2pKey, storage);
+  nodeWorker = await start_vane_web3(relayMultiAddr, account, network, live, storage);
   return nodeWorker;
 }
 
@@ -148,11 +147,6 @@ export async function exportStorage(): Promise<StorageExport> {
   return res as StorageExport;
 }
 
-export async function getMetrics(): Promise<UserMetrics> {
-  const res = await requireWorker().getMetrics();
-  return res as UserMetrics;
-}
-
 /**
  * Get the current node connection status
  * @returns Promise that resolves to the node connection status
@@ -190,7 +184,6 @@ const VaneWeb3 = {
   unsubscribeWatchTxUpdates,
   fetchPendingTxUpdates,
   exportStorage,
-  getMetrics,
   getNodeConnection,
   clearRevertedFromCache,
   clearFinalizedFromCache,
