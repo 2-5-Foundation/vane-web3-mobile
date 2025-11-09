@@ -20,10 +20,10 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
-          // {
-          //   key: 'Content-Security-Policy',
-          //   value: frameAncestors,
-          // },
+          {
+            key: 'Content-Security-Policy',
+            value: frameAncestors,
+          },
         ],
       },
       {
