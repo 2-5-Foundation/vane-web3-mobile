@@ -255,7 +255,7 @@ export default function Wallets() {
               {isConnectingNode ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
-                  {`Connecting.. dont refresh the page${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
+                  {`Don't refresh the page${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
                 </>
               ) : nodeConnectionStatus?.relay_connected === true ? (
                 'App Connected'
