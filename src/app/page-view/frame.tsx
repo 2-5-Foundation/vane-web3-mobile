@@ -1,15 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { Button } from '@/components/ui/button'
+import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useStore } from '@/app/lib/useStore'
 import type { NavigationState } from '@/app/lib/useStore'
 import { Smartphone } from "lucide-react"
 import Image from 'next/image'
-import LandingOverlay from './LandingOverlay'
-import { useRouter, usePathname } from 'next/navigation'
-
 
 type NavItem = {
   name: string
@@ -84,19 +80,6 @@ const DesktopMessage = () => (
 export function Frame({ children }: { children: React.ReactNode }) {
   const { currentView, setCurrentView } = useStore()
   const [isMobile, setIsMobile] = useState(true)
-  const [showLanding, setShowLanding] = useState(false)
-  const [fetchedTweets, setFetchedTweets] = useState<{ html: string }[]>([])
-  const router = useRouter()
-  const pathname = usePathname()
-
-  const tweetLinks = useMemo(() => [
-    "https://twitter.com/autismcapital/status/1786415766394527979?s=46",
-    "https://twitter.com/realscamsniffer/status/1786374327740543464?s=46",
-    "https://twitter.com/alexjmingolla/status/1781425355947233507?s=46",
-    "https://x.com/realScamSniffer/status/1915710745423339792?s=46",
-    "https://twitter.com/coinfessions/status/1819538679318384885?s=46",
-    "https://twitter.com/naiivememe/status/1870547032722591762?s=46",
-  ], [])
 
   useEffect(() => {
     const checkMobile = () => {
@@ -106,29 +89,6 @@ export function Frame({ children }: { children: React.ReactNode }) {
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
-
-  useEffect(() => {
-    const hasSeenLanding = localStorage.getItem('hasSeenLanding');
-    if (!hasSeenLanding) {
-      setShowLanding(true);
-      localStorage.setItem('hasSeenLanding', 'true');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (showLanding && tweetLinks.length > 0) {
-      fetch('/api/tweets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links: tweetLinks })
-      })
-        .then(res => res.json())
-        .then(data => {
-          setFetchedTweets(data.tweets || []);
-        })
-        .catch(() => setFetchedTweets([]))
-    }
-  }, [showLanding, tweetLinks])
 
   if (!isMobile) {
     return <DesktopMessage />
@@ -156,35 +116,8 @@ export function Frame({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Hamburger menu button on the right */}
-          {/* <Button
-            variant="ghost"
-            className="text-[#4A5853] hover:text-[#4A5853] focus:outline-none focus:ring-2 focus:ring-[#7EDFCD]"
-            aria-label="Open navigation menu"
-            tabIndex={0}
-            onClick={() => {
-              setShowLanding(true)
-              router.push(pathname + '#about')
-            }}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="white" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </Button> */}
         </div>
       </header>
-
-      {/* Landing Overlay (self-contained) */}
-      {/* <LandingOverlay
-        show={showLanding}
-        onClose={() => {
-          setShowLanding(false)
-          // Remove #about from the URL
-          if (window.location.hash === '#about') {
-            router.push(pathname)
-          }
-        }}
-        fetchedTweets={fetchedTweets}
-      /> */}
 
       {/* Main content */}
       <main className="container pt-0 md:ml-[200px]">

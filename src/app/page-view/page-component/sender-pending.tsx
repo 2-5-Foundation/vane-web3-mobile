@@ -381,8 +381,6 @@ export default function SenderPending() {
       : transaction.status?.type;
 
     switch (statusType) {
-      case 'TxSubmissionPending':
-        return null;
       case 'Genesis':
         return !showActionConfirmMap[transaction.txNonce] ? (
           <div className="w-full">
@@ -703,12 +701,6 @@ export default function SenderPending() {
   const getStatusInfo = (statusType: string, transaction?: TxStateMachine) => {
     console.log('statusType', statusType);
     switch (statusType) {
-      case 'TxSubmissionPending':
-        return {
-          color: 'text-[#FFA500] border-[#FFA500]',
-          iconColor: 'text-green-400',
-          message: 'Waiting for transaction receipt'
-        };
       case 'Genesis':
         return {
           color: 'text-[#FFA500] border-[#FFA500]',

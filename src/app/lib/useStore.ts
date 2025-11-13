@@ -38,6 +38,8 @@ import {
   LogLevel,
   NodeConnectionStatus,
   addAccount,
+  watchP2pNotifications,
+  P2pEventResult
   
 } from '@/lib/vane_lib/main'
 
@@ -66,16 +68,17 @@ export interface TransactionState {
   senderPendingTransactions: TxStateMachine[];  // Store all transaction updates
   // storing incoming transactions that serve as receiver notifications the receiver needs to confirm or reject
   recvTransactions: TxStateMachine[]
-  status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'TxSubmissionPending' | 'ReceiverNotRegistered' | 'Reverted';
+  status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted';
 
   // WASM state
   isWatchingUpdates: boolean;
   nodeStatus: 'idle' | 'initializing' | 'ready';
+  nodeConnectionStatus: NodeConnectionStatus | null;
 
   // Methods
   setUserProfile: (userProfile: UserProfile) => void;
   storeSetTransferFormData: (formData: TransferFormData) => void;
-  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'TxSubmissionPending' | 'ReceiverNotRegistered' | 'Reverted') => void;
+  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted') => void;
   txStatusSorter: (update:TxStateMachine) => void;
   sortTransactionsUpdates: (txs:TxStateMachine[]) => void;
   clearAllTransactions: () => void; 
@@ -102,6 +105,7 @@ export interface TransactionState {
   exportStorageData: () => Promise<StorageExport>;
   loadStorageData: () => StorageExport | null;
   getNodeConnectionStatus: () => Promise<NodeConnectionStatus>;
+  updateNodeConnectionStatus: () => Promise<void>;
 
   // Utility methods
   isTransactionReverted: (tx: TxStateMachine) => boolean;
@@ -135,6 +139,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   status: 'Genesis',
   isWatchingUpdates: false,
   nodeStatus: 'idle',
+  nodeConnectionStatus: null,
 
   // method
   setUserProfile: (userProfile: UserProfile) => {
@@ -145,7 +150,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
   storeSetTransferFormData: (formData: TransferFormData) => set({transferFormData: formData}),
 
-  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'TxSubmissionPending' | 'ReceiverNotRegistered' | 'Reverted') => set({status}),
+  setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted') => set({status}),
   
   
   txStatusSorter: (update: TxStateMachine) => {
@@ -184,7 +189,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             case 'SenderConfirmationfailed':
             case 'FailedToSubmitTxn':
             case 'TxSubmissionPassed':
-            case 'TxSubmissionPending':
             case 'TxError':
             case 'Reverted':
                 return {
@@ -347,6 +351,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
   getNodeConnectionStatus: async (): Promise<NodeConnectionStatus> => {
     return getNodeConnection();
+  },
+
+  updateNodeConnectionStatus: async (): Promise<void> => {
+    if (!isInitialized()) {
+      return;
+    }
+    try {
+      const status = await getNodeConnection();
+      set({ nodeConnectionStatus: status });
+    } catch (error) {
+      console.error('Error updating node connection status:', error);
+    }
   },
 
   senderConfirmTransaction: async (tx: TxStateMachine) => {
