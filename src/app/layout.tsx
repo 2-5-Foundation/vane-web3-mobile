@@ -26,6 +26,19 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL('https://vaneweb3.com'),
     title: "vaneweb3",
     description: "Your safety net for crypto transactions",
+    viewport: {
+      width: 'device-width',
+      initialScale: 1,
+      maximumScale: 1,
+      userScalable: false,
+      viewportFit: 'cover',
+    },
+    appleWebApp: {
+      capable: true,
+      title: 'Vane Web3',
+      statusBarStyle: 'black-translucent',
+      startupImage: '/vane-logo.png',
+    },
     openGraph: {
       title: "vaneweb3",
       description: "Your safety net for crypto transactions",
