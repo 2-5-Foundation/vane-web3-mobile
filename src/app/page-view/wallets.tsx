@@ -8,6 +8,7 @@ import { useDynamicContext, useUserWallets, IsBrowser, DynamicConnectButton, use
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useTransactionStore } from "@/app/lib/useStore";
+import { Copy } from "lucide-react";
 
 
 export default function Wallets() {
@@ -131,6 +132,12 @@ export default function Wallets() {
     setSelectedWallet(address);
   };
 
+  const handleCopyAddress = (address: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(address);
+    toast.success('Address copied to clipboard');
+  };
+
   // Automatically set selectedWallet when primaryWallet changes
   useEffect(() => {
     if (primaryWallet && !selectedWallet) {
@@ -138,21 +145,61 @@ export default function Wallets() {
     }
   }, [primaryWallet, selectedWallet]);
 
-  // Check connection status on component mount
+  // Check connection status on component mount and whenever page becomes visible
   useEffect(() => {
+    let isChecking = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const checkConnectionStatus = async () => {
+      // Prevent concurrent calls
+      if (isChecking) return;
+      
       if (isWasmInitialized()) {
+        isChecking = true;
         try {
           const status = await getNodeConnectionStatus();
           setNodeConnectionStatus(status);
         } catch (error) {
           console.error('Error checking connection status:', error);
+        } finally {
+          isChecking = false;
         }
       }
     };
 
+    // Check on mount
     checkConnectionStatus();
-  }, [isWasmInitialized, getNodeConnectionStatus]);
+
+    // Check when page becomes visible (user switches back to tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Debounce to prevent rapid successive calls
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          checkConnectionStatus();
+        }, 100);
+      }
+    };
+
+    // Check when window gains focus (user returns to the page)
+    const handleFocus = () => {
+      // Debounce to prevent rapid successive calls
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        checkConnectionStatus();
+      }, 100);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Add a ref to track previous connection status
   const prevConnectionStatus = useRef<boolean | null>(null);
@@ -225,7 +272,17 @@ export default function Wallets() {
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-3">
                         <span className="text-white">{wallet.connector?.name || 'Unknown'}</span>
-                        <span className="text-[#4A5853] text-xs">{wallet.address.slice(0, 13)}...{wallet.address.slice(-13)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[#4A5853] text-xs">{wallet.address.slice(0, 13)}...{wallet.address.slice(-13)}</span>
+                          <button
+                            onClick={(e) => handleCopyAddress(wallet.address, e)}
+                            className="h-4 w-4 flex items-center justify-center hover:bg-[#4A5853]/20 rounded transition-colors"
+                            aria-label="Copy address"
+                            tabIndex={0}
+                          >
+                            <Copy className="h-3 w-3 text-[#7EDFCD]" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

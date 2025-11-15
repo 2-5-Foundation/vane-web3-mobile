@@ -27,7 +27,7 @@ const CHAIN_TO_NETWORK_ID: Record<ChainSupported, number> = {
 const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453];
 
 export default function Profile() {
-  const { getNodeConnectionStatus, exportStorageData } = useTransactionStore();
+  const { getNodeConnectionStatus, exportStorageData, isWasmInitialized } = useTransactionStore();
   const [nodeConnectionStatus, setNodeConnectionStatus] = useState<NodeConnectionStatus | null>(null);
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -126,10 +126,61 @@ export default function Profile() {
     loadData();
   }, [exportStorageData, tokenBalances, calculateTransactionValue, primaryNetworkId]);
 
-  // Load node connection status separately
+  // Check connection status on component mount and whenever page becomes visible
   useEffect(() => {
-    getNodeConnectionStatus().then(setNodeConnectionStatus);
-  }, [getNodeConnectionStatus]);
+    let isChecking = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const checkConnectionStatus = async () => {
+      // Prevent concurrent calls
+      if (isChecking) return;
+      
+      if (isWasmInitialized()) {
+        isChecking = true;
+        try {
+          const status = await getNodeConnectionStatus();
+          setNodeConnectionStatus(status);
+        } catch (error) {
+          console.error('Error checking connection status:', error);
+        } finally {
+          isChecking = false;
+        }
+      }
+    };
+
+    // Check on mount
+    checkConnectionStatus();
+
+    // Check when page becomes visible (user switches back to tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Debounce to prevent rapid successive calls
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          checkConnectionStatus();
+        }, 100);
+      }
+    };
+
+    // Check when window gains focus (user returns to the page)
+    const handleFocus = () => {
+      // Debounce to prevent rapid successive calls
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        checkConnectionStatus();
+      }, 100);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-3 max-w-sm mx-auto px-4">

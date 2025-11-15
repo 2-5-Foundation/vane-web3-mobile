@@ -15,6 +15,7 @@ const setUserProfile = useTransactionStore(state => state.setUserProfile);
   return (
     <DynamicContextProvider
       settings={{
+        mobileExperience: 'redirect',
         environmentId: process.env.NEXT_PUBLIC_DYNAMIC_API_KEY!,
         walletConnectors: [BitcoinWalletConnectors, EthereumWalletConnectors, SolanaWalletConnectors],
         handlers: {
