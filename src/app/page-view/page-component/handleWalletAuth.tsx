@@ -10,7 +10,7 @@ import { SolanaWalletConnectors } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
 
 export default function DynamicWalletClientAuthProvider({ children }: { children: React.ReactNode }) {
-const setUserProfile = useTransactionStore(state => state.setUserProfile);
+
 
   return (
     <DynamicContextProvider
@@ -22,7 +22,6 @@ const setUserProfile = useTransactionStore(state => state.setUserProfile);
         handlers: {
           handleConnectedWallet: async (args) => {
             try {
-              setUserProfile({ account: args.address, network: args.chain });
               return true;
             } catch {
               return false;

@@ -13,6 +13,8 @@ import { watchP2pNotifications, unsubscribeWatchP2pNotifications, isInitialized,
 import { toast } from 'sonner'
 
 
+
+
 // get the connected address from dynamic wallet
 export default function Home() {
   const { removeWallet } = useDynamicContext();

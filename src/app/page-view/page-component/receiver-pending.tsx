@@ -68,6 +68,7 @@ export default function ReceiverPending() {
     includeFiat: true,
     includeNativeBalance: true
   });
+  const userProfile = useTransactionStore((s) => s.userProfile);
 
   // Helper function to get token decimals
   const getTokenDecimals = (token: Token): number | null => {
@@ -95,6 +96,7 @@ export default function ReceiverPending() {
         fetchPendingUpdates(),
         new Promise(resolve => setTimeout(resolve, 1000))
       ]);
+      console.log('debug userProfile', userProfile);
       console.log('recvTransactions', recvTransactions);
       toast.success('Transactions refreshed');
     } catch (e) {

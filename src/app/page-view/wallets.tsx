@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useDynamicContext, useUserWallets, IsBrowser, DynamicConnectButton, useWalletConnectorEvent, useDynamicModals, DynamicMultiWalletPromptsWidget, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { Copy, Plus, X, MoreVertical } from "lucide-react";
@@ -32,28 +32,8 @@ export default function Wallets() {
   const userProfile = useTransactionStore((s) => s.userProfile);
   const prevWalletsRef = useRef<Set<string>>(new Set());
 
-  
-  // Pending link helpers
-  const setPendingLink = (fromKeyId: string, toKeyId: string) => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('pending-link-from', fromKeyId);
-    localStorage.setItem('pending-link-to', toKeyId);
-  };
-  const getPendingLink = (): { from: string | null; to: string | null } => {
-    if (typeof window === 'undefined') return { from: null, to: null };
-    return {
-      from: localStorage.getItem('pending-link-from'),
-      to: localStorage.getItem('pending-link-to'),
-    };
-  };
-  const clearPendingLink = () => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('pending-link-from');
-    localStorage.removeItem('pending-link-to');
-  };
 
-
-  const handleConnectNode = async () => {
+  const handleConnectNode = useCallback(async () => {
     if (!primaryWallet || !userProfile.account || !userProfile.network) {
       toast.error('Please connect a wallet first');
       return;
@@ -91,7 +71,15 @@ export default function Wallets() {
       setIsConnectingNode(false);
       setConnectingCountdown(0);
     }
-  };
+  }, [
+    primaryWallet,
+    userProfile.account,
+    userProfile.network,
+    getNodeConnectionStatus,
+    isWasmInitialized,
+    initializeWasm,
+    startWatching,
+  ]);
   // Countdown effect while connecting
   useEffect(() => {
     if (!isConnectingNode) return;
@@ -151,22 +139,7 @@ export default function Wallets() {
       return;
     }
     
-    console.log('Switching wallet:', {
-      from: primaryWallet?.address,
-      to: address,
-      walletId: targetWallet.id,
-      walletAddress: targetWallet.address
-    });
-    
     try {
-      // Log before switch
-      console.log('About to switch:', {
-        targetWalletId: targetWallet.id,
-        targetWalletAddress: targetWallet.address,
-        currentPrimaryId: primaryWallet?.id,
-        currentPrimaryAddress: primaryWallet?.address
-      });
-      
       // Switch to the selected wallet using its ID
       await switchWallet(targetWallet.id);
       // Note: primaryWallet will update via useEffect when Dynamic SDK updates it
@@ -381,7 +354,7 @@ export default function Wallets() {
       // Update the previous status
       prevConnectionStatus.current = isCurrentlyConnected;
     }
-  }, [nodeConnectionStatus]);
+  }, [nodeConnectionStatus, handleConnectNode]);
 
 
   useWalletConnectorEvent(
@@ -580,26 +553,33 @@ export default function Wallets() {
 
           {/* Connect Node Button - only show when wallet is connected */}
           {primaryWallet && (
-            <Button
-              onClick={handleConnectNode}
-              disabled={isConnectingNode || (nodeConnectionStatus?.relay_connected === true)}
-              className={`w-full h-10 ${
-                nodeConnectionStatus?.relay_connected === true
-                  ? 'bg-green-600/20 border-green-500/30 text-green-400 cursor-not-allowed' 
-                  : 'bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner'
-              } transition-all duration-150 rounded-lg`}
-            >
-              {isConnectingNode ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
-                  {`Don't refresh the page${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
-                </>
-              ) : nodeConnectionStatus?.relay_connected === true ? (
-                'App Connected'
-              ) : (
-                'Connect App'
-              )}
-            </Button>
+            <>
+              <Button
+                onClick={handleConnectNode}
+                disabled={isConnectingNode || (nodeConnectionStatus?.relay_connected === true)}
+                className={`w-full h-10 ${
+                  nodeConnectionStatus?.relay_connected === true
+                    ? 'bg-green-600/20 border-green-500/30 text-green-400 cursor-not-allowed' 
+                    : 'bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner'
+                } transition-all duration-150 rounded-lg`}
+              >
+                {isConnectingNode ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
+                    {`Don't refresh the page${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
+                  </>
+                ) : nodeConnectionStatus?.relay_connected === true ? (
+                  'App Connected'
+                ) : (
+                  'Connect App'
+                )}
+              </Button>
+              <Alert className="bg-emerald-500/10 border-emerald-400/30">
+                <AlertDescription className="text-emerald-200">
+                  Sending between your own linked wallets? You can skip connecting the app.
+                </AlertDescription>
+              </Alert>
+            </>
           )}
 
           
