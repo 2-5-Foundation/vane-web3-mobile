@@ -169,18 +169,6 @@ export default function Wallets() {
       
       // Switch to the selected wallet using its ID
       await switchWallet(targetWallet.id);
-      
-      // Wait a bit for primaryWallet to update (Dynamic SDK may need time)
-      // Poll to check if primaryWallet has updated
-      let attempts = 0;
-      const maxAttempts = 10;
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        // Re-read primaryWallet from context (it might have updated)
-        // We'll check in the next render cycle via useEffect
-        attempts++;
-      }
-          
       // Note: primaryWallet will update via useEffect when Dynamic SDK updates it
     } catch (error) {
       toast.error('Failed to switch wallet');
