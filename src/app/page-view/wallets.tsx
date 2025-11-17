@@ -30,6 +30,7 @@ export default function Wallets() {
   const getNodeConnectionStatus = useTransactionStore((s) => s.getNodeConnectionStatus);
   const addAccount = useTransactionStore((s) => s.addAccount);
   const userProfile = useTransactionStore((s) => s.userProfile);
+  const prevWalletsRef = useRef<Set<string>>(new Set());
 
   
   // Pending link helpers
@@ -126,7 +127,6 @@ export default function Wallets() {
       // Call WASM to register account with the node
       await addAccount(selectedWallet, userProfile.network);
 
-      toast.success('Account added successfully');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to add account');
     }
@@ -390,6 +390,40 @@ export default function Wallets() {
     ({ accounts }, connector) => {
     },
   );
+
+  // Initialize prevWalletsRef on mount to avoid treating existing wallets as new
+  useEffect(() => {
+    if (prevWalletsRef.current.size === 0 && userWallets.length > 0) {
+      prevWalletsRef.current = new Set(userWallets.map(w => w.address));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Detect new wallets and call addAccount (only when a new wallet is actually added)
+  useEffect(() => {
+    if (!isWasmInitialized() || !userProfile.network) return;
+    
+    const currentWalletAddresses = new Set(userWallets.map(w => w.address));
+    const prevWalletAddresses = prevWalletsRef.current;
+    
+    // Find new wallets (only those not in previous set)
+    const newWallets = userWallets.filter(w => !prevWalletAddresses.has(w.address));
+    
+    if (newWallets.length > 0) {
+      // Call addAccount for each new wallet
+      newWallets.forEach(async (wallet) => {
+        try {
+          await addAccount(wallet.address, userProfile.network);
+        } catch (error) {
+          console.error('Error adding account:', error);
+        }
+      });
+      
+      // Update ref after processing new wallets
+      prevWalletsRef.current = currentWalletAddresses;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userWallets, userProfile.network]);
 
 
 

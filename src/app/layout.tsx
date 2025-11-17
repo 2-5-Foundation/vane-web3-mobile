@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PWAProvider } from '@/app/page-view/pwa-provider'
@@ -21,18 +21,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL('https://vaneweb3.com'),
     title: "vaneweb3",
     description: "Your safety net for crypto transactions",
-    viewport: {
-      width: 'device-width',
-      initialScale: 1,
-      maximumScale: 1,
-      userScalable: false,
-      viewportFit: 'cover',
-    },
     appleWebApp: {
       capable: true,
       title: 'Vane Web3',

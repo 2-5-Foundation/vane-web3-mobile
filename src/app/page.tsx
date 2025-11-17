@@ -6,15 +6,26 @@ import Wallets from './page-view/wallets'
 import Transfer from './page-view/transfer'
 import Receive from './page-view/receive'
 import Pending from './page-view/pending'
-import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+import { useDynamicContext, useUserWallets } from '@dynamic-labs/sdk-react-core'
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { watchP2pNotifications, unsubscribeWatchP2pNotifications, isInitialized, P2pEventResult } from '@/lib/vane_lib/main'
 import { toast } from 'sonner'
 
 
 // get the connected address from dynamic wallet
 export default function Home() {
+  const { removeWallet } = useDynamicContext();
+  const userWallets = useUserWallets();
+  const userWalletsRef = useRef(userWallets);
+  const removeWalletRef = useRef(removeWallet);
+
+  // Keep refs updated
+  useEffect(() => {
+    userWalletsRef.current = userWallets;
+    removeWalletRef.current = removeWallet;
+  }, [userWallets, removeWallet]);
+
   useEffect(() => {
     sdk.actions.ready();
   }, []);
@@ -127,6 +138,35 @@ export default function Home() {
                 color: '#991b1b',
               },
             });
+            return;
+          }
+
+          // AccountAddedSuccessfully event
+          if ('AccountAddedSuccessfully' in event) {
+            const { account_id } = event.AccountAddedSuccessfully;
+            toast.success(`Account linked successfully: ${account_id}`);
+            return;
+          }
+
+          // AccountAdditionFailed event
+          if ('AccountAdditionFailed' in event) {
+            const { account_id } = event.AccountAdditionFailed;
+            
+            // Find wallet by address (account_id) using ref to avoid re-renders
+            const wallet = userWalletsRef.current.find(w => w.address === account_id);
+            const removeWalletFn = removeWalletRef.current;
+            if (wallet && removeWalletFn) {
+              // Unlink the wallet
+              (async () => {
+                try {
+                  await removeWalletFn(wallet.id);
+                } catch (error) {
+                  console.error('Failed to unlink wallet:', error);
+                }
+              })();
+            }
+            
+            toast.error('Account linking failed, try again');
             return;
           }
         }
