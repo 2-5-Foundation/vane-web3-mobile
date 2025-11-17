@@ -342,11 +342,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     try {
       await addAccount(accountId, network);
       console.log('Account added successfully');
-      toast.success('Account added successfully');
 
     } catch (error) {
       console.error('Error adding account:', error);
-      toast.error('Error adding account');
     }
   },
   getNodeConnectionStatus: async (): Promise<NodeConnectionStatus> => {

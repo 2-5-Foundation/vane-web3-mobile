@@ -146,7 +146,7 @@ export default function Transfer() {
             <Rocket className="h-4 w-4" /> Transfer
           </TabsTrigger>
           <TabsTrigger value="receive" className="flex items-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]">
-            <Download className="h-4 w-4" /> Receive
+            <Download className="h-4 w-4" /> Verifiable Payment
           </TabsTrigger>
         </TabsList>
 

@@ -17,6 +17,7 @@ const setUserProfile = useTransactionStore(state => state.setUserProfile);
       settings={{
         mobileExperience: 'redirect',
         environmentId: process.env.NEXT_PUBLIC_DYNAMIC_API_KEY!,
+        initialAuthenticationMode:"connect-and-sign",
         walletConnectors: [BitcoinWalletConnectors, EthereumWalletConnectors, SolanaWalletConnectors],
         handlers: {
           handleConnectedWallet: async (args) => {

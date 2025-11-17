@@ -14,7 +14,7 @@ export default function TransferReceive() {
             <div className="space-y-2">
               <h3 className="text-lg font-semibold text-white">Coming Soon</h3>
               <p className="text-sm text-[#9EB2AD] leading-relaxed">
-                Request funds while maintaining privacy and proving legitimacy.
+              Make payments to any site with verifiable proof that the funds will be received correctly—no mistakes
               </p>
             </div>
           </div>
