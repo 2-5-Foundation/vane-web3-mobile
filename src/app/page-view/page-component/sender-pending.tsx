@@ -248,25 +248,34 @@ export default function SenderPending() {
 
         if (isSolanaWallet(primaryWallet)) {
           const signer = await primaryWallet.getSigner();
-          console.log("signer", signer);
+
+          const conn = await primaryWallet.getConnection();
+          const latesBlockHeight = await conn.getBlockHeight("finalized");
+
           let versionSolTx: VersionedTransaction;
           try {
                versionSolTx = new VersionedTransaction(VersionedMessage.deserialize(Uint8Array.from(callPayload)));
+
           } catch (error) {
             console.error('Error building Solana transaction:', error);
             toast.error('Failed to build Solana transaction.');
             return;
           }
-          let txSignature: string;
+          let txSignature: number[];
           try {
-            txSignature = (await signer.signAndSendTransaction(versionSolTx as any, {maxRetries: 10})).signature;
+
+            const signedTx = await signer.signTransaction(versionSolTx as any);
+            console.log("returned msg", Array.from(signedTx.message.serialize()));
+            txManager.setCallPayload({solana: {callPayload: Array.from(signedTx.message.serialize()), latestBlockHeight: latesBlockHeight}});
+            txSignature = Array.from(signedTx.signatures[0]);
+
           } catch (error) {
             console.error('Error signing Solana transaction:', error);
             toast.error('Failed to sign Solana transaction.');
             return;
           }
-          txManager.setTxSubmissionPassed(Array.from(bs58.decode(txSignature)));
-          txManager.setSignedCallPayload(Array.from(bs58.decode(txSignature)));
+          txManager.setSignedCallPayload(txSignature);
+          
         } else {
           toast.error('Please use a Solana wallet to confirm this transaction');
           return;

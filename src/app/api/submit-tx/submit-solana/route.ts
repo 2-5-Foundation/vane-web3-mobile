@@ -20,8 +20,16 @@ const errorJson = (status: number, message: string) =>
 export async function POST(request: NextRequest) {
   if (!SOLANA_RPC_URL) return errorJson(500, 'Solana RPC URL not configured');
 
-  const stateMachine = fromWire(await request.json().catch(() => null))
-  if (!stateMachine) return errorJson(400, 'Invalid JSON');
+  const body = await request.json().catch(() => null);
+  if (!body || !body.tx) {
+    return errorJson(400, 'Invalid JSON: missing tx');
+  }
+
+  console.log("body", body);
+
+  const stateMachine = fromWire(body.tx as any);
+
+  console.log("here");
 
   if (stateMachine.senderAddressNetwork !== 'Solana') {
     return errorJson(400, 'Only Solana supported in this endpoint');

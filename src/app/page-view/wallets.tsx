@@ -35,11 +35,15 @@ export default function Wallets() {
 
 
   const handleConnectNode = useCallback(async () => {
-    if (!primaryWallet || !userProfile.account || !userProfile.network) {
+    if (!primaryWallet) {
       toast.error('Please connect a wallet first');
       return;
     }
 
+    setUserProfile({
+      account: primaryWallet?.address,
+      network: primaryWallet?.chain
+    });
     // Helper: poll relay connection until true or timeout
     const waitForRelayConnected = async (maxSeconds = 60) => {
       for (let i = 0; i < maxSeconds; i++) {
@@ -56,7 +60,7 @@ export default function Wallets() {
     try {
       // Initialize node if not already initialized
       if (!isWasmInitialized()) {
-        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, userProfile.account, userProfile.network);
+        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, primaryWallet?.address, primaryWallet?.chain);
         await startWatching();
         const connected = await waitForRelayConnected();
         if (connected) {

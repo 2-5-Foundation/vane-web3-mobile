@@ -791,6 +791,7 @@ export function toWire(tx: TxStateMachine): any {
 }
 
 export function fromWire(wireTx: any): TxStateMachine {
+  console.log("wireTx amount", wireTx.amount);
   return {
     ...wireTx,
     amount: BigInt(wireTx.amount),
