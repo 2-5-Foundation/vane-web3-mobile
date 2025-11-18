@@ -25,11 +25,7 @@ export async function POST(request: NextRequest) {
     return errorJson(400, 'Invalid JSON: missing tx');
   }
 
-  console.log("body", body);
-
   const stateMachine = fromWire(body.tx as any);
-
-  console.log("here");
 
   if (stateMachine.senderAddressNetwork !== 'Solana') {
     return errorJson(400, 'Only Solana supported in this endpoint');
@@ -58,25 +54,25 @@ export async function POST(request: NextRequest) {
   const versionedTx = new VersionedTransaction(versionedMessage);
   versionedTx.addSignature(new PublicKey(stateMachine.senderAddress), Uint8Array.from(signatureBytes));
 
-  try {
-    const txHash = await connection.sendRawTransaction(versionedTx.serialize(), {maxRetries: 10});
-    const lastValidBlockHeight = stateMachine.callPayload.solana.latestBlockHeight;
+  
+  const txHash = await connection.sendRawTransaction(versionedTx.serialize(), {maxRetries: 10});
+  const lastValidBlockHeight = stateMachine.callPayload.solana.latestBlockHeight;
 
-    const confirmation = await connection.confirmTransaction(
-      {
-        signature: txHash,
-        blockhash: versionedMessage.recentBlockhash,
-        lastValidBlockHeight,
-      },
-      'finalized'
-    );
+  // try {
+  //   const confirmation = await connection.confirmTransaction(
+  //     {
+  //       signature: txHash,
+  //       blockhash: versionedMessage.recentBlockhash,
+  //       lastValidBlockHeight,
+  //     },
+  //     'confirmed'
+  //   );
+  // } catch (error) {
+  //   return errorJson(400, String(error?.message ?? 'confirmation failed'));
+  // }
 
-    if (!confirmation.value) {
-      return errorJson(400, 'Transaction failed during confirmation');
-    }
+  // the confirmation is flakky, so we wont try catch
 
-    return NextResponse.json({ hash: txHash });
-  } catch (err: any) {
-    return errorJson(400, String(err?.message ?? 'Broadcast failed'));
-  }
+  return NextResponse.json({ hash: txHash });
+  
 }

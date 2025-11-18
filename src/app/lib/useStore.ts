@@ -367,30 +367,30 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const storageExport = await get().exportStorageData();
       
       // Submit metrics to API
-      try {
-        const response = await fetch('/api/submit-metrics', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(storageExport, (key, value) => {
-            // Handle BigInt serialization for API request
-            if (typeof value === 'bigint') {
-              return value.toString();
-            }
-            return value;
-          }),
-        });
+      // try {
+      //   const response = await fetch('/api/submit-metrics', {
+      //     method: 'POST',
+      //     headers: {
+      //       'Content-Type': 'application/json',
+      //     },
+      //     body: JSON.stringify(storageExport, (key, value) => {
+      //       // Handle BigInt serialization for API request
+      //       if (typeof value === 'bigint') {
+      //         return value.toString();
+      //       }
+      //       return value;
+      //     }),
+      //   });
         
-        if (!response.ok) {
-          console.error('Failed to submit metrics:', await response.text());
-        } else {
-          console.log('Metrics submitted successfully');
-        }
-      } catch (metricsError) {
-        console.error('Error submitting metrics:', metricsError);
-        // Don't throw - metrics submission failure shouldn't block the transaction confirmation
-      }
+      //   if (!response.ok) {
+      //     console.error('Failed to submit metrics:', await response.text());
+      //   } else {
+      //     console.log('Metrics submitted successfully');
+      //   }
+      // } catch (metricsError) {
+      //   console.error('Error submitting metrics:', metricsError);
+      //   // Don't throw - metrics submission failure shouldn't block the transaction confirmation
+      // }
     } catch (error) {
       console.error('Error confirming transaction by sender:', error);
       toast.error('Error confirming transaction');

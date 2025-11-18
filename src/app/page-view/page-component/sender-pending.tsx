@@ -261,6 +261,7 @@ export default function SenderPending() {
             toast.error('Failed to build Solana transaction.');
             return;
           }
+          
           let txSignature: number[];
           try {
 
@@ -275,7 +276,7 @@ export default function SenderPending() {
             return;
           }
           txManager.setSignedCallPayload(txSignature);
-          
+
         } else {
           toast.error('Please use a Solana wallet to confirm this transaction');
           return;
