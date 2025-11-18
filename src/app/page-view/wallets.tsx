@@ -29,6 +29,7 @@ export default function Wallets() {
   const startWatching = useTransactionStore((s) => s.startWatching);
   const getNodeConnectionStatus = useTransactionStore((s) => s.getNodeConnectionStatus);
   const addAccount = useTransactionStore((s) => s.addAccount);
+  const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const prevWalletsRef = useRef<Set<string>>(new Set());
 
@@ -90,35 +91,6 @@ export default function Wallets() {
     return () => clearInterval(id);
   }, [isConnectingNode, connectingCountdown]);
 
-  const handleAddAccount = async () => {
-    try {
-      if (!primaryWallet) {
-        toast.error('Connect a wallet first');
-        return;
-      }
-      if (!selectedWallet) {
-        toast.error('Select the account to add');
-        return;
-      }
-      if (!userProfile.network) {
-        toast.error('Select a network first');
-        return;
-      }
-
-      // Find the wallet object for the selected address
-      const target = userWallets.find((w) => w.address === selectedWallet);
-      if (!target) {
-        toast.error('Selected wallet not found');
-        return;
-      }
-
-      // Call WASM to register account with the node
-      await addAccount(selectedWallet, userProfile.network);
-
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to add account');
-    }
-  };
 
   const handleWalletSelect = async (address: string) => {
     // Check if this wallet is already the primary wallet
@@ -142,6 +114,11 @@ export default function Wallets() {
     try {
       // Switch to the selected wallet using its ID
       await switchWallet(targetWallet.id);
+      // update the user profile
+      setUserProfile({
+        account: targetWallet.address,
+        network: targetWallet.chain,
+      });
       // Note: primaryWallet will update via useEffect when Dynamic SDK updates it
     } catch (error) {
       toast.error('Failed to switch wallet');
@@ -574,11 +551,7 @@ export default function Wallets() {
                   'Connect App'
                 )}
               </Button>
-              <Alert className="bg-emerald-500/10 border-emerald-400/30">
-                <AlertDescription className="text-emerald-200">
-                  Sending between your own linked wallets? You can skip connecting the app.
-                </AlertDescription>
-              </Alert>
+
             </>
           )}
 

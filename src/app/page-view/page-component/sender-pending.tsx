@@ -165,7 +165,6 @@ export default function SenderPending() {
   const [showSuccessComponents, setShowSuccessComponents] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
-  const [ networkId, setNetworkId] = useState<number | null>(null);
 
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const [communicationConfirmed, setCommunicationConfirmed] = useState<Record<string, boolean>>({});
@@ -179,16 +178,6 @@ export default function SenderPending() {
 
   const { primaryWallet } = useDynamicContext();
 
-
-  useEffect(() => {
-    const getNetworkId = async () => {
-      if (primaryWallet) {
-        const id = Number(await primaryWallet.getNetwork());
-        setNetworkId(id);
-      }
-    };
-    getNetworkId();
-  }, [primaryWallet]);
 
   // Effect to fetch transactions on mount
   useEffect(() => {
@@ -240,7 +229,6 @@ export default function SenderPending() {
   }
 
   const handleConfirm = async(transaction:TxStateMachine) => {
-    try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
       
@@ -260,9 +248,23 @@ export default function SenderPending() {
 
         if (isSolanaWallet(primaryWallet)) {
           const signer = await primaryWallet.getSigner();
-          const versionSolTx = new VersionedTransaction(VersionedMessage.deserialize(Uint8Array.from(callPayload)));
-          
-          const txSignature = (await signer.signAndSendTransaction(versionSolTx as any, {maxRetries: 10})).signature;
+          console.log("signer", signer);
+          let versionSolTx: VersionedTransaction;
+          try {
+               versionSolTx = new VersionedTransaction(VersionedMessage.deserialize(Uint8Array.from(callPayload)));
+          } catch (error) {
+            console.error('Error building Solana transaction:', error);
+            toast.error('Failed to build Solana transaction.');
+            return;
+          }
+          let txSignature: string;
+          try {
+            txSignature = (await signer.signAndSendTransaction(versionSolTx as any, {maxRetries: 10})).signature;
+          } catch (error) {
+            console.error('Error signing Solana transaction:', error);
+            toast.error('Failed to sign Solana transaction.');
+            return;
+          }
           txManager.setTxSubmissionPassed(Array.from(bs58.decode(txSignature)));
           txManager.setSignedCallPayload(Array.from(bs58.decode(txSignature)));
         } else {
@@ -313,10 +315,6 @@ export default function SenderPending() {
       console.log('updatedTransaction', updatedTransaction);
       await senderConfirmTransaction(updatedTransaction)
           
-    } catch (error) {
-      console.error('Error confirming transaction:', error);
-      toast.error('Failed to confirm transaction');
-    }
   }
 
   const handleComplete = (transaction) => {

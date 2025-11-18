@@ -733,6 +733,8 @@ function isNativeSolToken(token: Token): boolean {
 export function toWire(tx: TxStateMachine): any {
   return {
     ...tx,
+    inboundReqId: typeof tx.inboundReqId === 'number' ? tx.inboundReqId : null,
+    outboundReqId: typeof tx.outboundReqId === 'number' ? tx.outboundReqId : null,
     amount: tx.amount.toString(),
     // Convert Uint8Array fields to regular arrays
     multiId: tx.multiId ? Array.from(tx.multiId) : null,

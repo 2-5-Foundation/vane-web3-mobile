@@ -115,18 +115,10 @@ export interface TransactionState {
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   // state
-  userProfile: (() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('user-profile');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    }
-    return {
-      account: '',
-      network: ''
-    };
-  })(),
+  userProfile: {
+    account: '',
+    network: ''
+  },
   transferFormData: {
     recipient: '',
     amount: 0,
@@ -143,9 +135,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   // method
   setUserProfile: (userProfile: UserProfile) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('user-profile', JSON.stringify(userProfile));
-    }
     set({userProfile: userProfile});
   },
   storeSetTransferFormData: (formData: TransferFormData) => set({transferFormData: formData}),
@@ -158,12 +147,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         // Use the utility method to get consistent status string
         const statusString = get().getTransactionStatus(update);
         
-        
+
+        const isSender = update.senderAddress === get().userProfile.account;
+        const isReceiver = update.receiverAddress === get().userProfile.account;
+
         switch (statusString) {
             case 'Genesis':
-                const isSender = update.senderAddress === get().userProfile.account;
-                const isReceiver = update.receiverAddress === get().userProfile.account;
-                
+
                 if (isSender) {
                     return {
                         ...state,
@@ -191,10 +181,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             case 'TxSubmissionPassed':
             case 'TxError':
             case 'Reverted':
+    
+                if(isSender){
                 return {
                     ...state,
                     senderPendingTransactions: [update, ...state.senderPendingTransactions]
                 };
+              }
 
             default:
                 return state;
@@ -369,10 +362,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
 
     try {
-      await senderConfirm(tx);
-      console.info('Transaction confirmed by sender successfully');
-      toast.success('Transaction confirmed by sender successfully');
-      
+      await senderConfirm(tx);      
       // Export storage and save to localStorage
       const storageExport = await get().exportStorageData();
       

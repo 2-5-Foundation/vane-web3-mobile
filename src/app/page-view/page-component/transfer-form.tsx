@@ -13,6 +13,7 @@ import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { toast } from "sonner"
 import { TokenBalance } from "@dynamic-labs/sdk-api-core"
+import Image from "next/image";
 
 
 interface TransferFormProps {
@@ -497,8 +498,27 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                       </SelectTrigger>
                       <SelectContent className="bg-[#253639] border-white/10">
                         {tokenList.length > 0 && tokenList.map((token) => (
-                          <SelectItem key={token.symbol} value={token.symbol} className="text-white focus:bg-white/5">
-                            {token?.symbol}
+                          <SelectItem
+                            key={token.symbol ?? token.name ?? token.address}
+                            value={token.symbol}
+                            className="text-white focus:bg-white/5"
+                          >
+                            <span className="flex items-center gap-2">
+                              {token.logoURI ? (
+                                <Image
+                                  src={token.logoURI}
+                                  alt={`${token.symbol ?? token.name ?? 'token'} logo`}
+                                  width={20}
+                                  height={20}
+                                  className="rounded-full"
+                                />
+                              ) : (
+                                <span className="h-5 w-5 rounded-full bg-white/10" />
+                              )}
+                              <span className="text-xs uppercase tracking-wide">
+                                {token.symbol ?? token.name ?? 'Token'}
+                              </span>
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>

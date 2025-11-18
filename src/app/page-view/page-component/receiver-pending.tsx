@@ -169,20 +169,20 @@ export default function ReceiverPending() {
   }
 
   // Show connection status if not connected
-  if (!isWasmInitialized()) {
-    return (
-      <div className="space-y-3">
-        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
-              <WifiOff className="text-[#7EDFCD] h-4 w-4" />
-              <span className="text-sm">Connecting to receive updates...</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // if (!isWasmInitialized()) {
+  //   return (
+  //     <div className="space-y-3">
+  //       <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+  //         <CardContent className="p-3">
+  //           <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
+  //             <WifiOff className="text-[#7EDFCD] h-4 w-4" />
+  //             <span className="text-sm">Connecting to receive updates...</span>
+  //           </div>
+  //         </CardContent>
+  //       </Card>
+  //     </div>
+  //   );
+  // }
 
   // Show empty state when no pending transactions
   if (!recvTransactions || recvTransactions.length === 0) {
@@ -191,10 +191,7 @@ export default function ReceiverPending() {
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-6">
             <div className="text-center">
-              <div className="flex items-center justify-center gap-2 text-green-400 mb-2">
-                <Wifi className="h-4 w-4" />
-                <span className="text-sm">Connected and listening</span>
-              </div>
+            
               <p className="text-[#9EB2AD] text-sm inline-flex items-center gap-1 whitespace-nowrap">
                 <span>No pending transactions found •</span>
                 <button
