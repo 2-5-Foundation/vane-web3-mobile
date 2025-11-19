@@ -70,17 +70,6 @@ export default function ReceiverPending() {
   });
   const userProfile = useTransactionStore((s) => s.userProfile);
 
-  // Helper function to get token decimals
-  const getTokenDecimals = (token: Token): number | null => {
-    if (!tokenBalances || tokenBalances.length === 0) return null;
-    
-    const matchingToken = tokenBalances.find(balance => {
-      return balance.symbol === getTokenLabel(token);
-    });
-    
-    return matchingToken?.decimals || null;
-  };
-
   // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -96,8 +85,6 @@ export default function ReceiverPending() {
         fetchPendingUpdates(),
         new Promise(resolve => setTimeout(resolve, 1000))
       ]);
-      console.log('debug userProfile', userProfile);
-      console.log('recvTransactions', recvTransactions);
       toast.success('Transactions refreshed');
     } catch (e) {
       console.error('Error refreshing transactions:', e);

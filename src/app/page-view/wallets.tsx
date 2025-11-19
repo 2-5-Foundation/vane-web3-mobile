@@ -563,7 +563,10 @@ export default function Wallets() {
           <Alert className="bg-blue-500/10 border-blue-400/30">
             <AlertTitle className="text-blue-400">Heads up!</AlertTitle>
             <AlertDescription className="text-blue-300">
-              User experience will improve currently in open beta
+              User experience will improve currently in open beta.
+            </AlertDescription>
+            <AlertDescription className="text-blue-300">
+              Phantom will not work for now. Please use other wallets.
             </AlertDescription>
           </Alert>
         </div>
