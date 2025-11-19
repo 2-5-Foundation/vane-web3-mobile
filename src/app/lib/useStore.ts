@@ -365,32 +365,28 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       await senderConfirm(tx);      
       // Export storage and save to localStorage
       const storageExport = await get().exportStorageData();
+      // convert all amounts to their decimals
+
       
       // Submit metrics to API
-      // try {
-      //   const response = await fetch('/api/submit-metrics', {
-      //     method: 'POST',
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     },
-      //     body: JSON.stringify(storageExport, (key, value) => {
-      //       // Handle BigInt serialization for API request
-      //       if (typeof value === 'bigint') {
-      //         return value.toString();
-      //       }
-      //       return value;
-      //     }),
-      //   });
+      try {
+        const response = await fetch('/api/submit-metrics', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(storageExport)
+        });
         
-      //   if (!response.ok) {
-      //     console.error('Failed to submit metrics:', await response.text());
-      //   } else {
-      //     console.log('Metrics submitted successfully');
-      //   }
-      // } catch (metricsError) {
-      //   console.error('Error submitting metrics:', metricsError);
-      //   // Don't throw - metrics submission failure shouldn't block the transaction confirmation
-      // }
+        if (!response.ok) {
+          console.error('Failed to submit metrics:', await response.text());
+        } else {
+          console.log('Metrics submitted successfully');
+        }
+      } catch (metricsError) {
+        console.error('Error submitting metrics:', metricsError);
+        // Don't throw - metrics submission failure shouldn't block the transaction confirmation
+      }
     } catch (error) {
       console.error('Error confirming transaction by sender:', error);
       toast.error('Error confirming transaction');
@@ -474,19 +470,51 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const storage = await exportStorage();
       console.log('Exported storage data:', storage);
       
+      // Normalize BigInt values to numbers for safe serialization
+      // Specifically handles DbTxStateMachine arrays where amount might be BigInt
+      const normalizeBigInt = (value: any): any => {
+        if (typeof value === 'bigint') {
+          return Number(value);
+        }
+        if (Array.isArray(value)) {
+          // Handle arrays - recursively normalize each element
+          return value.map((item) => {
+            // If item is an object (like DbTxStateMachine), normalize it
+            if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+              const normalized: any = {};
+              for (const key in item) {
+                // Convert BigInt amount to number
+                if (key === 'amount' && typeof item[key] === 'bigint') {
+                  normalized[key] = Number(item[key]);
+                } else {
+                  normalized[key] = normalizeBigInt(item[key]);
+                }
+              }
+              return normalized;
+            }
+            // For primitive array elements, normalize recursively
+            return normalizeBigInt(item);
+          });
+        }
+        if (value !== null && typeof value === 'object') {
+          const normalized: any = {};
+          for (const key in value) {
+            normalized[key] = normalizeBigInt(value[key]);
+          }
+          return normalized;
+        }
+        return value;
+      };
+
+      const normalizedStorage = normalizeBigInt(storage) as StorageExport;
+      
       // Save to browser storage
       if (typeof window !== 'undefined') {
-        localStorage.setItem('vane-storage-export', JSON.stringify(storage, (key, value) => {
-          // Handle BigInt serialization
-          if (typeof value === 'bigint') {
-            return value.toString();
-          }
-          return value;
-        }));
+        localStorage.setItem('vane-storage-export', JSON.stringify(normalizedStorage));
         console.log('Storage data saved to localStorage');
       }
       
-      return storage;
+      return normalizedStorage;
     } catch (error) {
       console.error('Error exporting and saving storage data:', error);
       throw error;
