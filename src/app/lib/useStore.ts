@@ -39,7 +39,8 @@ import {
   NodeConnectionStatus,
   addAccount,
   watchP2pNotifications,
-  P2pEventResult
+  P2pEventResult,
+  clearRevertedFromCache
   
 } from '@/lib/vane_lib/main'
 
@@ -431,6 +432,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
 
     try {
+      // clear reverted transactions
+      clearRevertedFromCache();
       const updates = await fetchPendingTxUpdates();
       console.log('Fetched pending updates:', updates);
       
