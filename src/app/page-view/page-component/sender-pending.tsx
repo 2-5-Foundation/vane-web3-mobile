@@ -357,9 +357,9 @@ export default function SenderPending() {
           
   }
 
-  const handleComplete = (transaction) => {
+  const handleComplete = (transaction: TxStateMachine) => {
     // Remove the transaction from the store
-    removeTransaction(transaction.txNonce)
+    removeTransaction(transaction)
   }
 
 
