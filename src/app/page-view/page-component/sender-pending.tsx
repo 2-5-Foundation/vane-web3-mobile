@@ -4,11 +4,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, useEffect} from "react"
-import { useDynamicContext} from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, WalletConnector} from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
 import { ChainSupported, getTokenDecimals, Token, TxStateMachine, TxStateMachineManager} from '@/lib/vane_lib/main'
 import { bytesToHex, formatEther, hexToBytes } from 'viem';
 import bs58 from 'bs58';
+import {
+  isPhantomRedirectConnector,
+  SignTransactionListener,
+} from '@dynamic-labs/wallet-connector-core';
 
 import { toast } from "sonner"
 
@@ -19,6 +23,9 @@ import {
   VersionedMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
+
+import { usePhantomSignTransaction } from "./phantomSigning"
+
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -157,6 +164,19 @@ export const getTokenLabel = (token: Token): string => {
 };
 
 export default function SenderPending() {
+
+  // phantom wallet redirects state
+  // const [signature, setSignature] = useState<string | undefined>(undefined);
+  // const [txMessage, setTxMessage] = useState<number[] | undefined>(undefined);
+  // const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
+  // const [errorMessage, setErrorMessage] = useState<string | undefined>(
+  //   undefined,
+  // );
+
+  const { execute, errorCode, errorMessage, tx } = usePhantomSignTransaction();
+
+
+  // ----------------------------------------------------------------- //
  
  
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -221,12 +241,14 @@ export default function SenderPending() {
     };
   }, [senderPendingTransactions, showSuccessComponents]);
 
+
   const handleRevert = async (transaction:TxStateMachine) => {
     console.log('transaction', transaction);
     await revertTransaction(transaction, "User requested revert");
     removeTransaction(transaction.txNonce);
     toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`);
   }
+
 
   const handleConfirm = async(transaction:TxStateMachine) => {
       // Handle confirm logic
@@ -261,14 +283,22 @@ export default function SenderPending() {
             toast.error('Failed to build Solana transaction.');
             return;
           }
-          
+
           let txSignature: number[];
           try {
 
-            const signedTx = await signer.signTransaction(versionSolTx as any);
-            console.log("returned msg", Array.from(signedTx.message.serialize()));
-            txManager.setCallPayload({solana: {callPayload: Array.from(signedTx.message.serialize()), latestBlockHeight: latesBlockHeight}});
-            txSignature = Array.from(signedTx.signatures[0]);
+            const isRedirectWallet = isPhantomRedirectConnector(primaryWallet?.connector);
+
+            if(isRedirectWallet){
+              // await execute(versionSolTx);
+              // toast.success("Signed tx: " + tx);
+              toast.info("Please use another wallet for now (not Phantom)");
+
+            } else{
+              const signedTx = await signer.signTransaction(versionSolTx as any);
+               txManager.setCallPayload({solana: {callPayload: Array.from(signedTx.message.serialize()), latestBlockHeight: latesBlockHeight}});
+               txSignature = Array.from(signedTx.signatures[0]);
+            }
 
           } catch (error) {
             console.error('Error signing Solana transaction:', error);
@@ -809,6 +839,8 @@ export default function SenderPending() {
     }
   }, []);
 
+ 
+
   // Show loading state while fetching transactions
   if (isLoadingTransactions) {
     return (
@@ -1008,3 +1040,5 @@ export default function SenderPending() {
     </div>
   )
 }
+
+

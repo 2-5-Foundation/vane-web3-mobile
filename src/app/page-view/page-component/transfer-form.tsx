@@ -146,7 +146,6 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
   useEffect(() => {
     const amountValue = parseFloat(formData.amount.toString());
     if (amountValue > 0 && formData.recipient.trim() !== '') {
-      console.log('Storing form data:', formData);
       storeSetTransferFormData(formData);
     }
   }, [formData, storeSetTransferFormData]);

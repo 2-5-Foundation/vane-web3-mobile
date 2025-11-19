@@ -32,13 +32,6 @@ export default function Home() {
     sdk.actions.ready();
   }, []);
 
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(r => console.log('SW registered'))
-        .catch(e => console.error(e));
-    }
-  }, []);
 
   // Subscribe to P2P notifications - set up when WASM becomes initialized
   useEffect(() => {
