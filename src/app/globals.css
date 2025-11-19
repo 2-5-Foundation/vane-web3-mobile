@@ -14,5 +14,6 @@ body {
   button {
     @apply transition-all duration-150 active:scale-[0.98] active:translate-y-0.5 active:shadow-inner;
   }
+ 
 }
 

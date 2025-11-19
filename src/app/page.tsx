@@ -202,7 +202,14 @@ export default function Home() {
       if (pollInterval) {
         clearInterval(pollInterval);
       }
-      unsubscribeWatchP2pNotifications();
+      // Only unsubscribe if WASM is initialized and we actually subscribed
+      if (isSubscribed && isInitialized()) {
+        try {
+          unsubscribeWatchP2pNotifications();
+        } catch (error) {
+          console.error('Error unsubscribing from P2P notifications:', error);
+        }
+      }
       isSubscribed = false;
     };
   }, []);
