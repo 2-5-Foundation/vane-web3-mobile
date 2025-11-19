@@ -99,7 +99,7 @@ export default function Profile() {
           let total = 0;
           let largest = 0;
           transactions?.forEach(tx => {
-            const value = calculateTransactionValue(tx.amount, tx.token, tokenBalances);
+            const value = calculateTransactionValue(BigInt(tx.amount), tx.token, tokenBalances);
             total += value;
             largest = Math.max(largest, value);
           });

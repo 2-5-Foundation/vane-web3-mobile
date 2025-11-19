@@ -38,10 +38,8 @@ import {
   LogLevel,
   NodeConnectionStatus,
   addAccount,
-  watchP2pNotifications,
-  P2pEventResult,
-  clearRevertedFromCache
-  
+  clearRevertedFromCache,
+  deleteTxInCache
 } from '@/lib/vane_lib/main'
 
 import { config } from 'dotenv';
@@ -84,7 +82,7 @@ export interface TransactionState {
   sortTransactionsUpdates: (txs:TxStateMachine[]) => void;
   clearAllTransactions: () => void; 
   // sender context
-  removeTransaction: (txNonce: number) => void;
+  removeTransaction: (tx: TxStateMachine) => void;
   addTransaction: (tx: TxStateMachine) => void;
   // receiver context
   addRecvTransaction: (tx: TxStateMachine) => void;
@@ -208,9 +206,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       senderPendingTransactions: [tx, ...state.senderPendingTransactions]
     })),
 
-  removeTransaction: (txNonce: number) =>{
+  removeTransaction: (tx: TxStateMachine) =>{
+    if(!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+    deleteTxInCache(tx);
       set((state) => ({
-          senderPendingTransactions: state.senderPendingTransactions.filter(tx => tx.txNonce !== txNonce)
+          senderPendingTransactions: state.senderPendingTransactions.filter(tx => tx.txNonce !== tx.txNonce)
         }))
   },
 
@@ -422,6 +424,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw error;
     }
   },
+
 
   fetchPendingUpdates: async () => {
     const state = get();

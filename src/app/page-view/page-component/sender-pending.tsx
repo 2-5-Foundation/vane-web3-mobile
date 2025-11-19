@@ -245,7 +245,7 @@ export default function SenderPending() {
   const handleRevert = async (transaction:TxStateMachine) => {
     console.log('transaction', transaction);
     await revertTransaction(transaction, "User requested revert");
-    removeTransaction(transaction.txNonce);
+    removeTransaction(transaction);
     toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`);
   }
 
