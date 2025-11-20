@@ -68,6 +68,7 @@ export default function Profile() {
     const loadData = async () => {
       setIsLoading(true);
       try {
+        if (!isWasmInitialized()) return;
         const storageExport = await exportStorageData();
         if (!storageExport) return;
 

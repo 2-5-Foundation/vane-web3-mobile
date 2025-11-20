@@ -165,15 +165,7 @@ export const getTokenLabel = (token: Token): string => {
 
 export default function SenderPending() {
 
-  // phantom wallet redirects state
-  // const [signature, setSignature] = useState<string | undefined>(undefined);
-  // const [txMessage, setTxMessage] = useState<number[] | undefined>(undefined);
-  // const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
-  // const [errorMessage, setErrorMessage] = useState<string | undefined>(
-  //   undefined,
-  // );
-
-  const { execute, errorCode, errorMessage, tx } = usePhantomSignTransaction();
+  // const { execute, errorCode, errorMessage, tx } = usePhantomSignTransaction();
 
 
   // ----------------------------------------------------------------- //
