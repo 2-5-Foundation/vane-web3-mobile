@@ -26,11 +26,9 @@ const TokenBalancesComponent = ({ networkId, onBalancesChange }: { networkId: nu
 
   const { tokenBalances, isLoading, isError } = useTokenBalances(tokenBalanceArgs);
 
-  const stableOnBalancesChange = useCallback(onBalancesChange, []);
-
   useEffect(() => {
-    stableOnBalancesChange(tokenBalances || []);
-  }, [tokenBalances, stableOnBalancesChange]);
+    onBalancesChange(tokenBalances || []);
+  }, [tokenBalances, onBalancesChange]);
 
   return null; // This component doesn't render anything, just handles token balance fetching
 }
@@ -71,35 +69,53 @@ export default function Transfer() {
      }
    }, [])
 
+   // Derive network state from Dynamic SDK (source of truth)
    useEffect(() => {
-    const fetchNetwork = async () => {
-      if (primaryWallet) {
+    const syncNetworkFromDynamic = async () => {
+      if (!primaryWallet) {
+        setCurrentNetworkId(null)
+        setNetwork("")
+        setSelectedEVMNetwork("")
+        setShowNetworkDropdown(false)
+        return
+      }
+
+      try {
         const networkId = Number(await primaryWallet.getNetwork())
-        setCurrentNetworkId(networkId)
         
-        // Check if current network is EVM
-        const isEVMBased = EVM_NETWORKS.some(evmNetwork => evmNetwork.id === networkId)
-        setShowNetworkDropdown(isEVMBased)
+        // Find matching network from EVM_NETWORKS
+        const matchedNetwork = EVM_NETWORKS.find(n => n.id === networkId)
         
-        if (networkId === 1) {
-          setNetwork("Ethereum")
-          setSelectedEVMNetwork("ethereum")
-        } else if (networkId === 137) {
-          setNetwork("Polygon")
-          setSelectedEVMNetwork("polygon")
-        } else if (networkId === 8453) {
-          setNetwork("Base")
-          setSelectedEVMNetwork("base")
-        } else if (networkId === 56) {
-          setNetwork("BNB Smart Chain")
-          setSelectedEVMNetwork("bnb")
-        } else if (networkId === 101) {
-          setNetwork("Solana")
-          setSelectedEVMNetwork("solana")
+        if (matchedNetwork) {
+          // EVM network found
+          setCurrentNetworkId(networkId)
+          setNetwork(matchedNetwork.name)
+          setSelectedEVMNetwork(matchedNetwork.value)
+          setShowNetworkDropdown(true)
+        } else {
+          // Non-EVM network or unknown
+          setCurrentNetworkId(networkId)
+          setNetwork("")
+          setSelectedEVMNetwork("")
+          setShowNetworkDropdown(false)
         }
+      } catch (error) {
+        console.error('Error fetching network from Dynamic:', error)
       }
     }
-    fetchNetwork()
+
+    // Sync immediately when primaryWallet changes
+    syncNetworkFromDynamic()
+
+    // Poll for network changes (important for redirect mode where page may reload)
+    // This ensures we catch network changes after wallet redirects back
+    const pollInterval = setInterval(() => {
+      if (primaryWallet) {
+        syncNetworkFromDynamic()
+      }
+    }, 1500) // Poll every 1.5 seconds
+
+    return () => clearInterval(pollInterval)
    }, [primaryWallet])
 
   const handleNetworkSwitch = async (networkValue: string) => {
@@ -113,10 +129,13 @@ export default function Transfer() {
         return
       }
       
+      // Call switchNetwork - don't update local state here
+      // The useEffect will sync state from Dynamic after the redirect
       await primaryWallet.switchNetwork(targetNetwork.id)
-      setSelectedEVMNetwork(targetNetwork.name)
-      setNetwork(targetNetwork.name)
-      setCurrentNetworkId(targetNetwork.id)
+      
+      // Note: We intentionally don't set state here because:
+      // 1. With redirect mode, the page may reload and state is lost
+      // 2. The useEffect will sync from Dynamic's actual network state
       
     } catch (error) {
       console.error('Failed to switch network:', error)

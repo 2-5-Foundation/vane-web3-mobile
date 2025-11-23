@@ -163,6 +163,41 @@ export const getTokenLabel = (token: Token): string => {
   return Number(amount) / Math.pow(10, decimals);
 };
 
+// localStorage helpers for submission pending tracking
+const getSubmissionPending = (): Record<string, boolean> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem('SubmissionPending');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
+const setSubmissionPending = (txNonce: string, isPending: boolean) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = getSubmissionPending();
+    if (isPending) {
+      current[txNonce] = true;
+    } else {
+      delete current[txNonce];
+    }
+    localStorage.setItem('SubmissionPending', JSON.stringify(current));
+  } catch {}
+};
+
+const clearAllSubmissionPending = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('SubmissionPending');
+  } catch {}
+};
+
+const isSubmissionPending = (txNonce: string): boolean => {
+  return getSubmissionPending()[txNonce] === true;
+};
+
 export default function SenderPending() {
 
   // const { execute, errorCode, errorMessage, tx } = usePhantomSignTransaction();
@@ -180,6 +215,7 @@ export default function SenderPending() {
 
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const [communicationConfirmed, setCommunicationConfirmed] = useState<Record<string, boolean>>({});
+  const [submissionPending, setSubmissionPendingState] = useState<Record<string, boolean>>({});
   const senderPendingTransactions = useTransactionStore(state => state.senderPendingTransactions)
   const removeTransaction = useTransactionStore(state => state.removeTransaction)
   const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
@@ -187,9 +223,15 @@ export default function SenderPending() {
   const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
   const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
+  const nodeConnectionStatus = useTransactionStore(state => state.nodeConnectionStatus)
 
   const { primaryWallet } = useDynamicContext();
 
+
+  // Initialize submission pending state from localStorage on mount
+  useEffect(() => {
+    setSubmissionPendingState(getSubmissionPending());
+  }, []);
 
   // Effect to fetch transactions on mount
   useEffect(() => {
@@ -210,6 +252,30 @@ export default function SenderPending() {
   }, [isWasmInitialized, fetchPendingUpdates]);
 
 
+
+  // Effect to clear localStorage when status changes to FailedToSubmitTxn or TxSubmissionPassed
+  useEffect(() => {
+    senderPendingTransactions.forEach(transaction => {
+      const statusType = typeof transaction.status === 'string' ? transaction.status : transaction.status?.type || '';
+      const txNonce = String(transaction.txNonce);
+      if (statusType === 'FailedToSubmitTxn' || statusType === 'TxSubmissionPassed') {
+        setSubmissionPending(txNonce, false);
+        setSubmissionPendingState(prev => {
+          const next = { ...prev };
+          delete next[txNonce];
+          return next;
+        });
+      }
+    });
+  }, [senderPendingTransactions]);
+
+  // Effect to clear all submission pending when node disconnects
+  useEffect(() => {
+    if (nodeConnectionStatus && !nodeConnectionStatus.relay_connected) {
+      clearAllSubmissionPending();
+      setSubmissionPendingState({});
+    }
+  }, [nodeConnectionStatus]);
 
   // Effect to handle 3-second delay for success components
   useEffect(() => {
@@ -243,6 +309,11 @@ export default function SenderPending() {
 
 
   const handleConfirm = async(transaction:TxStateMachine) => {
+      // Save txNonce to localStorage to track submission pending state
+      const txNonce = String(transaction.txNonce);
+      setSubmissionPending(txNonce, true);
+      setSubmissionPendingState(prev => ({ ...prev, [txNonce]: true }));
+      
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
       
@@ -501,6 +572,8 @@ export default function SenderPending() {
           );
         }
         
+        const isSubmitting = submissionPending[txKey] === true;
+        
         return (
           <div className="space-y-3">
             <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
@@ -513,14 +586,23 @@ export default function SenderPending() {
                 onClick={() => handleRevert(transaction)}
                 variant="outline"
                 className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>
               <Button
                 onClick={() => handleConfirm(transaction)}
                 className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+                disabled={isSubmitting}
               >
-                Submit Transaction
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Transaction'
+                )}
               </Button>
             </div>
           </div>
@@ -561,6 +643,8 @@ export default function SenderPending() {
           );
         }
         
+        const isSubmitting2 = submissionPending[txKey2] === true;
+        
         return (
           <div className="space-y-3">
             <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
@@ -573,14 +657,23 @@ export default function SenderPending() {
                 onClick={() => handleRevert(transaction)}
                 variant="outline"
                 className="flex-1 h-10 bg-transparent border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-medium"
+                disabled={isSubmitting2}
               >
                 Cancel
               </Button>
               <Button
                 onClick={() => handleConfirm(transaction)}
                 className="flex-1 h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium"
+                disabled={isSubmitting2}
               >
-                Submit Transaction
+                {isSubmitting2 ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Transaction'
+                )}
               </Button>
             </div>
           </div>
