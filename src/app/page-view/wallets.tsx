@@ -31,7 +31,9 @@ export default function Wallets() {
   const addAccount = useTransactionStore((s) => s.addAccount);
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const userProfile = useTransactionStore((s) => s.userProfile);
+  const exportStorageData = useTransactionStore((s) => s.exportStorageData);
   const prevWalletsRef = useRef<Set<string>>(new Set());
+  const hasCheckedStorageRef = useRef<boolean>(false);
 
 
   const handleConnectNode = useCallback(async () => {
@@ -78,8 +80,7 @@ export default function Wallets() {
     }
   }, [
     primaryWallet,
-    userProfile.account,
-    userProfile.network,
+    setUserProfile,
     getNodeConnectionStatus,
     isWasmInitialized,
     initializeWasm,
@@ -355,29 +356,127 @@ export default function Wallets() {
 
   // Detect new wallets and call addAccount (only when a new wallet is actually added)
   useEffect(() => {
-    if (!isWasmInitialized() || !userProfile.network) return;
-    
-    const currentWalletAddresses = new Set(userWallets.map(w => w.address));
-    const prevWalletAddresses = prevWalletsRef.current;
-    
-    // Find new wallets (only those not in previous set)
-    const newWallets = userWallets.filter(w => !prevWalletAddresses.has(w.address));
-    
-    if (newWallets.length > 0) {
-      // Call addAccount for each new wallet
-      newWallets.forEach(async (wallet) => {
-        try {
-          await addAccount(wallet.address, userProfile.network);
-        } catch (error) {
-          console.error('Error adding account:', error);
-        }
-      });
+    const checkAndAddNewWallets = async () => {
+      if (!isWasmInitialized() || !userProfile.network) return;
       
-      // Update ref after processing new wallets
-      prevWalletsRef.current = currentWalletAddresses;
-    }
+      const currentWalletAddresses = new Set(userWallets.map(w => w.address));
+      const prevWalletAddresses = prevWalletsRef.current;
+      
+      // Find new wallets (only those not in previous set)
+      const newWallets = userWallets.filter(w => !prevWalletAddresses.has(w.address));
+      
+      if (newWallets.length > 0) {
+        try {
+          // Fetch storage to check if accounts are already registered
+          const storage = await exportStorageData();
+          
+          // Get registered accounts from storage
+          const registeredAccounts = new Set<string>();
+          if (storage?.user_account?.accounts) {
+            storage.user_account.accounts.forEach(([address]) => {
+              registeredAccounts.add(address.toLowerCase());
+            });
+          }
+          
+          // Call addAccount only for wallets not already in storage
+          for (const wallet of newWallets) {
+            const walletAddressLower = wallet.address.toLowerCase();
+            if (!registeredAccounts.has(walletAddressLower)) {
+              try {
+                await addAccount(wallet.address, userProfile.network);
+              } catch (error) {
+                console.error('Error adding account:', error);
+              }
+            } else {
+              console.log(`Account ${wallet.address} already registered in storage, skipping`);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching storage data:', error);
+          // If storage fetch fails, still try to add accounts (fallback behavior)
+          for (const wallet of newWallets) {
+            try {
+              await addAccount(wallet.address, userProfile.network);
+            } catch (addError) {
+              console.error('Error adding account:', addError);
+            }
+          }
+        }
+        
+        // Update ref after processing new wallets
+        prevWalletsRef.current = currentWalletAddresses;
+      }
+    };
+
+    checkAndAddNewWallets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userWallets, userProfile.network]);
+
+  // Check storage and register missing accounts after node is connected (runs only once)
+  useEffect(() => {
+    const checkAndRegisterAccounts = async () => {
+      // Only run if node is connected, WASM is initialized, and we haven't checked yet
+      console.log('Checking storage and registering accounts');
+      if (
+        !nodeConnectionStatus?.relay_connected ||
+        !isWasmInitialized() ||
+        hasCheckedStorageRef.current ||
+        userWallets.length === 0
+      ) {
+        return;
+      }
+      console.log('Checking storage and registering accounts 2');
+
+      // Mark as checked immediately to prevent concurrent runs
+      hasCheckedStorageRef.current = true;
+
+      try {
+        // Fetch storage data
+        const storage = await exportStorageData();
+        
+        if (!storage) {
+          console.log('No storage data found, registering all wallets');
+          // If no storage, register all wallets
+          for (const wallet of userWallets) {
+            try {
+              await addAccount(wallet.address, wallet.chain);
+            } catch (error) {
+              console.error(`Error adding account ${wallet.address}:`, error);
+            }
+          }
+          return;
+        }
+
+        // Get registered accounts from storage
+        const registeredAccounts = new Set<string>();
+        if (storage.user_account?.accounts) {
+          storage.user_account.accounts.forEach(([address]) => {
+            registeredAccounts.add(address.toLowerCase());
+          });
+        }
+
+        // Check each wallet and register if not in storage
+        for (const wallet of userWallets) {
+          const walletAddressLower = wallet.address.toLowerCase();
+          if (!registeredAccounts.has(walletAddressLower)) {
+            try {
+              console.log(`Registering missing account: ${wallet.address} on ${wallet.chain}`);
+              await addAccount(wallet.address, wallet.chain);
+            } catch (error) {
+              console.error(`Error adding account ${wallet.address}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking storage for accounts:', error);
+        // Reset the ref on error so it can be retried
+        hasCheckedStorageRef.current = false;
+      }
+    };
+
+    checkAndRegisterAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeConnectionStatus?.relay_connected, isWasmInitialized(), userWallets.length]);
 
 
 

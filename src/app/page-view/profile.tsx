@@ -56,7 +56,7 @@ export default function Profile() {
     );
     if (!balance) return 0;
 
-    const decimals = balance.decimals || getTokenDecimals(token) || 18;
+    const decimals = balance.decimals || getTokenDecimals(token);
     const tokenAmount = Number(amount) / Math.pow(10, decimals);
     const pricePerToken = balance.price || (balance.marketValue && balance.balance > 0 ? balance.marketValue / balance.balance : 0);
     
