@@ -113,6 +113,8 @@ export default function RootLayout({
           theme="dark"
           duration={8000}
           closeButton
+          offset={{ top: 30 }}
+          mobileOffset={{ top: 30 }}
           toastOptions={{
             style: {
               background: '#0D1B1B',
