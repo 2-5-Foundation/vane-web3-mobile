@@ -668,7 +668,7 @@ export default function Wallets() {
               User experience will improve currently in open beta.
             </AlertDescription>
             <AlertDescription className="text-blue-300">
-              Phantom will not work for now. Please use other wallets.
+              Phantom will only work in in-app browser.
             </AlertDescription>
           </Alert>
         </div>

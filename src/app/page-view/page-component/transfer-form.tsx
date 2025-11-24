@@ -6,11 +6,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, ArrowLeft, ArrowRight, DollarSign } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
 import { TxStateMachine } from '@/lib/vane_lib/main'
 import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
 import { toast } from "sonner"
 import { TokenBalance } from "@dynamic-labs/sdk-api-core"
 import Image from "next/image";
@@ -157,26 +157,33 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     }
   }, [isWasmInitialized, fetchPendingUpdates]);
 
-  // Get sender network when wallet is connected
-  useEffect(() => {
-    const getSenderNetwork = async () => {
-      if (primaryWallet) {
-        try {
-          const walletNetworkId = await primaryWallet.getNetwork();
-          const network = getWalletNetworkFromId(Number(walletNetworkId));
-          setSenderNetwork(network);
-          // Update form data to match sender network
-          setFormData(prev => ({ ...prev, network: network }));
-        } catch (error) {
-          console.error('Error getting wallet network:', error);
-        }
-      } else {
-        setSenderNetwork(null);
-      }
-    };
+  const updateSenderNetwork = useCallback(async () => {
+    if (!primaryWallet) {
+      setSenderNetwork(null);
+      return;
+    }
 
-    getSenderNetwork();
+    try {
+      const walletNetworkId = await primaryWallet.getNetwork();
+      const network = getWalletNetworkFromId(Number(walletNetworkId));
+      setSenderNetwork(network);
+      setFormData(prev => ({ ...prev, network }));
+    } catch (error) {
+      console.error('Error getting wallet network:', error);
+    }
   }, [primaryWallet]);
+
+  useEffect(() => {
+    updateSenderNetwork();
+  }, [updateSenderNetwork]);
+
+  useWalletConnectorEvent(
+    primaryWallet?.connector,
+    'chainChange',
+    () => {
+      updateSenderNetwork();
+    }
+  );
 
   const handleTransferFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;

@@ -320,7 +320,16 @@ export default function ReceiverPending() {
     } catch (error) {
       console.error('Error approving transaction:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(`Failed to confirm transaction: ${errorMessage}`);
+
+      if (
+        typeof errorMessage === 'string' &&
+        errorMessage.toLowerCase().includes('already pending') &&
+        errorMessage.toLowerCase().includes('personal_sign')
+      ) {
+        toast.error('A signature request is already open in your wallet. Please complete or cancel it before confirming again.');
+      } else {
+        toast.error(`Failed to confirm transaction: ${errorMessage}`);
+      }
     } finally {
       setPendingTxNonce(prev => (prev === currentTxNonce ? null : prev));
     }
