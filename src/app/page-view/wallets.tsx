@@ -4,7 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useDynamicContext, useUserWallets, IsBrowser, DynamicConnectButton, useWalletConnectorEvent, useDynamicModals, DynamicMultiWalletPromptsWidget, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, useUserWallets, IsBrowser, useWalletConnectorEvent, useDynamicModals, DynamicMultiWalletPromptsWidget, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useTransactionStore } from "@/app/lib/useStore";
@@ -13,7 +13,7 @@ import Image from "next/image";
 
 
 export default function Wallets() {
-  const {primaryWallet, handleLogOut, removeWallet } = useDynamicContext();
+  const {primaryWallet, handleLogOut, removeWallet, setShowAuthFlow } = useDynamicContext();
   const userWallets = useUserWallets();
   const { setShowLinkNewWalletModal } = useDynamicModals();
   const switchWallet = useSwitchWallet();
@@ -623,10 +623,13 @@ export default function Wallets() {
           </RadioGroup>
 
           {!primaryWallet && (
-            <DynamicConnectButton
-             buttonContainerClassName="w-full h-10 flex justify-center items-center bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg">
-             Connect Wallet
-            </DynamicConnectButton>
+            <Button
+              type="button"
+              onClick={() => setShowAuthFlow(true)}
+              className="w-full h-10 bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg"
+            >
+              Connect Wallet
+            </Button>
           )}
 
           {/* Handle connecting to app section */}

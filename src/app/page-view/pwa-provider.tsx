@@ -17,11 +17,44 @@ export function PWAProvider() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const registerServiceWorker = () => {
+      if (!('serviceWorker' in navigator)) {
+        return;
+      }
+
+      navigator.serviceWorker
+        .register('/sw.js', { scope: '/' })
+        .catch((error) => {
+          console.error('Failed to register service worker', error);
+        });
+    };
+
+    if (document.readyState === 'complete') {
+      registerServiceWorker();
+    } else {
+      window.addEventListener('load', registerServiceWorker);
+      return () => {
+        window.removeEventListener('load', registerServiceWorker);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setDeferredPrompt(event as BeforeInstallPromptEvent)
       setShowInstallPrompt(true)
-    })
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    }
   }, [])
 
   const handleInstall = async () => {

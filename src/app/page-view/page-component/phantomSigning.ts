@@ -9,7 +9,7 @@ import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
 import { ISolana, isSolanaWallet } from '@dynamic-labs/solana-core';
 import {
   isPhantomRedirectConnector,
-  SignAndSendTransactionListener,
+  SignMessageListener,
   SignTransactionListener,
 } from '@dynamic-labs/wallet-connector-core';
 
@@ -21,10 +21,22 @@ export const usePhantomSignTransaction = () => {
   const [errorMessage, setErrorMessage] = useState<string | undefined>(
     undefined,
   );
+  const [signedMessage, setSignedMessage] = useState<string | undefined>(
+    undefined,
+  );
+  const [messageErrorCode, setMessageErrorCode] = useState<string | undefined>(
+    undefined,
+  );
+  const [messageErrorMessage, setMessageErrorMessage] = useState<
+    string | undefined
+  >(undefined);
+
+  const connector = primaryWallet?.connector;
 
   useEffect(() => {
-    if (!isPhantomRedirectConnector(primaryWallet?.connector)) return;
-    const handler: SignTransactionListener = (response) => {
+    if (!connector) return;
+    if (!isPhantomRedirectConnector(connector)) return;
+    const handleSignTransaction: SignTransactionListener = (response) => {
       if (response.transaction) {
         setTx(response.transaction);
       } else {
@@ -33,12 +45,23 @@ export const usePhantomSignTransaction = () => {
       }
     };
 
-    primaryWallet.connector.on('signTransaction', handler);
-    return () => {
-      if (!isPhantomRedirectConnector(primaryWallet?.connector)) return;
-      primaryWallet.connector.off('signTransaction', handler);
+    const handleSignMessage: SignMessageListener = (response) => {
+      if (response.signature) {
+        setSignedMessage(response.signature);
+        return;
+      }
+      setMessageErrorCode(response.errorCode);
+      setMessageErrorMessage(response.errorMessage);
     };
-  }, [primaryWallet?.connector]);
+
+    connector.on('signTransaction', handleSignTransaction);
+    connector.on('signMessage', handleSignMessage);
+    return () => {
+      if (!isPhantomRedirectConnector(connector)) return;
+      connector.off('signTransaction', handleSignTransaction);
+      connector.off('signMessage', handleSignMessage);
+    };
+  }, [connector]);
 
   const execute = async (transaction: VersionedTransaction) => {
     if (!primaryWallet) return;
@@ -49,5 +72,23 @@ export const usePhantomSignTransaction = () => {
     await signer.signTransaction(transaction as any);
   };
 
-  return { errorCode, errorMessage, execute, tx };
+  const signMessage = async (message: Uint8Array) => {
+    if (!primaryWallet) return;
+    if (!isSolanaWallet(primaryWallet)){
+        return;
+    }
+    const signer = await primaryWallet.getSigner();
+    await signer.signMessage(message);
+  };
+
+  return {
+    errorCode,
+    errorMessage,
+    execute,
+    signMessage,
+    messageErrorCode,
+    messageErrorMessage,
+    signedMessage,
+    tx,
+  };
 };

@@ -2,14 +2,23 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { bytesToHex, hexToBytes } from "viem"
+import { hexToBytes } from "viem"
 import { useDynamicContext, useTokenBalances } from "@dynamic-labs/sdk-react-core";
+import { isEthereumWallet } from "@dynamic-labs/ethereum";
+import { isSolanaWallet } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
-import { TxStateMachine, TxStateMachineManager, Token } from '@/lib/vane_lib/main';
+import { TxStateMachine, TxStateMachineManager, Token, ChainSupported } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
 import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { formatAmount, getTokenLabel} from "./sender-pending";
+import bs58 from 'bs58';
+
+import {usePhantomSignTransaction} from "./phantomSigning"
+import {
+  isPhantomRedirectConnector,
+} from '@dynamic-labs/wallet-connector-core';
+
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -69,11 +78,66 @@ export default function ReceiverPending() {
     includeNativeBalance: true
   });
   const userProfile = useTransactionStore((s) => s.userProfile);
+  const { signMessage, errorCode, errorMessage, tx, signedMessage, messageErrorCode, messageErrorMessage } = usePhantomSignTransaction();
 
   // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
+  const [pendingTxNonce, setPendingTxNonce] = useState<string | null>(null);
+  const phantomSignatureRef = useRef<string | undefined>(undefined);
+  const phantomSignatureErrorRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    phantomSignatureRef.current = signedMessage;
+  }, [signedMessage]);
+
+  useEffect(() => {
+    phantomSignatureErrorRef.current = messageErrorMessage || messageErrorCode;
+  }, [messageErrorCode, messageErrorMessage]);
+
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return false;
+    }
+    return (
+      window.innerWidth <= 768 ||
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    );
+  }, []);
+
+  const waitForPhantomSignature = async () => {
+    const timeoutMs = 20000;
+    const pollMs = 250;
+    const startTime = Date.now();
+
+    return new Promise<string>((resolve, reject) => {
+      const checkSignature = () => {
+        if (phantomSignatureErrorRef.current) {
+          const errorMessage = phantomSignatureErrorRef.current;
+          phantomSignatureErrorRef.current = undefined;
+          reject(new Error(errorMessage || 'Failed to get signature from wallet'));
+          return;
+        }
+
+        if (phantomSignatureRef.current) {
+          const signature = phantomSignatureRef.current;
+          phantomSignatureRef.current = undefined;
+          resolve(signature);
+          return;
+        }
+
+        if (Date.now() - startTime >= timeoutMs) {
+          reject(new Error('Timed out waiting for Phantom signature'));
+          return;
+        }
+
+        setTimeout(checkSignature, pollMs);
+      };
+
+      checkSignature();
+    });
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -97,51 +161,155 @@ export default function ReceiverPending() {
 
   
   const handleApprove = async (transaction: TxStateMachine) => {
+    if (!isWasmInitialized()) {
+      toast.error('Connection not initialized. Please refresh the page.');
+      return;
+    }
+
+    if (!primaryWallet) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    const currentTxNonce = String(transaction.txNonce);
+    setPendingTxNonce(currentTxNonce);
+
     try {
-      if (!isWasmInitialized()) {
-        toast.error('Connection not initialized. Please refresh the page.');
-        return;
-      }
 
-      if (!primaryWallet) {
-        toast.error('Please connect your wallet first');
-        return;
-      }
-
-      const signature = await primaryWallet.signMessage(transaction.receiverAddress);
-      const txManager = new TxStateMachineManager(transaction);
+      // Check if this is an EVM chain transaction
+      const isEVMChain = transaction.receiverAddressNetwork === ChainSupported.Ethereum ||
+                        transaction.receiverAddressNetwork === ChainSupported.Bnb ||
+                        transaction.receiverAddressNetwork === ChainSupported.Base ||
+                        transaction.receiverAddressNetwork === ChainSupported.Optimism ||
+                        transaction.receiverAddressNetwork === ChainSupported.Arbitrum ||
+                        transaction.receiverAddressNetwork === ChainSupported.Polygon;
       
-      // Handle different signature formats from different wallets
-      let signatureBytes: Uint8Array;
-      if (typeof signature === 'string') {
-        if (signature.startsWith('0x')) {
-          // Standard hex format (Phantom)
-          signatureBytes = hexToBytes(signature as `0x${string}`);
-        } else {
-          // Base64 or other format (MetaMask)
-          try {
-            // Try to decode as base64
-            const decoded = atob(signature);
-            signatureBytes = new Uint8Array(decoded.split('').map(char => char.charCodeAt(0)));
-          } catch {
-            // If base64 fails, try to convert string to bytes directly
-            signatureBytes = new TextEncoder().encode(signature);
+      const isSolanaChain = transaction.receiverAddressNetwork === ChainSupported.Solana;
+      const isPhantomRedirect = isPhantomRedirectConnector(primaryWallet?.connector);
+
+      // For EVM chains, use wallet client's signMessage to ensure proper EIP-191 formatting
+      // For Solana, use signer's signMessage to get proper 64-byte signature
+      let signature: string | Uint8Array;
+      
+      if (isEVMChain && isEthereumWallet(primaryWallet)) {
+        try {
+          if (isMobile) {
+            signature = await primaryWallet.signMessage(transaction.receiverAddress);
+          } else {
+          const walletClient = await primaryWallet.getWalletClient();
+          const account = walletClient.account;
+          if (!account) {
+            toast.error('Wallet account not available');
+            return;
           }
+            const result = await walletClient.signMessage({
+              account,
+              message: transaction.receiverAddress,
+            });
+            if (typeof result === 'string') {
+              signature = result;
+            } else if (result && typeof result === 'object' && 'signature' in result) {
+              signature = (result as { signature: string }).signature;
+            } else {
+              signature = result as string | Uint8Array;
+            }
+          }
+        } catch (error) {
+          signature = await primaryWallet.signMessage(transaction.receiverAddress);
+        }
+      } else if (isSolanaChain && isSolanaWallet(primaryWallet)) {
+        const messageBytes = new TextEncoder().encode(transaction.receiverAddress);
+
+        if (isPhantomRedirect) {
+          await signMessage(messageBytes);
+          signature = await waitForPhantomSignature();
+        } else {
+          const signer = await primaryWallet.getSigner();
+          const signedMessageResult = await signer.signMessage(messageBytes);
+          signature = signedMessageResult.signature;
         }
       } else {
-        // Already a Uint8Array
-        signatureBytes = signature;
+        signature = await primaryWallet.signMessage(transaction.receiverAddress);
       }
       
-      // Validate signature length - should be reasonable for any signature type
-      if (signatureBytes.length < 32 || signatureBytes.length > 128) {
-        toast.error(`Invalid signature format. Signature length: ${signatureBytes.length} bytes`);
+      
+      if (!signature) {
+        toast.error('Failed to get signature from wallet');
         return;
+      }
+
+      if (typeof signature === 'string') {
+        const looksLikeMpcSignature =
+          signature.length > 300 ||
+          signature.includes('.') ||
+          signature.startsWith('{') ||
+          signature.startsWith('eyJ'); // base64-encoded JSON
+
+        if (looksLikeMpcSignature) {
+          toast.error('Coinbase MPC signatures are not supported yet. Please use the in-app browser or another wallet.');
+          return;
+        }
+      }
+
+      const txManager = new TxStateMachineManager(transaction);
+      
+      // Convert signature to bytes
+      const isUint8Array = (value: unknown): value is Uint8Array => {
+        return value instanceof Uint8Array;
+      };
+      
+      let signatureBytes: Uint8Array;
+      
+      if (typeof signature === 'string') {
+        if (!signature || signature.length === 0) {
+          toast.error('Invalid signature: empty string');
+          return;
+        }
+        if (signature.startsWith('0x')) {
+          // Hex format (EVM chains)
+          signatureBytes = hexToBytes(signature as `0x${string}`);
+        } else if (isSolanaChain) {
+          // Solana signatures are typically base58 encoded
+          try {
+            signatureBytes = new Uint8Array(bs58.decode(signature));
+          } catch {
+            // If base58 decode fails, try as raw bytes
+            signatureBytes = new TextEncoder().encode(signature);
+          }
+        } else {
+          signatureBytes = new TextEncoder().encode(signature);
+        }
+      } else if (isUint8Array(signature)) {
+        signatureBytes = signature;
+      } else {
+        toast.error('Invalid signature format from wallet');
+        return;
+      }
+      
+      if (!signatureBytes || signatureBytes.length === 0) {
+        toast.error('Invalid signature: signature bytes are empty');
+        return;
+      }
+      
+      // Validate and normalize signature length
+      if (isEVMChain && signatureBytes.length !== 65) {
+        toast.error(`Invalid EVM signature length: expected 65 bytes, got ${signatureBytes.length}`);
+        return;
+      }
+      
+      if (isSolanaChain) {
+        if (signatureBytes.length < 64) {
+          toast.error(`Invalid Solana signature length: expected at least 64 bytes, got ${signatureBytes.length}`);
+          return;
+        }
+        // Some wallets return extra bytes, take only the first 64 bytes
+        if (signatureBytes.length > 64) {
+          signatureBytes = signatureBytes.slice(0, 64);
+        }
       }
       
       txManager.setReceiverSignature(Array.from(signatureBytes));
       const updatedTx = txManager.getTx();
-      console.log('updatedTx signed by receiver', updatedTx.recvSignature);
       await receiverConfirmTransaction(updatedTx);
       
       // Mark this transaction as approved
@@ -151,25 +319,12 @@ export default function ReceiverPending() {
       
     } catch (error) {
       console.error('Error approving transaction:', error);
-      toast.error(`Failed to confirm transaction: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to confirm transaction: ${errorMessage}`);
+    } finally {
+      setPendingTxNonce(prev => (prev === currentTxNonce ? null : prev));
     }
   }
-
-  // Show connection status if not connected
-  // if (!isWasmInitialized()) {
-  //   return (
-  //     <div className="space-y-3">
-  //       <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-  //         <CardContent className="p-3">
-  //           <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
-  //             <WifiOff className="text-[#7EDFCD] h-4 w-4" />
-  //             <span className="text-sm">Connecting to receive updates...</span>
-  //           </div>
-  //         </CardContent>
-  //       </Card>
-  //     </div>
-  //   );
-  // }
 
   // Show empty state when no pending transactions
   if (!recvTransactions || recvTransactions.length === 0) {
@@ -215,6 +370,7 @@ export default function ReceiverPending() {
           variant="outline"
           className={`h-8 px-3 bg-transparent border border-[#4A5853]/40 text-[#9EB2AD] hover:text-[#7EDFCD] hover:border-[#7EDFCD]/50 ${isRefreshing ? 'animate-pulse' : ''}`}
           aria-label="Refresh pending transactions"
+          tabIndex={0}
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -301,11 +457,12 @@ export default function ReceiverPending() {
               <div className="mt-4 flex flex-col items-center">
                 <Button
                   onClick={() => handleApprove(transaction)}
-                  disabled={!isWasmInitialized() || !primaryWallet}
+                  disabled={!isWasmInitialized() || !primaryWallet || pendingTxNonce === String(transaction.txNonce)}
                   className="w-full h-10 bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 text-xs font-medium disabled:bg-gray-500 disabled:text-gray-300"
                 >
                   {!isWasmInitialized() ? 'Connecting...' :
                    !primaryWallet ? 'Connect Wallet' :
+                   pendingTxNonce === String(transaction.txNonce) ? 'Confirming…' :
                    'Confirm'}
                 </Button>
               </div>

@@ -15,7 +15,10 @@ export default function DynamicWalletClientAuthProvider({ children }: { children
   return (
     <DynamicContextProvider
       settings={{
-        mobileExperience: 'redirect',
+        mobileExperience: {
+          default: 'redirect',
+          phantom: 'in-app-browser',
+        },
         environmentId: process.env.NEXT_PUBLIC_DYNAMIC_API_KEY!,
         initialAuthenticationMode:"connect-and-sign",
         walletConnectors: [BitcoinWalletConnectors, EthereumWalletConnectors, SolanaWalletConnectors],
