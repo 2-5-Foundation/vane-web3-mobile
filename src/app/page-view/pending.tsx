@@ -20,14 +20,14 @@ export default function Pending() {
             className="flex-1 flex items-center justify-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]"
             aria-label="View outgoing pending transfers"
           >
-            <ArrowUpRight className="h-4 w-4" /> Outgoing
+            <ArrowUpRight className="h-4 w-4" /> Sender Outgoing
           </TabsTrigger>
           <TabsTrigger
             value="incoming"
             className="flex-1 flex items-center justify-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]"
             aria-label="View incoming pending transfers"
           >
-            <ArrowDownLeft className="h-4 w-4" /> Incoming
+            <ArrowDownLeft className="h-4 w-4" /> Receiver Incoming
           </TabsTrigger>
         </TabsList>
 

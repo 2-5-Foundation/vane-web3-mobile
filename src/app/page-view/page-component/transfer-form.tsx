@@ -13,7 +13,6 @@ import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
 import { useDynamicContext, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
 import { toast } from "sonner"
 import { TokenBalance } from "@dynamic-labs/sdk-api-core"
-import Image from "next/image";
 
 
 interface TransferFormProps {
@@ -108,7 +107,7 @@ function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
 export default function TransferForm({ tokenList }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
-  const { initiateTransaction, fetchPendingUpdates, isWasmInitialized } = useTransactionStore();
+  const { initiateTransaction, isWasmInitialized } = useTransactionStore();
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
   
   const setCurrentView = useStore(state => state.setCurrentView);
@@ -148,14 +147,9 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     if (amountValue > 0 && formData.recipient.trim() !== '') {
       storeSetTransferFormData(formData);
     }
-  }, [formData, storeSetTransferFormData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
 
-  // Fetch pending transactions when WASM initializes
-  useEffect(() => {
-    if (isWasmInitialized()) {
-      fetchPendingUpdates();
-    }
-  }, [isWasmInitialized, fetchPendingUpdates]);
 
   const updateSenderNetwork = useCallback(async () => {
     if (!primaryWallet) {
@@ -510,13 +504,16 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                             className="text-white focus:bg-white/5"
                           >
                             <span className="flex items-center gap-2">
-                              {token.logoURI ? (
-                                <Image
+                              {token.logoURI && token.logoURI.startsWith('http') ? (
+                                <img
                                   src={token.logoURI}
                                   alt={`${token.symbol ?? token.name ?? 'token'} logo`}
                                   width={20}
                                   height={20}
                                   className="rounded-full"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
                                 />
                               ) : (
                                 <span className="h-5 w-5 rounded-full bg-white/10" />

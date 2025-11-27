@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     // BNB transfer
     value = tx.amount
     to = receiver
+
   } else {
     // BEP-20 transfer
     const bep20 = ("Bnb" in tx.token && typeof tx.token.Bnb === "object" && "BEP20" in tx.token.Bnb) ?
@@ -90,7 +91,6 @@ export async function POST(req: NextRequest) {
     client.estimateGas({ account: sender, to, value, data }),
     client.getGasPrice(),
   ])
-
   const fields: UnsignedLegacy = {
     to: to,
     value: value,
@@ -101,13 +101,12 @@ export async function POST(req: NextRequest) {
     data: data,
     type: 'legacy',
   };
-
+  
   const feesInBNB = formatEther(gas * gasPrice);
 
   const signingPayload = serializeTransaction(fields as TransactionSerializableLegacy) as Hex;
-  if (!signingPayload.startsWith('0x00')) throw new Error('Expected 0x00 legacy payload');
+ 
   const digest = keccak256(signingPayload) as Hex;
-
   const updated: TxStateMachine = {
     ...tx,
     feesAmount: Number(feesInBNB),

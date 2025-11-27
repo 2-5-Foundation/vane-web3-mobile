@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     unoptimized: true,
+    domains: ['api.sim.dune.com', 'assets.coingecko.com'],
   }
 };
 export default nextConfig;

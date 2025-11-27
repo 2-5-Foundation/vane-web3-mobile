@@ -309,11 +309,27 @@ export default function SenderPending() {
   }
 
 
+  const clearSubmissionPendingFlag = (txNonce: string) => {
+    setSubmissionPending(txNonce, false);
+    setSubmissionPendingState(prev => {
+      const next = { ...prev };
+      delete next[txNonce];
+      return next;
+    });
+  };
+
   const handleConfirm = async(transaction:TxStateMachine) => {
       // Save txNonce to localStorage to track submission pending state
       const txNonce = String(transaction.txNonce);
       setSubmissionPending(txNonce, true);
       setSubmissionPendingState(prev => ({ ...prev, [txNonce]: true }));
+      const handleFailure = (message?: string) => {
+        if (message) {
+          toast.error(message);
+        }
+        clearSubmissionPendingFlag(txNonce);
+        setShowActionConfirmMap(prev => ({ ...prev, [txNonce]: true }));
+      };
       
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
@@ -324,8 +340,7 @@ export default function SenderPending() {
       : ("bnb" in transaction.callPayload) ? transaction.callPayload.bnb.callPayload[0] : null;
       
       if (!callPayload) {
-        toast.error('Transaction payload is missing. Please try again.');
-        return;
+        return handleFailure('Transaction payload is missing. Please try again.');
       }
 
       const txManager = new TxStateMachineManager(transaction);
@@ -344,8 +359,7 @@ export default function SenderPending() {
 
           } catch (error) {
             console.error('Error building Solana transaction:', error);
-            toast.error('Failed to build Solana transaction.');
-            return;
+            return handleFailure('Failed to build Solana transaction.');
           }
 
           let txSignature: number[];
@@ -366,24 +380,33 @@ export default function SenderPending() {
 
           } catch (error) {
             console.error('Error signing Solana transaction:', error);
-            toast.error('Failed to sign Solana transaction.');
-            return;
+            return handleFailure('Failed to sign Solana transaction.');
           }
           txManager.setSignedCallPayload(txSignature);
 
         } else {
-          toast.error('Please use a Solana wallet to confirm this transaction');
-          return;
+          return handleFailure('Please use a Solana wallet to confirm this transaction');
         }
 
-      } else if(transaction.senderAddressNetwork === ChainSupported.Ethereum){
+      } else if(
+        transaction.senderAddressNetwork === ChainSupported.Ethereum ||
+        transaction.senderAddressNetwork === ChainSupported.Base ||
+        transaction.senderAddressNetwork === ChainSupported.Polygon ||
+        transaction.senderAddressNetwork === ChainSupported.Optimism ||
+        transaction.senderAddressNetwork === ChainSupported.Arbitrum ||
+        transaction.senderAddressNetwork === ChainSupported.Bnb
+      ){
 
         if (isEthereumWallet(primaryWallet)) {
           const signer = await primaryWallet.getWalletClient();
-          const txFields = ("ethereum" in transaction.callPayload) ? transaction.callPayload.ethereum.ethUnsignedTxFields: null;
+          const txFields =
+            "ethereum" in transaction.callPayload
+              ? transaction.callPayload.ethereum.ethUnsignedTxFields
+              : "bnb" in transaction.callPayload
+                ? transaction.callPayload.bnb.bnbLegacyTxFields
+                : null;
           if (!txFields) {
-            toast.error('Invalid transaction fields');
-            return;
+            return handleFailure('Invalid transaction fields');
           }
 
           const receipt = (await signer.sendTransactionSync(txFields as any));
@@ -406,18 +429,21 @@ export default function SenderPending() {
           }
           
         } else {
-          toast.error('Please use an EVM wallet to confirm this transaction');
-          return;
+          return handleFailure('Please use an EVM wallet to confirm this transaction');
         }
 
       }else{
-        toast.error('Unsupported chain');
-        return;
+        return handleFailure('Unsupported chain');
       }
       
       const updatedTransaction = txManager.getTx();
       console.log('updatedTransaction', updatedTransaction);
-      await senderConfirmTransaction(updatedTransaction)
+      try {
+        await senderConfirmTransaction(updatedTransaction)
+      } catch (error) {
+        console.error('Error confirming transaction:', error);
+        return handleFailure('Failed to submit transaction. Please cancel or retry.');
+      }
           
   }
 

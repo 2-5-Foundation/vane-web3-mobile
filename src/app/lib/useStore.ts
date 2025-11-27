@@ -112,6 +112,13 @@ export interface TransactionState {
   getTransactionStatus: (tx: TxStateMachine) => string;
 }
 
+const normalizeChainAddress = (value?: string | null): string => {
+  if (!value) {
+    return '';
+  }
+  return value.split(':').pop()?.trim().toLowerCase() ?? '';
+};
+
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   // state
   userProfile: {
@@ -134,7 +141,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   // method
   setUserProfile: (userProfile: UserProfile) => {
-    set({userProfile: userProfile});
+    set({
+      userProfile: {
+        ...userProfile,
+        account: normalizeChainAddress(userProfile.account)
+      }
+    });
   },
   storeSetTransferFormData: (formData: TransferFormData) => set({transferFormData: formData}),
 
@@ -147,8 +159,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         const statusString = get().getTransactionStatus(update);
         
 
-        const isSender = update.senderAddress === get().userProfile.account;
-        const isReceiver = update.receiverAddress === get().userProfile.account;
+        const normalizedCurrentAccount = normalizeChainAddress(get().userProfile.account);
+        const normalizedSenderAddress = normalizeChainAddress(update.senderAddress);
+        const normalizedReceiverAddress = normalizeChainAddress(update.receiverAddress);
+
+        const isSender = normalizedCurrentAccount !== '' && normalizedSenderAddress === normalizedCurrentAccount;
+        const isReceiver = normalizedCurrentAccount !== '' && normalizedReceiverAddress === normalizedCurrentAccount;
 
         switch (statusString) {
             case 'Genesis':
@@ -429,7 +445,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchPendingUpdates: async () => {
     const state = get();
     
-    if (!state.isWasmInitialized) {
+    if (!state.isWasmInitialized()) {
       console.warn('WASM node not initialized - cannot fetch updates');
       return [];
     }
@@ -460,6 +476,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       
       return updates;
     } catch (error) {
+      // Catch WASM RuntimeError specifically
+      if (error instanceof Error && error.name === 'RuntimeError') {
+        console.error('WASM RuntimeError in fetchPendingUpdates (possibly Base network issue):', error);
+        return [];
+      }
       console.error('Error fetching pending updates:', error);
       return [];
     }
