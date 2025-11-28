@@ -89,7 +89,7 @@ export interface TransactionState {
   removeRecvTransaction: (txNonce: number) => void;
   
   // WASM initialization and management
-  initializeWasm: (relayMultiAddr: string, account: string, network: string, live?: boolean) => Promise<void>;
+  initializeWasm: (relayMultiAddr: string, account: string, network: string, selfNode:boolean, live: boolean) => Promise<void>;
   startWatching: () => Promise<void>;
   stopWatching: () => void;
   isWasmInitialized: () => boolean;
@@ -252,7 +252,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   // WASM initialization and management
-  initializeWasm: async (relayMultiAddr: string, account: string, network: string, live: boolean = true) => {
+  initializeWasm: async (relayMultiAddr: string, account: string, network: string, selfNode:boolean, live: boolean = true) => {
     try {
       if (isInitialized()) {
         console.log('WASM already initialized');
@@ -274,6 +274,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         relayMultiAddr,
         account,
         network,
+        self_node:selfNode,
         live,
         logLevel: LogLevel.Info,
         storage: storageExport ?? undefined

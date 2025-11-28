@@ -24,6 +24,8 @@ export default function Wallets() {
   const [longPressedWallet, setLongPressedWallet] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuOpenWallet, setMenuOpenWallet] = useState<string | null>(null);
+  const pendingSelfNodeInitRef = useRef(false);
+  const [isSelfNodeInitializing, setIsSelfNodeInitializing] = useState(false);
   const initializeWasm = useTransactionStore((s) => s.initializeWasm);
   const isWasmInitialized = useTransactionStore((s) => s.isWasmInitialized);
   const startWatching = useTransactionStore((s) => s.startWatching);
@@ -62,7 +64,7 @@ export default function Wallets() {
     try {
       // Initialize node if not already initialized
       if (!isWasmInitialized()) {
-        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, primaryWallet?.address, primaryWallet?.chain);
+        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, primaryWallet?.address, primaryWallet?.chain,false,true);
         await startWatching();
         const connected = await waitForRelayConnected();
         if (connected) {
@@ -480,11 +482,50 @@ export default function Wallets() {
 
 
 
+  const handleConnectWallet = () => {
+    pendingSelfNodeInitRef.current = true;
+    setShowAuthFlow(true);
+  };
+
+  useEffect(() => {
+    if (!primaryWallet || !pendingSelfNodeInitRef.current || isSelfNodeInitializing) {
+      return;
+    }
+
+    if (isWasmInitialized()) {
+      pendingSelfNodeInitRef.current = false;
+      return;
+    }
+
+    const initializeSelfNode = async () => {
+      setIsSelfNodeInitializing(true);
+      try {
+        await initializeWasm(
+          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+          primaryWallet.address,
+          primaryWallet.chain,
+          true,
+          true
+        );
+        await startWatching();
+        toast.success('App initialized with self node');
+      } catch (error) {
+        toast.error('Failed to initialize self node');
+        console.error('Self node init error:', error);
+      } finally {
+        pendingSelfNodeInitRef.current = false;
+        setIsSelfNodeInitializing(false);
+      }
+    };
+
+    initializeSelfNode();
+  }, [initializeWasm, primaryWallet, startWatching, isSelfNodeInitializing, isWasmInitialized]);
+
   return (
     <IsBrowser>
     <div className="pt-2 px-4 space-y-6 max-w-sm mx-auto">
-      {/* Link Wallet Button */}
-      <div className="flex justify-start mb-4">
+      {/* Link Wallet + Connect App */}
+      <div className="mb-4 flex items-center justify-between gap-3">
         <Button
           onClick={handleLinkNewWallet}
           disabled={!primaryWallet}
@@ -497,6 +538,29 @@ export default function Wallets() {
           <Plus className="h-2.5 w-2.5 stroke-[2.5]" />
           Link New Wallet
         </Button>
+
+        {primaryWallet && (
+          <Button
+            onClick={handleConnectNode}
+            disabled={isConnectingNode || (nodeConnectionStatus?.relay_connected === true)}
+            className={`h-8 min-w-[150px] text-[11px] font-semibold transition-all duration-200 ${
+              nodeConnectionStatus?.relay_connected === true
+                ? 'bg-green-600/20 border border-green-500/30 text-green-400 cursor-not-allowed' 
+                : 'bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/15 hover:border-[#7EDFCD]/70 hover:scale-[1.02] active:bg-[#7EDFCD] active:text-black'
+            } rounded-lg`}
+          >
+            {isConnectingNode ? (
+              <>
+                <div className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-b-2 border-black"></div>
+                {`Don't refresh${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : ''}`}
+              </>
+            ) : nodeConnectionStatus?.relay_connected === true ? (
+              'App Connected'
+            ) : (
+              'Connect App'
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Select Wallet Section */}
@@ -569,7 +633,7 @@ export default function Wallets() {
                         {menuOpenWallet === wallet.id && (
                           <div 
                             data-menu
-                            className="absolute right-0 top-6 z-30 bg-[#0D1B1B] border border-[#4A5853]/40 rounded-md shadow-xl min-w-[140px]"
+                            className="absolute right-0 top-6 z-30 bg-[#0D1B1B] border border-[#4A5853]/40 rounded-xl shadow-xl min-w-[160px]"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <button
@@ -577,10 +641,10 @@ export default function Wallets() {
                                 handleCopyAddress(wallet.address, e);
                                 setMenuOpenWallet(null);
                               }}
-                              className="w-full text-left text-white hover:bg-[#4A5853]/20 text-xs font-medium px-3 py-2 first:rounded-t-md transition-colors flex items-center gap-2"
+                              className="w-full text-left text-white hover:bg-[#7EDFCD]/40 hover:text-black text-sm font-medium px-4 py-2.5 first:rounded-t-xl transition-all duration-200 flex items-center gap-2.5"
                               aria-label="Copy address"
                             >
-                              <Copy className="h-3 w-3 text-[#7EDFCD]" />
+                              <Copy className="h-4 w-4 text-[#7EDFCD]" />
                               Copy address
                             </button>
                             <button
@@ -588,10 +652,10 @@ export default function Wallets() {
                                 handleDisconnectWallet(wallet.id, e);
                                 setMenuOpenWallet(null);
                               }}
-                              className="w-full text-left text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs font-medium px-3 py-2 last:rounded-b-md transition-colors flex items-center gap-2"
+                              className="w-full text-left text-red-400 hover:text-red-500 hover:bg-[#7EDFCD]/30 text-sm font-medium px-4 py-2.5 last:rounded-b-xl transition-all duration-200 flex items-center gap-2.5"
                               aria-label="Unlink wallet"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-4 w-4" />
                               Unlink wallet
                             </button>
                           </div>
@@ -625,41 +689,18 @@ export default function Wallets() {
           {!primaryWallet && (
             <Button
               type="button"
-              onClick={() => setShowAuthFlow(true)}
+              onClick={handleConnectWallet}
               className="w-full h-10 bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg"
             >
               Connect Wallet
             </Button>
           )}
 
-          {/* Handle connecting to app section */}
-
-          {/* Connect Node Button - only show when wallet is connected */}
-          {primaryWallet && (
-            <>
-              <Button
-                onClick={handleConnectNode}
-                disabled={isConnectingNode || (nodeConnectionStatus?.relay_connected === true)}
-                className={`w-full h-10 ${
-                  nodeConnectionStatus?.relay_connected === true
-                    ? 'bg-green-600/20 border-green-500/30 text-green-400 cursor-not-allowed' 
-                    : 'bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner'
-                } transition-all duration-150 rounded-lg`}
-              >
-                {isConnectingNode ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
-                    {`Don't refresh the page${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : '...'}`}
-                  </>
-                ) : nodeConnectionStatus?.relay_connected === true ? (
-                  'App Connected'
-                ) : (
-                  'Connect App'
-                )}
-              </Button>
-
-            </>
-          )}
+          <Alert className="bg-blue-500/10 border-blue-400/30">
+            <AlertDescription className="text-blue-300">
+              If you&apos;re sending to your own linked wallet, you don&apos;t need to connect the app.
+            </AlertDescription>
+          </Alert>
 
           
           <Alert className="bg-blue-500/10 border-blue-400/30">
@@ -668,7 +709,7 @@ export default function Wallets() {
               User experience will improve currently in open beta.
             </AlertDescription>
             <AlertDescription className="text-blue-300">
-              Phantom will only work in in-app browser.
+              Phantom wallet will only work in in-app browser.
             </AlertDescription>
           </Alert>
         </div>

@@ -107,7 +107,7 @@ function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
 export default function TransferForm({ tokenList }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
-  const { initiateTransaction, isWasmInitialized } = useTransactionStore();
+  const { initiateTransaction, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore();
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
   
   const setCurrentView = useStore(state => state.setCurrentView);
@@ -278,11 +278,22 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
         return;
       }
 
-      // Check WASM initialization before attempting transaction
       if (!isWasmInitialized()) {
-        toast.error('Please connect the node first. Go to Wallet page and click "Connect Node".');
-        setIsSubmitting(false);
-        return;
+        try {
+          await initializeWasm(
+            process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+            primaryWallet.address,
+            primaryWallet.chain,
+            true,
+            true
+          );
+          await startWatching();
+        } catch (error) {
+          toast.error('Failed to initialize app. Please try again.');
+          console.error('Transfer init self node error:', error);
+          setIsSubmitting(false);
+          return;
+        }
       }
       
       // Create token using TokenManager based on network and asset type
