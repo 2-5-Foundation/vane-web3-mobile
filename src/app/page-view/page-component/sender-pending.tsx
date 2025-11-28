@@ -328,9 +328,11 @@ export default function SenderPending() {
           toast.error(message);
         }
         clearSubmissionPendingFlag(txNonce);
+        setSubmissionPendingState(prev => ({ ...prev, [txNonce]: false }));
         setShowActionConfirmMap(prev => ({ ...prev, [txNonce]: true }));
       };
       
+      try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
       
@@ -380,6 +382,22 @@ export default function SenderPending() {
 
           } catch (error) {
             console.error('Error signing Solana transaction:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorName = error instanceof Error ? error.name : '';
+
+            // Handle user rejection/cancellation
+            if (
+              typeof errorMessage === 'string' &&
+              (errorMessage.toLowerCase().includes('user rejected') ||
+               errorMessage.toLowerCase().includes('user denied') ||
+               errorMessage.toLowerCase().includes('rejected the request') ||
+               errorMessage.toLowerCase().includes('cancelled') ||
+               errorName === 'UserRejectedRequestError')
+            ) {
+              toast.error('Transaction signature was cancelled');
+              return handleFailure();
+            }
+
             return handleFailure('Failed to sign Solana transaction.');
           }
           txManager.setSignedCallPayload(txSignature);
@@ -409,23 +427,45 @@ export default function SenderPending() {
             return handleFailure('Invalid transaction fields');
           }
 
-          const receipt = (await signer.sendTransactionSync(txFields as any));
-          if (receipt.status === 'success') {
+          try {
+            const receipt = (await signer.sendTransactionSync(txFields as any));
+            if (receipt.status === 'success') {
 
-            const txHash = receipt.transactionHash;
-            const signedCallPayload = hexToBytes(txHash as `0x${string}`);
-            txManager.setSignedCallPayload(Array.from(signedCallPayload));
-            txManager.setTxSubmissionPassed(Array.from(hexToBytes(txHash as `0x${string}`)));
-            const feesAmount = Number(formatEther(receipt.gasUsed * receipt.effectiveGasPrice));
-            txManager.setFeesAmount(feesAmount);
+              const txHash = receipt.transactionHash;
+              const signedCallPayload = hexToBytes(txHash as `0x${string}`);
+              txManager.setSignedCallPayload(Array.from(signedCallPayload));
+              txManager.setTxSubmissionPassed(Array.from(hexToBytes(txHash as `0x${string}`)));
+              const feesAmount = Number(formatEther(receipt.gasUsed * receipt.effectiveGasPrice));
+              txManager.setFeesAmount(feesAmount);
 
-          } else {
+            } else {
 
-            const signedCallPayload = hexToBytes(receipt.transactionHash as `0x${string}`);
-            txManager.setSignedCallPayload(Array.from(signedCallPayload));
-            txManager.setTxSubmissionFailed('Transaction failed to submit');
-            toast.error('Transaction failed to submit');
+              const signedCallPayload = hexToBytes(receipt.transactionHash as `0x${string}`);
+              txManager.setSignedCallPayload(Array.from(signedCallPayload));
+              txManager.setTxSubmissionFailed('Transaction failed to submit');
+              toast.error('Transaction failed to submit');
 
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorName = error instanceof Error ? error.name : '';
+
+            // Handle user rejection/cancellation
+            if (
+              typeof errorMessage === 'string' &&
+              (errorMessage.toLowerCase().includes('user rejected') ||
+               errorMessage.toLowerCase().includes('user denied') ||
+               errorMessage.toLowerCase().includes('rejected the request') ||
+               errorMessage.toLowerCase().includes('denied transaction signature') ||
+               errorName === 'UserRejectedRequestError' ||
+               errorName === 'TransactionExecutionError')
+            ) {
+              toast.error('Transaction was cancelled');
+              return handleFailure();
+            }
+
+            // Re-throw other errors
+            throw error;
           }
           
         } else {
@@ -443,6 +483,32 @@ export default function SenderPending() {
       } catch (error) {
         console.error('Error confirming transaction:', error);
         return handleFailure('Failed to submit transaction. Please cancel or retry.');
+      }
+      } catch (error) {
+        // This catch block handles any unhandled errors in the try block above
+        console.error('Error in handleConfirm:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorName = error instanceof Error ? error.name : '';
+
+        // Handle user rejection if not already handled
+        if (
+          typeof errorMessage === 'string' &&
+          (errorMessage.toLowerCase().includes('user rejected') ||
+           errorMessage.toLowerCase().includes('user denied') ||
+           errorMessage.toLowerCase().includes('rejected the request') ||
+           errorName === 'UserRejectedRequestError' ||
+           errorName === 'TransactionExecutionError')
+        ) {
+          toast.error('Transaction was cancelled');
+          return handleFailure();
+        }
+
+        // Generic error handling
+        return handleFailure('An unexpected error occurred. Please try again.');
+      } finally {
+        // Ensure submission pending state is cleared even if there's an error
+        clearSubmissionPendingFlag(txNonce);
+        setSubmissionPendingState(prev => ({ ...prev, [txNonce]: false }));
       }
           
   }
@@ -903,10 +969,13 @@ export default function SenderPending() {
           };
         }
       case 'Reverted':
+        const revertedData = transaction?.status && typeof transaction.status === 'object' && 'data' in transaction.status
+          ? transaction.status.data
+          : 'Transaction cancelled';
         return {
           color: 'text-red-400 border-red-400',
           iconColor: 'text-red-400',
-          message: 'Transaction cancelled'
+          message: revertedData
         };
       case 'TxError':
         if (transaction?.status?.type === 'TxError') {
@@ -1072,11 +1141,11 @@ export default function SenderPending() {
                         className="text-xs font-mono hover:bg-green-400/20 px-1 py-0.5 rounded transition-colors cursor-pointer"
                         title="Click to copy full hash"
                       >
-                        {statusInfo.message.split(': ')[1]}
+                        {typeof statusInfo.message === 'string' ? statusInfo.message.split(': ')[1] : statusInfo.fullHash}
                       </button>
                     </div>
                   ) : (
-                    <span className="text-xs">{statusInfo.message}</span>
+                    <span className="text-xs">{typeof statusInfo.message === 'string' ? statusInfo.message : 'Transaction status'}</span>
                   )}
                 </div>
  

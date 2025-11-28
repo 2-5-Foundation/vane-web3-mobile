@@ -186,22 +186,27 @@ export default function ReceiverPending() {
       
       const isSolanaChain = transaction.receiverAddressNetwork === ChainSupported.Solana;
       const isPhantomRedirect = isPhantomRedirectConnector(primaryWallet?.connector);
+      
+      // Check if wallet is Coinbase - Coinbase doesn't apply EIP-191 prefix automatically
+      const isCoinbaseWallet = primaryWallet?.connector?.name?.toLowerCase().includes('coinbase') || 
+                               primaryWallet?.connector?.metadata?.name?.toLowerCase().includes('coinbase');
 
-      // For EVM chains, use wallet client's signMessage to ensure proper EIP-191 formatting
+      // For EVM chains, use primaryWallet.signMessage() directly - it handles EIP-191 formatting automatically
+      // Exception: Coinbase wallet doesn't apply EIP-191 prefix, so we need to manually prefix the message
       // For Solana, use signer's signMessage to get proper 64-byte signature
       let signature: string | Uint8Array;
       
       if (isEVMChain && isEthereumWallet(primaryWallet)) {
-        try {
-          if (isMobile) {
-            signature = await primaryWallet.signMessage(transaction.receiverAddress);
-          } else {
-          const walletClient = await primaryWallet.getWalletClient();
-          const account = walletClient.account;
-          if (!account) {
-            toast.error('Wallet account not available');
-            return;
-          }
+        if (isCoinbaseWallet) {
+          // Coinbase wallet doesn't apply EIP-191 prefix with primaryWallet.signMessage()
+          // Use wallet client's signMessage which properly handles EIP-191 formatting
+          try {
+            const walletClient = await primaryWallet.getWalletClient();
+            const account = walletClient.account;
+            if (!account) {
+              toast.error('Wallet account not available');
+              return;
+            }
             const result = await walletClient.signMessage({
               account,
               message: transaction.receiverAddress,
@@ -213,20 +218,64 @@ export default function ReceiverPending() {
             } else {
               signature = result as string | Uint8Array;
             }
+          } catch (error) {
+            // Check if user rejected the request
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (
+              typeof errorMessage === 'string' &&
+              (errorMessage.toLowerCase().includes('user rejected') ||
+               errorMessage.toLowerCase().includes('user denied') ||
+               errorMessage.toLowerCase().includes('rejected the request'))
+            ) {
+              toast.error('Signature request was cancelled');
+              return;
+            }
+            // Fallback to primaryWallet.signMessage if wallet client fails
+            try {
+              signature = await primaryWallet.signMessage(transaction.receiverAddress);
+            } catch (fallbackError) {
+              const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+              if (
+                typeof fallbackMessage === 'string' &&
+                (fallbackMessage.toLowerCase().includes('user rejected') ||
+                 fallbackMessage.toLowerCase().includes('user denied') ||
+                 fallbackMessage.toLowerCase().includes('rejected the request'))
+              ) {
+                toast.error('Signature request was cancelled');
+                return;
+              }
+              throw fallbackError;
+            }
           }
-        } catch (error) {
+        } else {
           signature = await primaryWallet.signMessage(transaction.receiverAddress);
         }
       } else if (isSolanaChain && isSolanaWallet(primaryWallet)) {
-        const messageBytes = new TextEncoder().encode(transaction.receiverAddress);
+        try {
+          const messageBytes = new TextEncoder().encode(transaction.receiverAddress);
 
-        if (isPhantomRedirect) {
-          await signMessage(messageBytes);
-          signature = await waitForPhantomSignature();
-        } else {
-          const signer = await primaryWallet.getSigner();
-          const signedMessageResult = await signer.signMessage(messageBytes);
-          signature = signedMessageResult.signature;
+          if (isPhantomRedirect) {
+            await signMessage(messageBytes);
+            signature = await waitForPhantomSignature();
+          } else {
+            const signer = await primaryWallet.getSigner();
+            const signedMessageResult = await signer.signMessage(messageBytes);
+            signature = signedMessageResult.signature;
+          }
+        } catch (error) {
+          // Check if user rejected the request (will be caught by outer catch block)
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (
+            typeof errorMessage === 'string' &&
+            (errorMessage.toLowerCase().includes('user rejected') ||
+             errorMessage.toLowerCase().includes('user denied') ||
+             errorMessage.toLowerCase().includes('rejected the request') ||
+             errorMessage.toLowerCase().includes('cancelled'))
+          ) {
+            toast.error('Signature request was cancelled');
+            return;
+          }
+          throw error;
         }
       } else {
         signature = await primaryWallet.signMessage(transaction.receiverAddress);
@@ -320,7 +369,21 @@ export default function ReceiverPending() {
     } catch (error) {
       console.error('Error approving transaction:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : '';
 
+      // Handle user rejection/cancellation
+      if (
+        typeof errorMessage === 'string' &&
+        (errorMessage.toLowerCase().includes('user rejected') ||
+         errorMessage.toLowerCase().includes('user denied') ||
+         errorMessage.toLowerCase().includes('rejected the request') ||
+         errorName === 'UserRejectedRequestError')
+      ) {
+        toast.error('Signature request was cancelled');
+        return;
+      }
+
+      // Handle already pending signature request
       if (
         typeof errorMessage === 'string' &&
         errorMessage.toLowerCase().includes('already pending') &&
