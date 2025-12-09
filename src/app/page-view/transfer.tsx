@@ -6,9 +6,16 @@ import TransferForm from "../page-view/page-component/transfer-form"
 import TransferReceive from "./page-component/transfer-receive"
 import { useDynamicContext, useTokenBalances } from '@dynamic-labs/sdk-react-core'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Rocket, Download, Network } from "lucide-react"
-import { ChainEnum } from "@dynamic-labs/sdk-api-core"
+import { useTransactionStore } from "@/app/lib/useStore"
+import { Rocket, Download, TrendingUp, ArrowLeft, User, Send } from "lucide-react"
+import { ChainEnum, TokenBalance } from "@dynamic-labs/sdk-api-core"
+import { Button } from "@/components/ui/button"
+import { Token, getTokenDecimals } from "@/lib/vane_lib/primitives"
+import { getTokenLabel } from "./page-component/sender-pending"
+
+// Supported network IDs
+const SOLANA_NETWORK_ID = 101;
+const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453]; // Ethereum, BNB, Optimism, Arbitrum, Polygon, Base
 
 // Separate component for token balances that only mounts after network is known
 const TokenBalancesComponent = ({ networkId, onBalancesChange }: { networkId: number, onBalancesChange: (balances: any[]) => void }) => {
@@ -33,26 +40,62 @@ const TokenBalancesComponent = ({ networkId, onBalancesChange }: { networkId: nu
   return null; // This component doesn't render anything, just handles token balance fetching
 }
 
-// EVM Networks configuration
-const EVM_NETWORKS = [
-  { id: 1, name: "Ethereum", value: "ethereum" },
-  { id: 56, name: "BNB Smart Chain", value: "bnb" },
-  { id: 137, name: "Polygon", value: "polygon" },
-  { id: 8453, name: "Base", value: "base" },
-  { id: 10, name: "Optimism", value: "optimism" },
-  { id: 42161, name: "Arbitrum", value: "arbitrum" },
-]
-
 export default function Transfer() {
   const [activeTab, setActiveTab] = useState<'transfer' | 'receive'>('transfer')
   const [balance, setBalance] = useState("0")
-  const [network, setNetwork] = useState<string>("")
   const [availableTokens, setAvailableTokens] = useState<any[]>([])
-  const [selectedEVMNetwork, setSelectedEVMNetwork] = useState<string>("")
-  const [showNetworkDropdown, setShowNetworkDropdown] = useState<boolean>(false)
   const [currentNetworkId, setCurrentNetworkId] = useState<number | null>(null)
+  const [showTransferForm, setShowTransferForm] = useState(false)
+  const [transferType, setTransferType] = useState<'self' | 'external' | null>(null)
+  const [failedTransactionsValue, setFailedTransactionsValue] = useState<number>(0)
+  const [failedTransactionCount, setFailedTransactionCount] = useState<number>(0)
 
   const { primaryWallet } = useDynamicContext()
+  const { exportStorageData, isWasmInitialized } = useTransactionStore()
+
+  // Get token balances with network-specific parameters (same pattern as total balance)
+  const tokenBalanceArgs = useMemo(() => {
+    if (!currentNetworkId) return undefined;
+
+    const base = { includeFiat: true, includeNativeBalance: true };
+    
+    // Solana
+    if (currentNetworkId === SOLANA_NETWORK_ID) {
+      return { ...base, chainName: ChainEnum.Sol };
+    }
+    
+    // EVM chains: Ethereum (1), BNB (56), Optimism (10), Arbitrum (42161), Polygon (137), Base (8453)
+    if (EVM_NETWORK_IDS.includes(currentNetworkId)) {
+      return { ...base, chainName: ChainEnum.Evm, networkId: currentNetworkId };
+    }
+    
+    // Unsupported chain - return undefined
+    return undefined;
+  }, [currentNetworkId]);
+
+  const { tokenBalances } = useTokenBalances(tokenBalanceArgs);
+
+  // Calculate USD value for a failed transaction
+  const calculateTransactionValue = useCallback((amount: bigint, token: Token, balances: TokenBalance[]): number => {
+    if (!balances?.length) return 0;
+
+    const tokenSymbol = getTokenLabel(token);
+    if (!tokenSymbol) return 0;
+
+    const balance = balances.find((b: any) => 
+      b.symbol?.toUpperCase() === tokenSymbol.toUpperCase() || 
+      b.name?.toUpperCase() === tokenSymbol.toUpperCase()
+    );
+    if (!balance) return 0;
+
+    const decimals = getTokenDecimals(token);
+    if (!decimals) return 0;
+
+    const tokenAmount = Number(amount) / Math.pow(10, decimals);
+    const pricePerToken = balance.price || (balance.marketValue && balance.balance > 0 ? balance.marketValue / balance.balance : 0);
+    
+    return tokenAmount * pricePerToken;
+  }, [])
  
    // Handle token balances from the separate component
    const handleBalancesChange = useCallback((balances: any[]) => {
@@ -69,78 +112,73 @@ export default function Transfer() {
      }
    }, [])
 
-   // Derive network state from Dynamic SDK (source of truth)
+   // Derive network ID from Dynamic SDK for token balances
    useEffect(() => {
-    const syncNetworkFromDynamic = async () => {
+    const syncNetworkId = async () => {
       if (!primaryWallet) {
         setCurrentNetworkId(null)
-        setNetwork("")
-        setSelectedEVMNetwork("")
-        setShowNetworkDropdown(false)
         return
       }
 
       try {
         const networkId = Number(await primaryWallet.getNetwork())
-        
-        // Find matching network from EVM_NETWORKS
-        const matchedNetwork = EVM_NETWORKS.find(n => n.id === networkId)
-        
-        if (matchedNetwork) {
-          // EVM network found
-          setCurrentNetworkId(networkId)
-          setNetwork(matchedNetwork.name)
-          setSelectedEVMNetwork(matchedNetwork.value)
-          setShowNetworkDropdown(true)
-        } else {
-          // Non-EVM network or unknown
-          setCurrentNetworkId(networkId)
-          setNetwork("")
-          setSelectedEVMNetwork("")
-          setShowNetworkDropdown(false)
-        }
+        setCurrentNetworkId(networkId)
       } catch (error) {
         console.error('Error fetching network from Dynamic:', error)
       }
     }
 
     // Sync immediately when primaryWallet changes
-    syncNetworkFromDynamic()
+    syncNetworkId()
 
     // Poll for network changes (important for redirect mode where page may reload)
-    // This ensures we catch network changes after wallet redirects back
     const pollInterval = setInterval(() => {
       if (primaryWallet) {
-        syncNetworkFromDynamic()
+        syncNetworkId()
       }
     }, 1500) // Poll every 1.5 seconds
 
     return () => clearInterval(pollInterval)
    }, [primaryWallet])
 
-  const handleNetworkSwitch = async (networkValue: string) => {
-    if (!primaryWallet) return
-    
-    try {
-      const targetNetwork = EVM_NETWORKS.find(network => network.value === networkValue)
+   // Calculate total value and count of failed transactions using useTokenBalances
+   useEffect(() => {
+    const calculateFailedTransactionsValue = async () => {
+      if (!isWasmInitialized()) return;
       
-      if (!targetNetwork) {
-        console.error('Network not found:', networkValue)
-        return
+      try {
+        const storageExport = await exportStorageData();
+        if (!storageExport?.failed_transactions) {
+          setFailedTransactionsValue(0);
+          setFailedTransactionCount(0);
+          return;
+        }
+
+        // Set the count
+        setFailedTransactionCount(storageExport.failed_transactions.length);
+
+        // Calculate total value if we have token balances
+        if (!tokenBalances?.length) {
+          setFailedTransactionsValue(0);
+          return;
+        }
+
+        let totalValue = 0;
+        storageExport.failed_transactions.forEach((tx) => {
+          const value = calculateTransactionValue(BigInt(tx.amount), tx.token, tokenBalances);
+          totalValue += value;
+        });
+
+        setFailedTransactionsValue(totalValue);
+      } catch (error) {
+        console.error('Error calculating failed transactions value:', error);
+        setFailedTransactionsValue(0);
+        setFailedTransactionCount(0);
       }
-      
-      // Call switchNetwork - don't update local state here
-      // The useEffect will sync state from Dynamic after the redirect
-      await primaryWallet.switchNetwork(targetNetwork.id)
-      
-      // Note: We intentionally don't set state here because:
-      // 1. With redirect mode, the page may reload and state is lost
-      // 2. The useEffect will sync from Dynamic's actual network state
-      
-    } catch (error) {
-      console.error('Failed to switch network:', error)
-    }
-  }
+    };
+
+    calculateFailedTransactionsValue();
+  }, [isWasmInitialized, exportStorageData, tokenBalances, calculateTransactionValue])
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 px-4 max-w-sm mx-auto">
@@ -170,32 +208,68 @@ export default function Transfer() {
         </TabsList>
 
         <TabsContent value="transfer" className="mt-4">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="flex items-center gap-2 text-xs mb-3">
-            <Network className="w-3 h-3 text-gray-400" />
-            <span className="text-gray-400">Sender Network:</span>
-            
-            {showNetworkDropdown ? (
-              <Select value={selectedEVMNetwork} onValueChange={handleNetworkSwitch}>
-                <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-md h-5 w-28 text-xs px-2">
-                  <SelectValue className="text-white text-xs" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#253639] border-white/10">
-                  {EVM_NETWORKS.map((network) => (
-                    <SelectItem 
-                      key={network.value} 
-                      value={network.value} 
-                      className="text-white focus:bg-white/5 text-xs h-6"
-                    >
-                      {network.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <span className="text-gray-300 font-medium text-xs">{network}</span>
-            )}
-          </motion.div>
-          <TransferForm tokenList={availableTokens} />
+          {!showTransferForm ? (
+            <div className="space-y-4">
+              {/* Selection Card */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-[#0D1B1B] rounded-lg p-4 flex flex-col space-y-3"
+              >
+                <TrendingUp className="w-3 h-3 text-gray-400 mb-1" />
+                <p className="text-gray-300 text-base font-medium mb-1 tracking-wide">Total funds protected by Vane</p>
+                <p className="text-xs text-gray-500">These funds could have been lost due to transactional mistakes.</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-lg font-light text-gray-300">${failedTransactionsValue.toFixed(4)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-gray-400">Safe Reverts</p>
+                    <p className="text-lg font-light text-gray-300">{failedTransactionCount}</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Buttons */}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setTransferType('self')
+                    setShowTransferForm(true)
+                  }}
+                  className="flex-1 h-20 bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg text-xs font-medium ml-2 flex flex-col items-center justify-center gap-1"
+                >
+                  <User className="h-5 w-5" />
+                  Safe Self Transfer
+                </Button>
+                <Button
+                  onClick={() => {
+                    setTransferType('external')
+                    setShowTransferForm(true)
+                  }}
+                  className="flex-1 h-20 bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg text-xs font-medium mr-2 flex flex-col items-center justify-center gap-1"
+                >
+                  <Send className="h-5 w-5" />
+                  Safe External Transfer
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Back Button */}
+              <Button
+                onClick={() => {
+                  setShowTransferForm(false)
+                  setTransferType(null)
+                }}
+                variant="ghost"
+                className="flex items-center gap-2 text-gray-400 hover:text-white mb-2 p-0 h-auto"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="text-sm">Back</span>
+              </Button>
+              <TransferForm tokenList={availableTokens} />
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="receive" className="mt-4">

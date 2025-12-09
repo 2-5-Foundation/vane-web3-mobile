@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { User, Shield, TrendingUp, DollarSign, CreditCard } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTransactionStore } from "../lib/useStore";
-import { NodeConnectionStatus, StorageExportManager } from "@/lib/vane_lib/main";
+import { StorageExportManager } from "@/lib/vane_lib/main";
 import { useTokenBalances } from '@dynamic-labs/sdk-react-core';
 import { TokenBalance, ChainEnum } from "@dynamic-labs/sdk-api-core";
 import { Token, getTokenDecimals, ChainSupported } from "@/lib/vane_lib/primitives";
@@ -27,8 +27,7 @@ const CHAIN_TO_NETWORK_ID: Record<ChainSupported, number> = {
 const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453];
 
 export default function Profile() {
-  const { getNodeConnectionStatus, exportStorageData, isWasmInitialized } = useTransactionStore();
-  const [nodeConnectionStatus, setNodeConnectionStatus] = useState<NodeConnectionStatus | null>(null);
+  const { exportStorageData, isWasmInitialized } = useTransactionStore();
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [primaryNetworkId, setPrimaryNetworkId] = useState<number | null>(null);
@@ -127,62 +126,6 @@ export default function Profile() {
     loadData();
   }, [exportStorageData, tokenBalances, calculateTransactionValue, primaryNetworkId]);
 
-  // Check connection status on component mount and whenever page becomes visible
-  useEffect(() => {
-    let isChecking = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const checkConnectionStatus = async () => {
-      // Prevent concurrent calls
-      if (isChecking) return;
-      
-      if (isWasmInitialized()) {
-        isChecking = true;
-        try {
-          const status = await getNodeConnectionStatus();
-          setNodeConnectionStatus(status);
-        } catch (error) {
-          console.error('Error checking connection status:', error);
-        } finally {
-          isChecking = false;
-        }
-      }
-    };
-
-    // Check on mount
-    checkConnectionStatus();
-
-    // Check when page becomes visible (user switches back to tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Debounce to prevent rapid successive calls
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          checkConnectionStatus();
-        }, 100);
-      }
-    };
-
-    // Check when window gains focus (user returns to the page)
-    const handleFocus = () => {
-      // Debounce to prevent rapid successive calls
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        checkConnectionStatus();
-      }, 100);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
     <div className="space-y-3 max-w-sm mx-auto px-4">
       <style>{`
@@ -202,14 +145,6 @@ export default function Profile() {
         </div>
         <div>
           <p className="text-xs text-gray-400 font-medium">Protected by VaneWeb3</p>
-          <div className="flex items-center justify-center gap-2 mt-1">
-            <div className={`w-2 h-2 rounded-full ${
-              nodeConnectionStatus?.relay_connected ? 'bg-green-500' : 'bg-red-500'
-            }`}></div>
-            <p className="text-xs text-gray-400 font-medium">
-              {nodeConnectionStatus?.relay_connected ? 'Connected' : 'Disconnected'}
-            </p>
-          </div>
         </div>
       </div>
 

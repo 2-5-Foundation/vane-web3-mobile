@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "update_vane_lib": "degit github:2-5-Foundation/vane_web3/node/wasm/vane_lib#native ./src/lib/vane_lib --force",
-    "build_extension":"next build && next export"
+    "update_vane_lib": "degit github:2-5-Foundation/vane_web3/node/wasm/vane_lib#master ./src/lib/vane_lib --force"
   },
   "dependencies": {
     "@dynamic-labs-sdk/client": "^0.0.1-alpha.1",

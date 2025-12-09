@@ -18,9 +18,6 @@ export default function Wallets() {
   const { setShowLinkNewWalletModal } = useDynamicModals();
   const switchWallet = useSwitchWallet();
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
-  const [isConnectingNode, setIsConnectingNode] = useState(false);
-  const [connectingCountdown, setConnectingCountdown] = useState<number>(0);
-  const [nodeConnectionStatus, setNodeConnectionStatus] = useState<{ relay_connected: boolean } | null>(null);
   const [longPressedWallet, setLongPressedWallet] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuOpenWallet, setMenuOpenWallet] = useState<string | null>(null);
@@ -29,74 +26,12 @@ export default function Wallets() {
   const initializeWasm = useTransactionStore((s) => s.initializeWasm);
   const isWasmInitialized = useTransactionStore((s) => s.isWasmInitialized);
   const startWatching = useTransactionStore((s) => s.startWatching);
-  const getNodeConnectionStatus = useTransactionStore((s) => s.getNodeConnectionStatus);
   const addAccount = useTransactionStore((s) => s.addAccount);
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const exportStorageData = useTransactionStore((s) => s.exportStorageData);
   const prevWalletsRef = useRef<Set<string>>(new Set());
   const hasCheckedStorageRef = useRef<boolean>(false);
-
-
-  const handleConnectNode = useCallback(async () => {
-    if (!primaryWallet) {
-      toast.error('Please connect a wallet first');
-      return;
-    }
-
-    setUserProfile({
-      account: primaryWallet?.address,
-      network: primaryWallet?.chain
-    });
-    // Helper: poll relay connection until true or timeout
-    const waitForRelayConnected = async (maxSeconds = 60) => {
-      for (let i = 0; i < maxSeconds; i++) {
-        const status = await getNodeConnectionStatus();
-        setNodeConnectionStatus(status);
-        if (status.relay_connected) return true;
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-      return false;
-    };
-
-    setIsConnectingNode(true);
-    setConnectingCountdown(15);
-    try {
-      // Initialize node if not already initialized
-      if (!isWasmInitialized()) {
-        await initializeWasm(process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!, primaryWallet?.address, primaryWallet?.chain,false,true);
-        await startWatching();
-        const connected = await waitForRelayConnected();
-        if (connected) {
-          toast.success('App connected successfully!');
-        }
-      } else {
-        // Already initialized; keep loading animation until connected
-        await waitForRelayConnected();
-      }
-    } catch (err) {
-      toast.error(`Failed to connect app`);
-    } finally {
-      setIsConnectingNode(false);
-      setConnectingCountdown(0);
-    }
-  }, [
-    primaryWallet,
-    setUserProfile,
-    getNodeConnectionStatus,
-    isWasmInitialized,
-    initializeWasm,
-    startWatching,
-  ]);
-  // Countdown effect while connecting
-  useEffect(() => {
-    if (!isConnectingNode) return;
-    if (connectingCountdown <= 0) return;
-    const id = setInterval(() => {
-      setConnectingCountdown((s) => (s > 0 ? s - 1 : 0));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [isConnectingNode, connectingCountdown]);
 
 
   const handleWalletSelect = async (address: string) => {
@@ -259,87 +194,6 @@ export default function Wallets() {
     }
   }, [primaryWallet]);
 
-  // Check connection status on component mount and whenever page becomes visible
-  useEffect(() => {
-    let isChecking = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const checkConnectionStatus = async () => {
-      // Prevent concurrent calls
-      if (isChecking) return;
-      
-      if (isWasmInitialized()) {
-        isChecking = true;
-        try {
-          const status = await getNodeConnectionStatus();
-          setNodeConnectionStatus(status);
-        } catch (error) {
-          // Error checking connection status
-        } finally {
-          isChecking = false;
-        }
-      }
-    };
-
-    // Check on mount
-    checkConnectionStatus();
-
-    // Check when page becomes visible (user switches back to tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Debounce to prevent rapid successive calls
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          checkConnectionStatus();
-        }, 100);
-      }
-    };
-
-    // Check when window gains focus (user returns to the page)
-    const handleFocus = () => {
-      // Debounce to prevent rapid successive calls
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        checkConnectionStatus();
-      }, 100);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Add a ref to track previous connection status
-  const prevConnectionStatus = useRef<boolean | null>(null);
-
-  // Add this new useEffect to monitor connection status changes
-  useEffect(() => {
-    if (nodeConnectionStatus !== null) {
-      const isCurrentlyConnected = nodeConnectionStatus.relay_connected;
-      const wasPreviouslyConnected = prevConnectionStatus.current;
-      
-      // Check if we went from connected to disconnected
-      if (wasPreviouslyConnected === true && isCurrentlyConnected === false) {
-        toast.error('Node disconnected! Please check your connection and try reconnecting.', {
-          duration: 10000, // Show for 10 seconds since it's important
-          action: {
-            label: 'Reconnect',
-            onClick: () => handleConnectNode()
-          }
-        });
-      }
-      
-      // Update the previous status
-      prevConnectionStatus.current = isCurrentlyConnected;
-    }
-  }, [nodeConnectionStatus, handleConnectNode]);
-
 
   useWalletConnectorEvent(
     primaryWallet?.connector,
@@ -417,10 +271,9 @@ export default function Wallets() {
   // Check storage and register missing accounts after node is connected (runs only once)
   useEffect(() => {
     const checkAndRegisterAccounts = async () => {
-      // Only run if node is connected, WASM is initialized, and we haven't checked yet
+      // Only run if WASM is initialized and we haven't checked yet
       console.log('Checking storage and registering accounts');
       if (
-        !nodeConnectionStatus?.relay_connected ||
         !isWasmInitialized() ||
         hasCheckedStorageRef.current ||
         userWallets.length === 0
@@ -478,7 +331,7 @@ export default function Wallets() {
 
     checkAndRegisterAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeConnectionStatus?.relay_connected, isWasmInitialized(), userWallets.length]);
+  }, [isWasmInitialized(), userWallets.length]);
 
 
 
@@ -524,8 +377,8 @@ export default function Wallets() {
   return (
     <IsBrowser>
     <div className="pt-2 px-4 space-y-6 max-w-sm mx-auto">
-      {/* Link Wallet + Connect App */}
-      <div className="mb-4 flex items-center justify-between gap-3">
+      {/* Link Wallet */}
+      <div className="mb-4 flex items-center justify-start">
         <Button
           onClick={handleLinkNewWallet}
           disabled={!primaryWallet}
@@ -538,29 +391,6 @@ export default function Wallets() {
           <Plus className="h-2.5 w-2.5 stroke-[2.5]" />
           Link New Wallet
         </Button>
-
-        {primaryWallet && (
-          <Button
-            onClick={handleConnectNode}
-            disabled={isConnectingNode || (nodeConnectionStatus?.relay_connected === true)}
-            className={`h-8 min-w-[150px] text-[11px] font-semibold transition-all duration-200 ${
-              nodeConnectionStatus?.relay_connected === true
-                ? 'bg-green-600/20 border border-green-500/30 text-green-400 cursor-not-allowed' 
-                : 'bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/15 hover:border-[#7EDFCD]/70 hover:scale-[1.02] active:bg-[#7EDFCD] active:text-black'
-            } rounded-lg`}
-          >
-            {isConnectingNode ? (
-              <>
-                <div className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-b-2 border-black"></div>
-                {`Don't refresh${connectingCountdown > 0 ? ` • ${connectingCountdown}s` : ''}`}
-              </>
-            ) : nodeConnectionStatus?.relay_connected === true ? (
-              'App Connected'
-            ) : (
-              'Connect App'
-            )}
-          </Button>
-        )}
       </div>
 
       {/* Select Wallet Section */}
@@ -696,12 +526,6 @@ export default function Wallets() {
             </Button>
           )}
 
-          <Alert className="bg-blue-500/10 border-blue-400/30">
-            <AlertDescription className="text-blue-300">
-              If you&apos;re sending to your own linked wallet, you don&apos;t need to connect the app.
-            </AlertDescription>
-          </Alert>
-
           
           <Alert className="bg-blue-500/10 border-blue-400/30">
             <AlertTitle className="text-blue-400">Heads up!</AlertTitle>
@@ -709,7 +533,15 @@ export default function Wallets() {
               User experience will improve currently in open beta.
             </AlertDescription>
             <AlertDescription className="text-blue-300">
-              Phantom wallet will only work in in-app browser.
+              Phantom wallet will only work in in-app browser, and if some wallet fails to connect, please share the issue on{' '}
+              <a 
+                href="https://x.com/VaneNetwork_" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-200 hover:text-blue-100 underline font-bold text-base"
+              >
+                X
+              </a>
             </AlertDescription>
           </Alert>
         </div>

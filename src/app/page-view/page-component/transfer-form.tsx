@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, ArrowLeft, ArrowRight, DollarSign } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, DollarSign, Network } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
+import { motion } from "framer-motion"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
 import { TxStateMachine } from '@/lib/vane_lib/main'
 import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
@@ -18,6 +19,16 @@ import { TokenBalance } from "@dynamic-labs/sdk-api-core"
 interface TransferFormProps {
   tokenList: TokenBalance[]; // TokenBalance objects
 }
+
+// EVM Networks configuration
+const EVM_NETWORKS = [
+  { id: 1, name: "Ethereum", value: "ethereum" },
+  { id: 56, name: "BNB Smart Chain", value: "bnb" },
+  { id: 137, name: "Polygon", value: "polygon" },
+  { id: 8453, name: "Base", value: "base" },
+  { id: 10, name: "Optimism", value: "optimism" },
+  { id: 42161, name: "Arbitrum", value: "arbitrum" },
+]
 
 // Helper function to convert network ID to ChainSupported
 function getWalletNetworkFromId(networkId: number): ChainSupported {
@@ -122,6 +133,9 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
   const [currentStep, setCurrentStep] = useState<'recipient' | 'amount' | 'confirm'>('recipient');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [senderNetwork, setSenderNetwork] = useState<ChainSupported | null>(null);
+  const [networkDisplayName, setNetworkDisplayName] = useState<string>("");
+  const [selectedEVMNetwork, setSelectedEVMNetwork] = useState<string>("");
+  const [showNetworkDropdown, setShowNetworkDropdown] = useState<boolean>(false);
 
   // Function to get USD price from token balances
   const getUsdPriceFromToken = (asset: string) => {
@@ -176,8 +190,77 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
     'chainChange',
     () => {
       updateSenderNetwork();
+      syncNetworkDisplay();
     }
   );
+
+  // Sync network display from Dynamic SDK
+  const syncNetworkDisplay = useCallback(async () => {
+    if (!primaryWallet) {
+      setNetworkDisplayName("");
+      setSelectedEVMNetwork("");
+      setShowNetworkDropdown(false);
+      return;
+    }
+
+    try {
+      const networkId = Number(await primaryWallet.getNetwork());
+      
+      // Find matching network from EVM_NETWORKS
+      const matchedNetwork = EVM_NETWORKS.find(n => n.id === networkId);
+      
+      if (matchedNetwork) {
+        // EVM network found
+        setNetworkDisplayName(matchedNetwork.name);
+        setSelectedEVMNetwork(matchedNetwork.value);
+        setShowNetworkDropdown(true);
+      } else {
+        // Non-EVM network or unknown
+        setNetworkDisplayName("");
+        setSelectedEVMNetwork("");
+        setShowNetworkDropdown(false);
+      }
+    } catch (error) {
+      console.error('Error fetching network from Dynamic:', error);
+    }
+  }, [primaryWallet]);
+
+  useEffect(() => {
+    syncNetworkDisplay();
+    
+    // Poll for network changes (important for redirect mode where page may reload)
+    const pollInterval = setInterval(() => {
+      if (primaryWallet) {
+        syncNetworkDisplay();
+      }
+    }, 1500); // Poll every 1.5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [primaryWallet, syncNetworkDisplay]);
+
+  const handleNetworkSwitch = useCallback(async (networkValue: string) => {
+    if (!primaryWallet) return;
+    
+    try {
+      const targetNetwork = EVM_NETWORKS.find(network => network.value === networkValue);
+      
+      if (!targetNetwork) {
+        console.error('Network not found:', networkValue);
+        return;
+      }
+      
+      // Call switchNetwork - don't update local state here
+      // The useEffect will sync state from Dynamic after the redirect
+      await primaryWallet.switchNetwork(targetNetwork.id);
+      
+      // Note: We intentionally don't set state here because:
+      // 1. With redirect mode, the page may reload and state is lost
+      // 2. The useEffect will sync from Dynamic's actual network state
+      
+    } catch (error) {
+      console.error('Failed to switch network:', error);
+    }
+  }, [primaryWallet]);
 
   const handleTransferFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -384,7 +467,12 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
  
 
   return (
-    <div className="flex flex-col h-full">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} 
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col h-full"
+    >
       <style>{`
         * {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
@@ -422,11 +510,43 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
       `}</style>
       {/* Progressive Transfer Form */}
       <div className="flex-none">
-        <Card className="bg-[#1a2628] border-white/10">
+        <Card className="bg-[#1a2628] border border-transparent">
           <CardContent className="pt-2 px-3 space-y-3">
 
             {/* Step 1: Recipient Information */}
             <div className="space-y-3">
+              {/* Sender Network Display */}
+              <div className="flex flex-col items-center justify-center gap-2 text-sm mb-2">
+                <div className="flex items-center gap-2">
+                  <Network className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-400">Your Network</span>
+                </div>
+                
+                {showNetworkDropdown ? (
+                  <Select value={selectedEVMNetwork} onValueChange={handleNetworkSwitch}>
+                    <SelectTrigger className="bg-[#1a2628] border-0 border-b border-[#7EDFCD]/50 text-white rounded-md h-8 w-36 text-sm px-2">
+                      <SelectValue className="text-white text-sm" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#253639] border-white/10">
+                      {EVM_NETWORKS.map((network) => (
+                        <SelectItem 
+                          key={network.value} 
+                          value={network.value} 
+                          className="text-white focus:bg-white/5 text-sm h-7"
+                        >
+                          {network.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-gray-300 font-medium text-sm">{networkDisplayName || senderNetwork || ''}</span>
+                )}
+              </div>
+
+              {/* Separator */}
+              <div className="border-t border-gray-700/50 my-2"></div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs text-gray-400 font-medium">Receiver Address</Label>
                 <Input 
@@ -434,13 +554,16 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
                   value={formData.recipient}
                   onChange={handleTransferFormChange}
                   placeholder="0x..." 
-                  className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
+                  className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-gray-400 font-medium">Receiver Network</Label>
-                <div className="bg-[#1a2628] border border-white/10 text-white rounded-lg h-9 px-3 flex items-center">
+                <div className="flex items-center gap-2 text-xs mb-2">
+                  <Network className="w-3 h-3 text-gray-400" />
+                  <Label className="text-xs text-gray-400 font-medium">Receiver Network</Label>
+                </div>
+                <div className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white rounded-lg h-9 px-3 flex items-center">
                   <span className="text-sm text-white">
                     {senderNetwork}
                   </span>
@@ -576,6 +699,6 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
 
       {/* Scrollable Transaction Pending */}
      
-    </div>
+    </motion.div>
   )
 }

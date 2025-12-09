@@ -224,7 +224,6 @@ export default function SenderPending() {
   const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
   const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
-  const nodeConnectionStatus = useTransactionStore(state => state.nodeConnectionStatus)
 
   const { primaryWallet } = useDynamicContext();
 
@@ -269,14 +268,6 @@ export default function SenderPending() {
       }
     });
   }, [senderPendingTransactions]);
-
-  // Effect to clear all submission pending when node disconnects
-  useEffect(() => {
-    if (nodeConnectionStatus && !nodeConnectionStatus.relay_connected) {
-      clearAllSubmissionPending();
-      setSubmissionPendingState({});
-    }
-  }, [nodeConnectionStatus]);
 
   // Effect to handle 3-second delay for success components
   useEffect(() => {

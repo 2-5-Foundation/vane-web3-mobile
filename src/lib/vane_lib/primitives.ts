@@ -616,6 +616,21 @@ export interface TxStateMachine {
     receiverAddressNetwork: ChainSupported;
 }
 
+const textDecoder = new TextDecoder();
+
+function normalizeAmount(amount: number | string | bigint): bigint {
+    if (typeof amount === "bigint") return amount;
+    if (typeof amount === "string") return BigInt(amount);
+    return BigInt(amount);
+}
+
+export function decodeTxStateMachine(data: Uint8Array | number[]): TxStateMachine {
+    const bytes = data instanceof Uint8Array ? data : Uint8Array.from(data);
+    const json = textDecoder.decode(bytes);
+    const parsed = JSON.parse(json) as TxStateMachine & { amount: number | string | bigint };
+    return { ...parsed, amount: normalizeAmount(parsed.amount) };
+}
+
 export class TxStateMachineManager {
     private tx: TxStateMachine;
    
@@ -780,25 +795,21 @@ export interface NodeConnectionStatus {
 }
 
 /**
- * P2P event result types
- * Events tracking on p2p networking
+ * Backend event types for JSON-RPC communication
  * Matches serde's default enum serialization format:
- * - Unit variants: just the string name
  * - Variants with data: { "VariantName": {...data...} }
  */
-export type P2pEventResult =
-    | "RelayerConnectionClosed"
-    | "PeerIsOnline"
-    | "PeerIsOffline"
-    | "ReservationAccepted"
-    | "SenderCircuitEstablished"
-    | { PeerConnectionClosed: { peer_id: string; address: string } }
-    | { Dialing: { peer_id: string | null; address: string | null } }
-    | { RecvIncomingConnectionError: { error: string } }
-    | { SenderOutgoingConnectionError: { error: string; address: string | null } }
-    | { ReceiverConnected: { peer_id: string; address: string } }
-    | { AccountAddedSuccessfully: { account_id: string } }
-    | { AccountAdditionFailed: { account_id: string } };
+export type BackendEvent =
+    | { SenderRequestReceived: { address: string; data: number[] } }
+    | { SenderRequestHandled: { address: string; data: number[] } }
+    | { SenderConfirmed: { address: string; data: number[] } }
+    | { SenderReverted: { address: string; data: number[] } }
+    | { ReceiverResponseReceived: { address: string; data: number[] } }
+    | { ReceiverResponseHandled: { address: string; data: number[] } }
+    | { PeerDisconnected: { account_id: string } }
+    | { DataExpired: { multi_id: string; data: number[] } }
+    | { PendingTransactionsFetched: { address: string; transactions: TxStateMachine[] } }
+    | { TxSubmitted: { address: string; data: number[] } };
 
 /** User metrics structure */
 export interface UserMetrics {

@@ -33,10 +33,8 @@ import {
   watchTxUpdates,
   exportStorage,
   StorageExport,
-  getNodeConnection,
   isInitialized,
   LogLevel,
-  NodeConnectionStatus,
   addAccount,
   clearRevertedFromCache,
   deleteTxInCache
@@ -71,8 +69,6 @@ export interface TransactionState {
 
   // WASM state
   isWatchingUpdates: boolean;
-  nodeStatus: 'idle' | 'initializing' | 'ready';
-  nodeConnectionStatus: NodeConnectionStatus | null;
 
   // Methods
   setUserProfile: (userProfile: UserProfile) => void;
@@ -103,8 +99,6 @@ export interface TransactionState {
   fetchPendingUpdates: () => Promise<TxStateMachine[]>;
   exportStorageData: () => Promise<StorageExport>;
   loadStorageData: () => StorageExport | null;
-  getNodeConnectionStatus: () => Promise<NodeConnectionStatus>;
-  updateNodeConnectionStatus: () => Promise<void>;
 
   // Utility methods
   isTransactionReverted: (tx: TxStateMachine) => boolean;
@@ -117,6 +111,17 @@ const normalizeChainAddress = (value?: string | null): string => {
     return '';
   }
   return value.split(':').pop()?.trim().toLowerCase() ?? '';
+};
+
+const stringToChainSupported = (network: string): ChainSupported => {
+  const normalized = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
+  const chain = Object.values(ChainSupported).find(c => c === normalized || c === network);
+  
+  if (!chain) {
+    throw new Error(`Invalid network: ${network}`);
+  }
+  
+  return chain;
 };
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
@@ -136,8 +141,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   recvTransactions: [],
   status: 'Genesis',
   isWatchingUpdates: false,
-  nodeStatus: 'idle',
-  nodeConnectionStatus: null,
 
   // method
   setUserProfile: (userProfile: UserProfile) => {
@@ -353,26 +356,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw new Error('WASM node not initialized');
     }
     try {
-      await addAccount(accountId, network);
+      const chainSupported = stringToChainSupported(network);
+      await addAccount(accountId, chainSupported);
       console.log('Account added successfully');
 
     } catch (error) {
       console.error('Error adding account:', error);
-    }
-  },
-  getNodeConnectionStatus: async (): Promise<NodeConnectionStatus> => {
-    return getNodeConnection();
-  },
-
-  updateNodeConnectionStatus: async (): Promise<void> => {
-    if (!isInitialized()) {
-      return;
-    }
-    try {
-      const status = await getNodeConnection();
-      set({ nodeConnectionStatus: status });
-    } catch (error) {
-      console.error('Error updating node connection status:', error);
+      throw error;
     }
   },
 
