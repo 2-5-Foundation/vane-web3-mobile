@@ -55,6 +55,17 @@ export default function Transfer() {
   const userWallets = useUserWallets()
   const { exportStorageData, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore()
   const [isInitializing, setIsInitializing] = useState(false)
+  const [balancesRefreshToken, setBalancesRefreshToken] = useState<number>(0)
+
+  const syncNetworkIdOnce = useCallback(async () => {
+    if (!primaryWallet) return
+    try {
+      const networkId = Number(await primaryWallet.getNetwork())
+      setCurrentNetworkId(networkId)
+    } catch (error) {
+      console.error('Error syncing network for balances:', error)
+    }
+  }, [primaryWallet])
 
   // Get token balances with network-specific parameters (same pattern as total balance)
   const tokenBalanceArgs = useMemo(() => {
@@ -115,7 +126,7 @@ export default function Transfer() {
      }
    }, [])
 
-   // Derive network ID from Dynamic SDK for token balances
+  // Derive network ID from Dynamic SDK for token balances
    useEffect(() => {
     const syncNetworkId = async () => {
       if (!primaryWallet) {
@@ -125,7 +136,7 @@ export default function Transfer() {
 
       try {
         const networkId = Number(await primaryWallet.getNetwork())
-        setCurrentNetworkId(networkId)
+          setCurrentNetworkId(networkId)
       } catch (error) {
         console.error('Error fetching network from Dynamic:', error)
       }
@@ -143,6 +154,17 @@ export default function Transfer() {
 
     return () => clearInterval(pollInterval)
    }, [primaryWallet])
+
+  // Ensure current network is synced when wallet connects or form opens
+  useEffect(() => {
+    syncNetworkIdOnce()
+    setBalancesRefreshToken(Date.now())
+  }, [primaryWallet, showTransferForm, syncNetworkIdOnce])
+
+  // Ensure current network is synced when wallet connects or form is opened
+  useEffect(() => {
+    syncNetworkIdOnce()
+  }, [primaryWallet, showTransferForm, syncNetworkIdOnce])
 
    // Calculate total value and count of failed transactions using useTokenBalances
    useEffect(() => {
@@ -173,11 +195,11 @@ export default function Transfer() {
         });
 
         setFailedTransactionsValue(totalValue);
-      } catch (error) {
+    } catch (error) {
         console.error('Error calculating failed transactions value:', error);
         setFailedTransactionsValue(0);
         setFailedTransactionCount(0);
-      }
+    }
     };
 
     calculateFailedTransactionsValue();
@@ -188,6 +210,7 @@ export default function Transfer() {
       {/* Token Balances Component - only renders after network is known */}
       {currentNetworkId && (
         <TokenBalancesComponent 
+          key={`${currentNetworkId}-${primaryWallet?.address ?? 'no-wallet'}-${balancesRefreshToken}`}
           networkId={currentNetworkId} 
           onBalancesChange={handleBalancesChange} 
         />
@@ -242,6 +265,7 @@ export default function Transfer() {
                       return
                     }
                     
+                    await syncNetworkIdOnce()
                     setTransferType('self')
                     setShowTransferForm(true)
                     
@@ -253,7 +277,7 @@ export default function Transfer() {
                           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
                           primaryWallet.address,
                           primaryWallet.chain,
-                          true, // self_node: true
+                          false, // self_node: false for now
                           true  // live: true
                         )
                         await startWatching()
@@ -270,12 +294,16 @@ export default function Transfer() {
                   Safe Self Transfer
                 </Button>
                 <Button
-                  disabled={true}
                   onClick={async () => {
+                    await syncNetworkIdOnce()
                     setTransferType('external')
                     setShowTransferForm(true)
                     
                     // Initialize node with self_node: false
+                    if (!primaryWallet) {
+                      toast.error('Connect wallet first')
+                      return
+                    }
                     if (!isWasmInitialized() && primaryWallet && !isInitializing) {
                       setIsInitializing(true)
                       try {
@@ -317,7 +345,12 @@ export default function Transfer() {
                   Transfer {transferType && '>'} {transferType === 'self' ? 'Self Transfer' : transferType === 'external' ? 'External Transfer' : ''}
                 </span>
               </Button>
-              <TransferForm tokenList={availableTokens} transferType={transferType} userWallets={userWallets} />
+              <TransferForm 
+                tokenList={availableTokens} 
+                transferType={transferType} 
+                userWallets={userWallets}
+                onNetworkChange={(id) => setCurrentNetworkId(id)}
+              />
             </div>
           )}
         </TabsContent>

@@ -20,6 +20,7 @@ interface TransferFormProps {
   tokenList: TokenBalance[]; // TokenBalance objects
   transferType?: 'self' | 'external' | null;
   userWallets?: any[];
+  onNetworkChange?: (id: number) => void;
 }
 
 // EVM Networks configuration
@@ -123,7 +124,7 @@ const truncateAddress = (address: string, startChars: number = 16, endChars: num
   return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
 };
 
-export default function TransferForm({ tokenList, transferType, userWallets = [] }: TransferFormProps) {
+export default function TransferForm({ tokenList, transferType, userWallets = [], onNetworkChange }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
   const { initiateTransaction, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore();
@@ -181,13 +182,15 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
 
     try {
       const walletNetworkId = await primaryWallet.getNetwork();
-      const network = getWalletNetworkFromId(Number(walletNetworkId));
+      const networkIdNum = Number(walletNetworkId);
+      const network = getWalletNetworkFromId(networkIdNum);
       setSenderNetwork(network);
       setFormData(prev => ({ ...prev, network }));
+      onNetworkChange?.(networkIdNum);
     } catch (error) {
       console.error('Error getting wallet network:', error);
     }
-  }, [primaryWallet]);
+  }, [primaryWallet, onNetworkChange]);
 
   useEffect(() => {
     updateSenderNetwork();
@@ -260,6 +263,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
       // Call switchNetwork - don't update local state here
       // The useEffect will sync state from Dynamic after the redirect
       await primaryWallet.switchNetwork(targetNetwork.id);
+      onNetworkChange?.(targetNetwork.id);
       
       // Note: We intentionally don't set state here because:
       // 1. With redirect mode, the page may reload and state is lost
@@ -268,7 +272,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     } catch (error) {
       console.error('Failed to switch network:', error);
     }
-  }, [primaryWallet]);
+  }, [primaryWallet, onNetworkChange]);
 
   const handleTransferFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;

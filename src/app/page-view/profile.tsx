@@ -213,7 +213,7 @@ export default function Profile() {
             </div>
             <div className="mt-1">
               <p className="text-[9px] text-gray-500">
-                $0.05 per protected transaction
+                $0.1 per protected transaction
               </p>
               <p className="text-[9px] text-gray-500 mt-0.5">
                 Current plan: Free

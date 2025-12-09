@@ -33,7 +33,7 @@
     "dotenv": "^16.4.7",
     "framer-motion": "^12.23.22",
     "lucide-react": "^0.475.0",
-    "next": "^15.3.3",
+    "next": "^15.5.7",
     "pino-pretty": "^13.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -42,7 +42,7 @@
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "tronweb": "^6.1.0",
-    "vercel": "^41.6.2",
+    "vercel": "^49.1.2",
     "viem": "^2.37.13",
     "web-push": "^3.6.7",
     "zustand": "^5.0.3"
