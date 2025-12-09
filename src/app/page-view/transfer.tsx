@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { motion } from "framer-motion"
 import TransferForm from "../page-view/page-component/transfer-form"
 import TransferReceive from "./page-component/transfer-receive"
-import { useDynamicContext, useTokenBalances } from '@dynamic-labs/sdk-react-core'
+import { useDynamicContext, useTokenBalances, useUserWallets } from '@dynamic-labs/sdk-react-core'
+import { toast } from 'sonner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useTransactionStore } from "@/app/lib/useStore"
 import { Rocket, Download, TrendingUp, ArrowLeft, User, Send } from "lucide-react"
@@ -51,7 +52,9 @@ export default function Transfer() {
   const [failedTransactionCount, setFailedTransactionCount] = useState<number>(0)
 
   const { primaryWallet } = useDynamicContext()
-  const { exportStorageData, isWasmInitialized } = useTransactionStore()
+  const userWallets = useUserWallets()
+  const { exportStorageData, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore()
+  const [isInitializing, setIsInitializing] = useState(false)
 
   // Get token balances with network-specific parameters (same pattern as total balance)
   const tokenBalanceArgs = useMemo(() => {
@@ -232,9 +235,34 @@ export default function Transfer() {
               {/* Buttons */}
               <div className="flex gap-2">
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
+                    // Check if wallet list has more than 1 wallet
+                    if (userWallets.length <= 1) {
+                      toast.error('Wallet linked should be more than 1')
+                      return
+                    }
+                    
                     setTransferType('self')
                     setShowTransferForm(true)
+                    
+                    // Initialize node with self_node: true
+                    if (!isWasmInitialized() && primaryWallet && !isInitializing) {
+                      setIsInitializing(true)
+                      try {
+                        await initializeWasm(
+                          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+                          primaryWallet.address,
+                          primaryWallet.chain,
+                          true, // self_node: true
+                          true  // live: true
+                        )
+                        await startWatching()
+                      } catch (error) {
+                        console.error('Failed to initialize node:', error)
+                      } finally {
+                        setIsInitializing(false)
+                      }
+                    }
                   }}
                   className="flex-1 h-20 bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg text-xs font-medium ml-2 flex flex-col items-center justify-center gap-1"
                 >
@@ -242,9 +270,29 @@ export default function Transfer() {
                   Safe Self Transfer
                 </Button>
                 <Button
-                  onClick={() => {
+                  disabled={true}
+                  onClick={async () => {
                     setTransferType('external')
                     setShowTransferForm(true)
+                    
+                    // Initialize node with self_node: false
+                    if (!isWasmInitialized() && primaryWallet && !isInitializing) {
+                      setIsInitializing(true)
+                      try {
+                        await initializeWasm(
+                          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+                          primaryWallet.address,
+                          primaryWallet.chain,
+                          false, // self_node: false
+                          true   // live: true
+                        )
+                        await startWatching()
+                      } catch (error) {
+                        console.error('Failed to initialize node:', error)
+                      } finally {
+                        setIsInitializing(false)
+                      }
+                    }
                   }}
                   className="flex-1 h-20 bg-transparent border border-[#7EDFCD] text-white hover:bg-[#7EDFCD]/10 active:bg-[#7EDFCD] active:text-black active:scale-[0.92] active:translate-y-0.5 active:shadow-inner transition-all duration-150 rounded-lg text-xs font-medium mr-2 flex flex-col items-center justify-center gap-1"
                 >
@@ -255,7 +303,7 @@ export default function Transfer() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Back Button */}
+              {/* Back Button with Breadcrumb */}
               <Button
                 onClick={() => {
                   setShowTransferForm(false)
@@ -265,9 +313,11 @@ export default function Transfer() {
                 className="flex items-center gap-2 text-gray-400 hover:text-white mb-2 p-0 h-auto"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span className="text-sm">Back</span>
+                <span className="text-xs">
+                  Transfer {transferType && '>'} {transferType === 'self' ? 'Self Transfer' : transferType === 'external' ? 'External Transfer' : ''}
+                </span>
               </Button>
-              <TransferForm tokenList={availableTokens} />
+              <TransferForm tokenList={availableTokens} transferType={transferType} userWallets={userWallets} />
             </div>
           )}
         </TabsContent>

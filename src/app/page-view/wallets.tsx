@@ -21,11 +21,7 @@ export default function Wallets() {
   const [longPressedWallet, setLongPressedWallet] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuOpenWallet, setMenuOpenWallet] = useState<string | null>(null);
-  const pendingSelfNodeInitRef = useRef(false);
-  const [isSelfNodeInitializing, setIsSelfNodeInitializing] = useState(false);
-  const initializeWasm = useTransactionStore((s) => s.initializeWasm);
   const isWasmInitialized = useTransactionStore((s) => s.isWasmInitialized);
-  const startWatching = useTransactionStore((s) => s.startWatching);
   const addAccount = useTransactionStore((s) => s.addAccount);
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const userProfile = useTransactionStore((s) => s.userProfile);
@@ -336,43 +332,8 @@ export default function Wallets() {
 
 
   const handleConnectWallet = () => {
-    pendingSelfNodeInitRef.current = true;
     setShowAuthFlow(true);
   };
-
-  useEffect(() => {
-    if (!primaryWallet || !pendingSelfNodeInitRef.current || isSelfNodeInitializing) {
-      return;
-    }
-
-    if (isWasmInitialized()) {
-      pendingSelfNodeInitRef.current = false;
-      return;
-    }
-
-    const initializeSelfNode = async () => {
-      setIsSelfNodeInitializing(true);
-      try {
-        await initializeWasm(
-          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
-          primaryWallet.address,
-          primaryWallet.chain,
-          true,
-          true
-        );
-        await startWatching();
-        toast.success('App initialized with self node');
-      } catch (error) {
-        toast.error('Failed to initialize self node');
-        console.error('Self node init error:', error);
-      } finally {
-        pendingSelfNodeInitRef.current = false;
-        setIsSelfNodeInitializing(false);
-      }
-    };
-
-    initializeSelfNode();
-  }, [initializeWasm, primaryWallet, startWatching, isSelfNodeInitializing, isWasmInitialized]);
 
   return (
     <IsBrowser>

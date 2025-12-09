@@ -18,6 +18,8 @@ import { TokenBalance } from "@dynamic-labs/sdk-api-core"
 
 interface TransferFormProps {
   tokenList: TokenBalance[]; // TokenBalance objects
+  transferType?: 'self' | 'external' | null;
+  userWallets?: any[];
 }
 
 // EVM Networks configuration
@@ -115,7 +117,13 @@ function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
   }
 }
 
-export default function TransferForm({ tokenList }: TransferFormProps) {
+// Helper function to truncate address in the middle to fit placeholder width
+const truncateAddress = (address: string, startChars: number = 16, endChars: number = 16): string => {
+  if (address.length <= startChars + endChars) return address;
+  return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
+};
+
+export default function TransferForm({ tokenList, transferType, userWallets = [] }: TransferFormProps) {
   const setTransferStatus = useTransactionStore().setTransferStatus;
   const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
   const { initiateTransaction, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore();
@@ -549,13 +557,42 @@ export default function TransferForm({ tokenList }: TransferFormProps) {
 
               <div className="space-y-1.5">
                 <Label className="text-xs text-gray-400 font-medium">Receiver Address</Label>
-                <Input 
-                  name="recipient"
-                  value={formData.recipient}
-                  onChange={handleTransferFormChange}
-                  placeholder="0x..." 
-                  className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
-                />
+                {transferType === 'self' ? (
+                  <Select 
+                    value={formData.recipient} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, recipient: value }))}
+                  >
+                    <SelectTrigger className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white rounded-lg h-9 text-sm px-3 w-full">
+                      <SelectValue placeholder="Select receiver address" className="text-white text-sm">
+                        <span className="text-white">
+                          {formData.recipient ? truncateAddress(formData.recipient) : "select receiver address"}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#253639] border-white/10 w-[var(--radix-select-trigger-width)]">
+                      {userWallets
+                        .filter(wallet => wallet.address !== primaryWallet?.address)
+                        .map((wallet) => (
+                          <SelectItem 
+                            key={wallet.address} 
+                            value={wallet.address} 
+                            className="text-white focus:bg-white/5 text-sm"
+                            title={wallet.address}
+                          >
+                            <span className="text-white">{truncateAddress(wallet.address,16,16)}</span>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input 
+                    name="recipient"
+                    value={formData.recipient}
+                    onChange={handleTransferFormChange}
+                    placeholder="0x..." 
+                    className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
+                  />
+                )}
               </div>
 
               <div className="space-y-1.5">
