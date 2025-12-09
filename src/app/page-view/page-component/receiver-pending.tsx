@@ -405,9 +405,9 @@ export default function ReceiverPending() {
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
           <CardContent className="p-6">
             <div className="text-center">
-            
+
               <p className="text-[#9EB2AD] text-sm inline-flex items-center gap-1 whitespace-nowrap">
-                <span>No pending transactions found •</span>
+                <span>No incoming transactions found •</span>
                 <button
                   type="button"
                   onClick={handleRefresh}

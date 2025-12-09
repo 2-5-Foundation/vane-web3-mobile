@@ -1016,13 +1016,14 @@ export default function SenderPending() {
   // Show loading state while fetching transactions
   if (isLoadingTransactions) {
     return (
-      <div className="pt-2 px-2 space-y-3 pb-24">
+      <div className="space-y-3 pb-24">
         <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
-              <RefreshCw className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Make a transaction to view pending outgoing</span>
-            </div>
+          <CardContent className="p-6">
+          <div className="text-center">
+            <p className="text-[#9EB2AD] text-sm inline-flex items-center gap-1 whitespace-nowrap">
+              <span>Make a transaction to view pending outgoing</span>
+            </p>
+          </div>
           </CardContent>
         </Card>
       </div>

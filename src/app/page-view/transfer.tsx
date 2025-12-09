@@ -300,10 +300,7 @@ export default function Transfer() {
                     setShowTransferForm(true)
                     
                     // Initialize node with self_node: false
-                    if (!primaryWallet) {
-                      toast.error('Connect wallet first')
-                      return
-                    }
+                   
                     if (!isWasmInitialized() && primaryWallet && !isInitializing) {
                       setIsInitializing(true)
                       try {
