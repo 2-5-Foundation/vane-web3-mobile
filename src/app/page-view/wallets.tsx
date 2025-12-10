@@ -22,10 +22,13 @@ export default function Wallets() {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuOpenWallet, setMenuOpenWallet] = useState<string | null>(null);
   const isWasmInitialized = useTransactionStore((s) => s.isWasmInitialized);
+  const initializeWasm = useTransactionStore((s) => s.initializeWasm);
+  const startWatching = useTransactionStore((s) => s.startWatching);
   const addAccount = useTransactionStore((s) => s.addAccount);
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const exportStorageData = useTransactionStore((s) => s.exportStorageData);
+  const [isInitializing, setIsInitializing] = useState(false);
   const prevWalletsRef = useRef<Set<string>>(new Set());
   const hasCheckedStorageRef = useRef<boolean>(false);
 
@@ -64,8 +67,9 @@ export default function Wallets() {
     }
   };
 
-  const handleLinkNewWallet = () => {
+  const handleLinkNewWallet = async () => {
     setShowLinkNewWalletModal(true);
+    // Note: addAccount will be called automatically via useEffect when new wallet is detected
   };
 
   const handleCopyAddress = (address: string, e: React.MouseEvent) => {
@@ -334,6 +338,34 @@ export default function Wallets() {
   const handleConnectWallet = () => {
     setShowAuthFlow(true);
   };
+
+  // Initialize WASM when wallet is connected and WASM is not initialized
+  useEffect(() => {
+    const initializeWasmOnWalletConnect = async () => {
+      if (!primaryWallet || isWasmInitialized() || isInitializing) {
+        return;
+      }
+
+      setIsInitializing(true);
+      try {
+        await initializeWasm(
+          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+          primaryWallet.address,
+          primaryWallet.chain,
+          false, // self_node: false (default for wallet connection)
+          true   // live: true
+        );
+        await startWatching();
+        console.log('WASM initialized after wallet connection');
+      } catch (error) {
+        console.error('Failed to initialize WASM after wallet connection:', error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeWasmOnWalletConnect();
+  }, [primaryWallet, isWasmInitialized, initializeWasm, startWatching, isInitializing]);
 
   return (
     <IsBrowser>
