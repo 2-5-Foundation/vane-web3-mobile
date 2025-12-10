@@ -114,6 +114,9 @@ const normalizeChainAddress = (value?: string | null): string => {
 };
 
 const stringToChainSupported = (network: string): ChainSupported => {
+  const upper = network.toUpperCase();
+  if (upper === 'EVM') return ChainSupported.Ethereum;
+
   const normalized = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
   const chain = Object.values(ChainSupported).find(c => c === normalized || c === network);
   

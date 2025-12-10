@@ -18,29 +18,6 @@ import { getTokenLabel } from "./page-component/sender-pending"
 const SOLANA_NETWORK_ID = 101;
 const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453]; // Ethereum, BNB, Optimism, Arbitrum, Polygon, Base
 
-// Separate component for token balances that only mounts after network is known
-const TokenBalancesComponent = ({ networkId, onBalancesChange }: { networkId: number, onBalancesChange: (balances: any[]) => void }) => {
-  const tokenBalanceArgs = useMemo(() => {
-    const base = { includeFiat: true, includeNativeBalance: true };
-    
-    if (networkId === 101) {
-      return { ...base, chainName: ChainEnum.Sol };
-    } else if (networkId === 1 || networkId === 56 || networkId === 10 || networkId === 42161) {
-      return { ...base, chainName: ChainEnum.Evm, networkId };
-    }
-    
-    return base;
-  }, [networkId]);
-
-  const { tokenBalances, isLoading, isError } = useTokenBalances(tokenBalanceArgs);
-
-  useEffect(() => {
-    onBalancesChange(tokenBalances || []);
-  }, [tokenBalances, onBalancesChange]);
-
-  return null; // This component doesn't render anything, just handles token balance fetching
-}
-
 export default function Transfer() {
   const [activeTab, setActiveTab] = useState<'transfer' | 'receive'>('transfer')
   const [balance, setBalance] = useState("0")
@@ -55,23 +32,34 @@ export default function Transfer() {
   const userWallets = useUserWallets()
   const { exportStorageData, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore()
   const [isInitializing, setIsInitializing] = useState(false)
-  const [balancesRefreshToken, setBalancesRefreshToken] = useState<number>(0)
-
   const syncNetworkIdOnce = useCallback(async () => {
-    if (!primaryWallet) return
+    if (!primaryWallet) return;
+
     try {
-      const networkId = Number(await primaryWallet.getNetwork())
-      setCurrentNetworkId(networkId)
+      const rawNetwork = await primaryWallet.getNetwork();
+      let networkId = Number(rawNetwork);
+
+      // If Dynamic returns a non-numeric value (e.g. "solana"), default to Ethereum (1)
+      if (Number.isNaN(networkId)) {
+        console.warn('Non-numeric network from Dynamic, defaulting to Ethereum:', rawNetwork);
+        networkId = 1;
+      }
+
+      setCurrentNetworkId(networkId);
     } catch (error) {
-      console.error('Error syncing network for balances:', error)
+      console.error('Error syncing network for balances:', error);
     }
-  }, [primaryWallet])
+  }, [primaryWallet]);
 
   // Get token balances with network-specific parameters (same pattern as total balance)
+  // Get token balances with network-specific parameters (same pattern as total balance)
   const tokenBalanceArgs = useMemo(() => {
-    if (!currentNetworkId) return undefined;
-
     const base = { includeFiat: true, includeNativeBalance: true };
+
+    // If we don't have a network yet, fall back to default balances (usually Ethereum)
+    if (!currentNetworkId) {
+      return base;
+    }
     
     // Solana
     if (currentNetworkId === SOLANA_NETWORK_ID) {
@@ -83,11 +71,31 @@ export default function Transfer() {
       return { ...base, chainName: ChainEnum.Evm, networkId: currentNetworkId };
     }
     
-    // Unsupported chain - return undefined
-    return undefined;
+    // Fallback to base if unsupported
+    return base;
   }, [currentNetworkId]);
 
   const { tokenBalances } = useTokenBalances(tokenBalanceArgs);
+
+  useEffect(() => {
+    if (tokenBalances === undefined) {
+      // Keep previous balance while fetching
+      return;
+    }
+
+    if (tokenBalances.length === 0) {
+      setBalance("0");
+      setAvailableTokens([]);
+      return;
+    }
+
+    const totalValue = tokenBalances.reduce((sum: number, token: any) => {
+      return sum + (token.marketValue || 0);
+    }, 0);
+
+    setBalance(totalValue.toString());
+    setAvailableTokens(tokenBalances as any[]);
+  }, [tokenBalances]);
 
   // Calculate USD value for a failed transaction
   const calculateTransactionValue = useCallback((amount: bigint, token: Token, balances: TokenBalance[]): number => {
@@ -126,45 +134,46 @@ export default function Transfer() {
      }
    }, [])
 
-  // Derive network ID from Dynamic SDK for token balances
-   useEffect(() => {
+  // Derive network ID from Dynamic SDK for token balances (with fallback)
+  useEffect(() => {
     const syncNetworkId = async () => {
       if (!primaryWallet) {
-        setCurrentNetworkId(null)
-        return
+        setCurrentNetworkId(null);
+        return;
       }
 
       try {
-        const networkId = Number(await primaryWallet.getNetwork())
-          setCurrentNetworkId(networkId)
-      } catch (error) {
-        console.error('Error fetching network from Dynamic:', error)
-      }
-    }
+        const rawNetwork = await primaryWallet.getNetwork();
+        let networkId = Number(rawNetwork);
 
-    // Sync immediately when primaryWallet changes
-    syncNetworkId()
+        if (Number.isNaN(networkId)) {
+          console.warn('Non-numeric network from Dynamic in poll, defaulting to Ethereum:', rawNetwork);
+          networkId = 1;
+        }
+
+        setCurrentNetworkId(networkId);
+      } catch (error) {
+        console.error('Error fetching network from Dynamic:', error);
+      }
+    };
+
+    // Sync immediately when primaryWallet changes / component mounts
+    syncNetworkId();
 
     // Poll for network changes (important for redirect mode where page may reload)
     const pollInterval = setInterval(() => {
       if (primaryWallet) {
-        syncNetworkId()
+        syncNetworkId();
       }
-    }, 1500) // Poll every 1.5 seconds
+    }, 1500); // Poll every 1.5 seconds
 
-    return () => clearInterval(pollInterval)
-   }, [primaryWallet])
+    return () => clearInterval(pollInterval);
+  }, [primaryWallet]);
 
   // Ensure current network is synced when wallet connects or form opens
   useEffect(() => {
     syncNetworkIdOnce()
-    setBalancesRefreshToken(Date.now())
-  }, [primaryWallet, showTransferForm, syncNetworkIdOnce])
-
-  // Ensure current network is synced when wallet connects or form is opened
-  useEffect(() => {
-    syncNetworkIdOnce()
-  }, [primaryWallet, showTransferForm, syncNetworkIdOnce])
+  }, [primaryWallet, syncNetworkIdOnce])
 
    // Calculate total value and count of failed transactions using useTokenBalances
    useEffect(() => {
@@ -207,15 +216,6 @@ export default function Transfer() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 px-4 max-w-sm mx-auto">
-      {/* Token Balances Component - only renders after network is known */}
-      {currentNetworkId && (
-        <TokenBalancesComponent 
-          key={`${currentNetworkId}-${primaryWallet?.address ?? 'no-wallet'}-${balancesRefreshToken}`}
-          networkId={currentNetworkId} 
-          onBalancesChange={handleBalancesChange} 
-        />
-      )}
-      
       {/* Balance Display */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-1 mb-3">
         <p className="text-gray-400 text-xs font-medium">Total Available Balance</p>
@@ -269,7 +269,7 @@ export default function Transfer() {
                     setTransferType('self')
                     setShowTransferForm(true)
                     
-                    // Initialize node with self_node: true
+                    // Initialize node once (skip if already initialized)
                     if (!isWasmInitialized() && primaryWallet && !isInitializing) {
                       setIsInitializing(true)
                       try {
@@ -299,8 +299,7 @@ export default function Transfer() {
                     setTransferType('external')
                     setShowTransferForm(true)
                     
-                    // Initialize node with self_node: false
-                   
+                    // Initialize node once (skip if already initialized)
                     if (!isWasmInitialized() && primaryWallet && !isInitializing) {
                       setIsInitializing(true)
                       try {
@@ -309,7 +308,7 @@ export default function Transfer() {
                           primaryWallet.address,
                           primaryWallet.chain,
                           false, // self_node: false
-                          true   // live: true
+                          true  // live: true
                         )
                         await startWatching()
                       } catch (error) {

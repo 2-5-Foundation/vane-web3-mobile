@@ -32,6 +32,19 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [primaryNetworkId, setPrimaryNetworkId] = useState<number | null>(null);
 
+  // One-time cleanup of any persisted storage export to avoid reapplying corrupted data
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && !localStorage.getItem('vane-storage-export-cleared')) {
+        localStorage.removeItem('vane-storage-export');
+        localStorage.setItem('vane-storage-export-cleared', 'true');
+        console.log('Cleared persisted vane-storage-export once (profile page)');
+      }
+    } catch (e) {
+      console.warn('Unable to clear persisted storage export', e);
+    }
+  }, [isWasmInitialized]);
+
   // Get token balances with network-specific parameters
   const tokenBalanceArgs = useMemo(() => {
     const base = { includeFiat: true, includeNativeBalance: true };
@@ -124,7 +137,7 @@ export default function Profile() {
     };
 
     loadData();
-  }, [exportStorageData, tokenBalances, calculateTransactionValue, primaryNetworkId]);
+  }, [exportStorageData, tokenBalances, calculateTransactionValue, primaryNetworkId, isWasmInitialized]);
 
   return (
     <div className="space-y-3 max-w-sm mx-auto px-4">
