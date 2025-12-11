@@ -9,7 +9,7 @@ import { isSolanaWallet } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { TxStateMachine, TxStateMachineManager, Token, ChainSupported } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
-import { Wifi, WifiOff, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatAmount, getTokenLabel} from "./sender-pending";
 import bs58 from 'bs58';
@@ -248,6 +248,8 @@ export default function ReceiverPending() {
             }
           }
         } else {
+          console.log('handleApprove - primaryWallet address:', primaryWallet.address);
+
           signature = await primaryWallet.signMessage(transaction.receiverAddress);
         }
       } else if (isSolanaChain && isSolanaWallet(primaryWallet)) {

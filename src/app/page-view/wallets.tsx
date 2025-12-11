@@ -186,13 +186,25 @@ export default function Wallets() {
     };
   }, [longPressedWallet, menuOpenWallet]);
 
-  // Automatically set selectedWallet when primaryWallet changes
+  // Sync selected wallet and user profile when primary wallet changes
   useEffect(() => {
     if (primaryWallet) {
       setSelectedWallet(primaryWallet.address);
+      setUserProfile({
+        account: primaryWallet.address,
+        network: primaryWallet.chain,
+      });
       console.log('Primary wallet updated:', primaryWallet.address);
+      return;
     }
-  }, [primaryWallet]);
+
+    // Clear profile when no primary wallet
+    setSelectedWallet(null);
+    setUserProfile({
+      account: '',
+      network: '',
+    });
+  }, [primaryWallet, setUserProfile]);
 
 
   useWalletConnectorEvent(
