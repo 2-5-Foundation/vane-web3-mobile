@@ -662,7 +662,7 @@ export default function SenderPending() {
           <div className="space-y-3">
             <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
               <p className="text-xs text-green-400 font-medium">
-                ✅ Communication confirmed. Ready to submit transaction.
+                Communication confirmed. Ready to submit transaction.
               </p>
             </div>
             <div className="flex gap-2">

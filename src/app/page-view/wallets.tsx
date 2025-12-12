@@ -28,6 +28,13 @@ export default function Wallets() {
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const exportStorageData = useTransactionStore((s) => s.exportStorageData);
+
+  // Hard reload app function - reloads page when all wallets are unlinked
+  const hardReloadApp = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  }, []);
   const [isInitializing, setIsInitializing] = useState(false);
   const prevWalletsRef = useRef<Set<string>>(new Set());
   const hasCheckedStorageRef = useRef<boolean>(false);
@@ -187,6 +194,7 @@ export default function Wallets() {
   }, [longPressedWallet, menuOpenWallet]);
 
   // Sync selected wallet and user profile when primary wallet changes
+  // Hard reload app when primary wallet is disconnected (all wallets unlinked)
   useEffect(() => {
     if (primaryWallet) {
       setSelectedWallet(primaryWallet.address);
@@ -204,7 +212,13 @@ export default function Wallets() {
       account: '',
       network: '',
     });
-  }, [primaryWallet, setUserProfile]);
+
+    // If WASM is initialized but no primary wallet (all wallets unlinked), hard reload app
+    if (isWasmInitialized()) {
+      console.log('Primary wallet disconnected, hard reloading app...');
+      hardReloadApp();
+    }
+  }, [primaryWallet, setUserProfile, isWasmInitialized, hardReloadApp]);
 
 
   useWalletConnectorEvent(

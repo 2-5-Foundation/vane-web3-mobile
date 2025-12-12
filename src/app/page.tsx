@@ -31,6 +31,23 @@ export default function Home() {
     sdk.actions.ready();
   }, []);
 
+  // One-time cleanup of all app-related localStorage items
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const hasClearedAllStorage = localStorage.getItem('vane-all-storage-cleared');
+        if (!hasClearedAllStorage) {
+          localStorage.removeItem('SubmissionPending');
+          localStorage.removeItem('vane-storage-export');
+          localStorage.removeItem('vane-storage-export-cleared');
+          localStorage.setItem('vane-all-storage-cleared', 'true');
+          console.log('One-time cleanup: Cleared all app-related localStorage items');
+        }
+      } catch (e) {
+        console.warn('Unable to clear localStorage:', e);
+      }
+    }
+  }, []);
 
   // Subscribe to P2P notifications - set up when WASM becomes initialized
   useEffect(() => {
