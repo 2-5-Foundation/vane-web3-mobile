@@ -5,22 +5,26 @@ import Image from 'next/image'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function DesktopCheck({ children }: { children: React.ReactNode }) {
-  const [isDesktop, setIsDesktop] = useState(() => {
-    // Client-side only: check immediately
-    if (typeof window !== 'undefined') {
-      return window.innerWidth >= 640
-    }
-    return false
-  })
+  const [isDesktop, setIsDesktop] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     const checkSize = () => {
       setIsDesktop(window.innerWidth >= 640)
     }
     
+    // Check on mount after hydration
+    checkSize()
+    
     window.addEventListener('resize', checkSize)
     return () => window.removeEventListener('resize', checkSize)
   }, [])
+
+  // Don't check until after hydration to prevent mismatch
+  if (!mounted) {
+    return <>{children}</>
+  }
 
   // If desktop, show the message - NEVER render children (prevents providers from mounting)
   if (isDesktop) {

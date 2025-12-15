@@ -160,6 +160,24 @@ export default function ReceiverPending() {
   };
 
   
+  const buildReceiverSignMessage = (transaction: TxStateMachine) => {
+    const isEvmReceiverNetwork =
+      transaction.receiverAddressNetwork === ChainSupported.Ethereum ||
+      transaction.receiverAddressNetwork === ChainSupported.Bnb ||
+      transaction.receiverAddressNetwork === ChainSupported.Base ||
+      transaction.receiverAddressNetwork === ChainSupported.Optimism ||
+      transaction.receiverAddressNetwork === ChainSupported.Arbitrum ||
+      transaction.receiverAddressNetwork === ChainSupported.Polygon;
+
+    if (isEvmReceiverNetwork && transaction.receiverAddressNetwork !== ChainSupported.Ethereum) {
+      const receiverAddress = transaction.receiverAddress ?? '';
+      const messageLength = `${receiverAddress.length}`;
+      return `\u0019Ethereum Signed Message:\n${messageLength}${receiverAddress}`;
+    }
+
+    return transaction.receiverAddress;
+  };
+
   const handleApprove = async (transaction: TxStateMachine) => {
     if (!isWasmInitialized()) {
       toast.error('Connection not initialized. Please refresh the page.');
@@ -183,6 +201,7 @@ export default function ReceiverPending() {
                         transaction.receiverAddressNetwork === ChainSupported.Optimism ||
                         transaction.receiverAddressNetwork === ChainSupported.Arbitrum ||
                         transaction.receiverAddressNetwork === ChainSupported.Polygon;
+      const receiverSignMessage = buildReceiverSignMessage(transaction);
       
       const isSolanaChain = transaction.receiverAddressNetwork === ChainSupported.Solana;
       const isPhantomRedirect = isPhantomRedirectConnector(primaryWallet?.connector);
@@ -209,7 +228,7 @@ export default function ReceiverPending() {
             }
             const result = await walletClient.signMessage({
               account,
-              message: transaction.receiverAddress,
+              message: receiverSignMessage,
             });
             if (typeof result === 'string') {
               signature = result;
@@ -232,7 +251,7 @@ export default function ReceiverPending() {
             }
             // Fallback to primaryWallet.signMessage if wallet client fails
             try {
-              signature = await primaryWallet.signMessage(transaction.receiverAddress);
+              signature = await primaryWallet.signMessage(receiverSignMessage);
             } catch (fallbackError) {
               const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
               if (
@@ -250,7 +269,7 @@ export default function ReceiverPending() {
         } else {
           console.log('handleApprove - primaryWallet address:', primaryWallet.address);
 
-          signature = await primaryWallet.signMessage(transaction.receiverAddress);
+          signature = await primaryWallet.signMessage(receiverSignMessage);
         }
       } else if (isSolanaChain && isSolanaWallet(primaryWallet)) {
         try {
@@ -280,7 +299,7 @@ export default function ReceiverPending() {
           throw error;
         }
       } else {
-        signature = await primaryWallet.signMessage(transaction.receiverAddress);
+          signature = await primaryWallet.signMessage(receiverSignMessage);
       }
       
       
