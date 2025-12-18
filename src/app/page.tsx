@@ -15,17 +15,27 @@ import { useDynamicContext, useUserWallets } from '@dynamic-labs/sdk-react-core'
 
 
 
+// Helper function to normalize chain addresses for comparison
+const normalizeChainAddress = (value?: string | null): string => {
+  if (!value) {
+    return '';
+  }
+  return value.split(':').pop()?.trim().toLowerCase() ?? '';
+};
+
 // get the connected address from dynamic wallet
 export default function Home() {
-  const { removeWallet } = useDynamicContext();
+  const { removeWallet, primaryWallet } = useDynamicContext();
   const userWallets = useUserWallets();
   const userWalletsRef = useRef(userWallets);
   const removeWalletRef = useRef(removeWallet);
+  const primaryWalletRef = useRef(primaryWallet);
 
   useEffect(() => {
     userWalletsRef.current = userWallets;
     removeWalletRef.current = removeWallet;
-  }, [userWallets, removeWallet]);
+    primaryWalletRef.current = primaryWallet;
+  }, [userWallets, removeWallet, primaryWallet]);
 
   useEffect(() => {
     sdk.actions.ready();
@@ -67,6 +77,32 @@ export default function Home() {
 
       isSubscribed = true;
 
+      // Helper function to check if primary wallet is the sender
+      const isPrimaryWalletSender = (txStateMachine: { senderAddress: string }): boolean => {
+        const primaryWalletAddress = primaryWalletRef.current?.address;
+        if (!primaryWalletAddress) {
+          return false;
+        }
+
+        const normalizedPrimaryAddress = normalizeChainAddress(primaryWalletAddress);
+        const normalizedSenderAddress = normalizeChainAddress(txStateMachine.senderAddress);
+
+        return normalizedPrimaryAddress === normalizedSenderAddress;
+      };
+
+      // Helper function to check if transaction involves primary wallet (sender or receiver)
+      const isPrimaryWalletInvolved = (txStateMachine: { senderAddress: string; receiverAddress: string }): boolean => {
+        const primaryWalletAddress = primaryWalletRef.current?.address;
+        if (!primaryWalletAddress) {
+          return false;
+        }
+
+        const normalizedPrimaryAddress = normalizeChainAddress(primaryWalletAddress);
+        const normalizedSenderAddress = normalizeChainAddress(txStateMachine.senderAddress);
+        const normalizedReceiverAddress = normalizeChainAddress(txStateMachine.receiverAddress);
+
+        return normalizedPrimaryAddress === normalizedSenderAddress || normalizedPrimaryAddress === normalizedReceiverAddress;
+      };
 
       const handleBackendEvent = (event: BackendEvent) => {
         if (!event || typeof event !== 'object') {
@@ -76,54 +112,65 @@ export default function Home() {
 
         if ('SenderRequestHandled' in event) {
           const txStateMachine = decodeTxStateMachine(event.SenderRequestHandled.data);
-          toast.success(`Request received ${txStateMachine.receiverAddress}`);
+          if (isPrimaryWalletSender(txStateMachine)) {
+            toast.success(`Request received ${txStateMachine.receiverAddress}`);
+          }
           return;
         }
 
-        if ('SenderConfirmed' in event) {
-          const txStateMachine = decodeTxStateMachine(event.SenderConfirmed.data);
-          toast.success(`You confirmed the transaction for receiver ${txStateMachine.receiverAddress}`);
-          return;
-        }
+      
 
         if ('SenderReverted' in event) {
           const txStateMachine = decodeTxStateMachine(event.SenderReverted.data);
-          toast.error(`Sender reverted for receiver ${txStateMachine.receiverAddress}`, {
-            style: { background: '#fee2e2', color: '#991b1b' },
-          });
+          if (isPrimaryWalletSender(txStateMachine)) {
+            toast.error(`Sender reverted for receiver ${txStateMachine.receiverAddress}`, {
+              style: { background: '#fee2e2', color: '#991b1b' },
+            });
+          }
           return;
         }
 
-
         if ('ReceiverResponseHandled' in event) {
           const txStateMachine = decodeTxStateMachine(event.ReceiverResponseHandled.data);
-          toast.success(`Receiver responded for sender ${txStateMachine.senderAddress}`);
+          if (isPrimaryWalletInvolved(txStateMachine)) {
+            toast.success(`Receiver responded for sender ${txStateMachine.senderAddress}`);
+          }
           return;
         }
 
         if ('PeerDisconnected' in event) {
-          toast.error(`Peer disconnected: ${event.PeerDisconnected.account_id}`, {
-            style: { background: '#fee2e2', color: '#991b1b' },
-          });
+          // For PeerDisconnected, check if the account_id matches primary wallet
+          const primaryWalletAddress = primaryWalletRef.current?.address;
+          if (primaryWalletAddress) {
+            const normalizedPrimaryAddress = normalizeChainAddress(primaryWalletAddress);
+            const normalizedDisconnectedAddress = normalizeChainAddress(event.PeerDisconnected.account_id);
+            if (normalizedPrimaryAddress === normalizedDisconnectedAddress) {
+              toast.error(`Peer disconnected: ${event.PeerDisconnected.account_id}`, {
+                style: { background: '#fee2e2', color: '#991b1b' },
+              });
+            }
+          }
           return;
         }
 
         if ('DataExpired' in event) {
           const txStateMachine = decodeTxStateMachine(event.DataExpired.data);
-          toast.error(`Transaction expired for receiver ${txStateMachine.receiverAddress}`, {
-            style: { background: '#fee2e2', color: '#991b1b' },
-          });
+          if (isPrimaryWalletInvolved(txStateMachine)) {
+            toast.error(`Transaction expired for receiver ${txStateMachine.receiverAddress}`, {
+              style: { background: '#fee2e2', color: '#991b1b' },
+            });
+          }
           return;
         }
 
-
-      if ('TxSubmitted' in event) {
-        const txStateMachine = decodeTxStateMachine(event.TxSubmitted.data);
-        toast.success(`Transaction submitted for receiver ${txStateMachine.receiverAddress}`);
-        return;
-      }
-
-    };
+        if ('TxSubmitted' in event) {
+          const txStateMachine = decodeTxStateMachine(event.TxSubmitted.data);
+          if (isPrimaryWalletInvolved(txStateMachine)) {
+            toast.success(`Transaction submitted for receiver ${txStateMachine.receiverAddress}`);
+          }
+          return;
+        }
+      };
 
       // Start watching P2P notifications
       watchP2pNotifications(handleBackendEvent)
