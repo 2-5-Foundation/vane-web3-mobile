@@ -97,7 +97,7 @@ export default function Home() {
 
         if ('ReceiverResponseHandled' in event) {
           const txStateMachine = decodeTxStateMachine(event.ReceiverResponseHandled.data);
-          toast.success(`Receiver responded ${txStateMachine.receiverAddress}`);
+          toast.success(`Receiver responded for sender ${txStateMachine.senderAddress}`);
           return;
         }
 

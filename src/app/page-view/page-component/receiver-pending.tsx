@@ -2,9 +2,10 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { hexToBytes } from "viem"
+import { hexToBytes, bytesToHex } from "viem"
 import { useDynamicContext, useTokenBalances } from "@dynamic-labs/sdk-react-core";
 import { isEthereumWallet } from "@dynamic-labs/ethereum";
+import { EthereumWallet } from "@dynamic-labs/ethereum-core";
 import { isSolanaWallet } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { TxStateMachine, TxStateMachineManager, Token, ChainSupported } from '@/lib/vane_lib/main';
@@ -19,6 +20,9 @@ import {
   isPhantomRedirectConnector,
 } from '@dynamic-labs/wallet-connector-core';
 
+// Helper: Convert UTF-8 string to hex (forces consistent byte encoding across wallets)
+const utf8ToHex = (value: string) =>
+  bytesToHex(new TextEncoder().encode(value));
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
@@ -159,25 +163,6 @@ export default function ReceiverPending() {
     }
   };
 
-  
-  const buildReceiverSignMessage = (transaction: TxStateMachine) => {
-    const isEvmReceiverNetwork =
-      transaction.receiverAddressNetwork === ChainSupported.Ethereum ||
-      transaction.receiverAddressNetwork === ChainSupported.Bnb ||
-      transaction.receiverAddressNetwork === ChainSupported.Base ||
-      transaction.receiverAddressNetwork === ChainSupported.Optimism ||
-      transaction.receiverAddressNetwork === ChainSupported.Arbitrum ||
-      transaction.receiverAddressNetwork === ChainSupported.Polygon;
-
-    if (isEvmReceiverNetwork && transaction.receiverAddressNetwork !== ChainSupported.Ethereum) {
-      const receiverAddress = transaction.receiverAddress ?? '';
-      const messageLength = `${receiverAddress.length}`;
-      return `\u0019Ethereum Signed Message:\n${messageLength}${receiverAddress}`;
-    }
-
-    return transaction.receiverAddress;
-  };
-
   const handleApprove = async (transaction: TxStateMachine) => {
     if (!isWasmInitialized()) {
       toast.error('Connection not initialized. Please refresh the page.');
@@ -193,87 +178,52 @@ export default function ReceiverPending() {
     setPendingTxNonce(currentTxNonce);
 
     try {
+      const isEVMChain =
+        transaction.receiverAddressNetwork === ChainSupported.Ethereum ||
+        transaction.receiverAddressNetwork === ChainSupported.Bnb ||
+        transaction.receiverAddressNetwork === ChainSupported.Base ||
+        transaction.receiverAddressNetwork === ChainSupported.Optimism ||
+        transaction.receiverAddressNetwork === ChainSupported.Arbitrum ||
+        transaction.receiverAddressNetwork === ChainSupported.Polygon;
 
-      // Check if this is an EVM chain transaction
-      const isEVMChain = transaction.receiverAddressNetwork === ChainSupported.Ethereum ||
-                        transaction.receiverAddressNetwork === ChainSupported.Bnb ||
-                        transaction.receiverAddressNetwork === ChainSupported.Base ||
-                        transaction.receiverAddressNetwork === ChainSupported.Optimism ||
-                        transaction.receiverAddressNetwork === ChainSupported.Arbitrum ||
-                        transaction.receiverAddressNetwork === ChainSupported.Polygon;
-      const receiverSignMessage = buildReceiverSignMessage(transaction);
-      
       const isSolanaChain = transaction.receiverAddressNetwork === ChainSupported.Solana;
+
+      const receiverAddress = (transaction.receiverAddress ?? '').trim();
+      if (!receiverAddress) {
+        toast.error('Receiver address is missing');
+        return;
+      }
+
       const isPhantomRedirect = isPhantomRedirectConnector(primaryWallet?.connector);
-      
-      // Check if wallet is Coinbase - Coinbase doesn't apply EIP-191 prefix automatically
-      const isCoinbaseWallet = primaryWallet?.connector?.name?.toLowerCase().includes('coinbase') || 
-                               primaryWallet?.connector?.metadata?.name?.toLowerCase().includes('coinbase');
 
-      // For EVM chains, use primaryWallet.signMessage() directly - it handles EIP-191 formatting automatically
-      // Exception: Coinbase wallet doesn't apply EIP-191 prefix, so we need to manually prefix the message
-      // For Solana, use signer's signMessage to get proper 64-byte signature
       let signature: string | Uint8Array;
-      
-      if (isEVMChain && isEthereumWallet(primaryWallet)) {
-        if (isCoinbaseWallet) {
-          // Coinbase wallet doesn't apply EIP-191 prefix with primaryWallet.signMessage()
-          // Use wallet client's signMessage which properly handles EIP-191 formatting
-          try {
-            const walletClient = await primaryWallet.getWalletClient();
-            const account = walletClient.account;
-            if (!account) {
-              toast.error('Wallet account not available');
-              return;
-            }
-            const result = await walletClient.signMessage({
-              account,
-              message: receiverSignMessage,
-            });
-            if (typeof result === 'string') {
-              signature = result;
-            } else if (result && typeof result === 'object' && 'signature' in result) {
-              signature = (result as { signature: string }).signature;
-            } else {
-              signature = result as string | Uint8Array;
-            }
-          } catch (error) {
-            // Check if user rejected the request
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            if (
-              typeof errorMessage === 'string' &&
-              (errorMessage.toLowerCase().includes('user rejected') ||
-               errorMessage.toLowerCase().includes('user denied') ||
-               errorMessage.toLowerCase().includes('rejected the request'))
-            ) {
-              toast.error('Signature request was cancelled');
-              return;
-            }
-            // Fallback to primaryWallet.signMessage if wallet client fails
-            try {
-              signature = await primaryWallet.signMessage(receiverSignMessage);
-            } catch (fallbackError) {
-              const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-              if (
-                typeof fallbackMessage === 'string' &&
-                (fallbackMessage.toLowerCase().includes('user rejected') ||
-                 fallbackMessage.toLowerCase().includes('user denied') ||
-                 fallbackMessage.toLowerCase().includes('rejected the request'))
-              ) {
-                toast.error('Signature request was cancelled');
-                return;
-              }
-              throw fallbackError;
-            }
-          }
-        } else {
-          console.log('handleApprove - primaryWallet address:', primaryWallet.address);
 
-          signature = await primaryWallet.signMessage(receiverSignMessage);
+      // ---------------- EVM SIGNING (FIXED) ----------------
+      if (isEVMChain && isEthereumWallet(primaryWallet)) {
+        const ethereumWallet = primaryWallet as EthereumWallet;
+        const walletClient = await ethereumWallet.getWalletClient();
+        const account = walletClient.account;
+
+        if (!account) {
+          toast.error('Wallet account not available');
+          return;
         }
+
+        // IMPORTANT:
+        // Convert address string → UTF-8 bytes → hex
+        // This forces Coinbase & Trust to sign the SAME bytes as MetaMask
+        const rawMessageHex = utf8ToHex(receiverAddress);
+
+        const signatureHex = await walletClient.signMessage({
+          account,
+          message: { raw: rawMessageHex }, // ✅ forces exact bytes
+        });
+
+        signature = signatureHex;
       } else if (isSolanaChain && isSolanaWallet(primaryWallet)) {
+        // Solana: sign bytes, keep your Phantom redirect handling
         try {
-          const messageBytes = new TextEncoder().encode(transaction.receiverAddress);
+          const messageBytes = new TextEncoder().encode(receiverAddress);
 
           if (isPhantomRedirect) {
             await signMessage(messageBytes);
@@ -284,14 +234,13 @@ export default function ReceiverPending() {
             signature = signedMessageResult.signature;
           }
         } catch (error) {
-          // Check if user rejected the request (will be caught by outer catch block)
           const errorMessage = error instanceof Error ? error.message : String(error);
           if (
             typeof errorMessage === 'string' &&
             (errorMessage.toLowerCase().includes('user rejected') ||
-             errorMessage.toLowerCase().includes('user denied') ||
-             errorMessage.toLowerCase().includes('rejected the request') ||
-             errorMessage.toLowerCase().includes('cancelled'))
+              errorMessage.toLowerCase().includes('user denied') ||
+              errorMessage.toLowerCase().includes('rejected the request') ||
+              errorMessage.toLowerCase().includes('cancelled'))
           ) {
             toast.error('Signature request was cancelled');
             return;
@@ -299,51 +248,79 @@ export default function ReceiverPending() {
           throw error;
         }
       } else {
-          signature = await primaryWallet.signMessage(receiverSignMessage);
+        // Fallback: use wallet client for consistency
+        try {
+          if (isEthereumWallet(primaryWallet)) {
+            const ethereumWallet = primaryWallet as EthereumWallet;
+            const walletClient = await ethereumWallet.getWalletClient();
+            const account = walletClient.account;
+            if (!account) {
+              toast.error('Wallet account not available');
+              return;
+            }
+            const rawMessageHex = utf8ToHex(receiverAddress);
+            signature = await walletClient.signMessage({
+              account,
+              message: { raw: rawMessageHex },
+            });
+          } else {
+            // For non-EVM wallets, fallback to signMessage
+            signature = await primaryWallet.signMessage(receiverAddress);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (
+            typeof errorMessage === 'string' &&
+            (errorMessage.toLowerCase().includes('user rejected') ||
+              errorMessage.toLowerCase().includes('user denied') ||
+              errorMessage.toLowerCase().includes('rejected the request') ||
+              errorMessage.toLowerCase().includes('cancelled'))
+          ) {
+            toast.error('Signature request was cancelled');
+            return;
+          }
+          throw error;
+        }
       }
-      
-      
+
       if (!signature) {
         toast.error('Failed to get signature from wallet');
         return;
       }
 
+      // Block weird non-hex "signatures"
       if (typeof signature === 'string') {
-        const looksLikeMpcSignature =
+        const looksNotLikeHexSig =
           signature.length > 300 ||
           signature.includes('.') ||
           signature.startsWith('{') ||
           signature.startsWith('eyJ'); // base64-encoded JSON
 
-        if (looksLikeMpcSignature) {
-          toast.error('Coinbase MPC signatures are not supported yet. Please use the in-app browser or another wallet.');
+        if (looksNotLikeHexSig) {
+          toast.error('Unsupported signature format from wallet.');
           return;
         }
       }
 
-      const txManager = new TxStateMachineManager(transaction);
-      
       // Convert signature to bytes
-      const isUint8Array = (value: unknown): value is Uint8Array => {
-        return value instanceof Uint8Array;
-      };
-      
+      const isUint8Array = (value: unknown): value is Uint8Array => value instanceof Uint8Array;
+
       let signatureBytes: Uint8Array;
-      
+
       if (typeof signature === 'string') {
         if (!signature || signature.length === 0) {
           toast.error('Invalid signature: empty string');
           return;
         }
+
         if (signature.startsWith('0x')) {
-          // Hex format (EVM chains)
+          // EVM: hex string 65 bytes (130 hex chars + 0x)
           signatureBytes = hexToBytes(signature as `0x${string}`);
         } else if (isSolanaChain) {
-          // Solana signatures are typically base58 encoded
+          // Solana signatures are often base58, but you already handle bytes too
           try {
             signatureBytes = new Uint8Array(bs58.decode(signature));
           } catch {
-            // If base58 decode fails, try as raw bytes
             signatureBytes = new TextEncoder().encode(signature);
           }
         } else {
@@ -355,62 +332,71 @@ export default function ReceiverPending() {
         toast.error('Invalid signature format from wallet');
         return;
       }
-      
+
       if (!signatureBytes || signatureBytes.length === 0) {
         toast.error('Invalid signature: signature bytes are empty');
         return;
       }
-      
+
       // Validate and normalize signature length
-      if (isEVMChain && signatureBytes.length !== 65) {
-        toast.error(`Invalid EVM signature length: expected 65 bytes, got ${signatureBytes.length}`);
-        return;
+      if (isEVMChain) {
+        if (signatureBytes.length !== 65) {
+          toast.error(`Invalid EVM signature length: expected 65 bytes, got ${signatureBytes.length}`);
+          return;
+        }
+
+        // Normalize EVM recovery byte (v)
+        // some libs expect v as 0/1 while wallets may return 27/28
+        const v = signatureBytes[64];
+        if (v === 27 || v === 28) {
+          const normalized = new Uint8Array(signatureBytes);
+          normalized[64] = v - 27; // 27→0, 28→1
+          signatureBytes = normalized;
+        }
       }
-      
+
       if (isSolanaChain) {
         if (signatureBytes.length < 64) {
           toast.error(`Invalid Solana signature length: expected at least 64 bytes, got ${signatureBytes.length}`);
           return;
         }
-        // Some wallets return extra bytes, take only the first 64 bytes
         if (signatureBytes.length > 64) {
           signatureBytes = signatureBytes.slice(0, 64);
         }
       }
-      
+
+      const txManager = new TxStateMachineManager(transaction);
       txManager.setReceiverSignature(Array.from(signatureBytes));
+
       const updatedTx = txManager.getTx();
       await receiverConfirmTransaction(updatedTx);
-      
-      // Mark this transaction as approved
+
       setApprovedTransactions(prev => new Set(prev).add(String(transaction.txNonce)));
-      
       toast.success('Transaction confirmed successfully');
-      
     } catch (error) {
       console.error('Error approving transaction:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorName = error instanceof Error ? error.name : '';
 
-      // Handle user rejection/cancellation
       if (
         typeof errorMessage === 'string' &&
         (errorMessage.toLowerCase().includes('user rejected') ||
-         errorMessage.toLowerCase().includes('user denied') ||
-         errorMessage.toLowerCase().includes('rejected the request') ||
-         errorName === 'UserRejectedRequestError')
+          errorMessage.toLowerCase().includes('user denied') ||
+          errorMessage.toLowerCase().includes('rejected the request') ||
+          errorName === 'UserRejectedRequestError')
       ) {
         toast.error('Signature request was cancelled');
         return;
       }
 
-      // Handle already pending signature request
       if (
         typeof errorMessage === 'string' &&
         errorMessage.toLowerCase().includes('already pending') &&
         errorMessage.toLowerCase().includes('personal_sign')
       ) {
-        toast.error('A signature request is already open in your wallet. Please complete or cancel it before confirming again.');
+        toast.error(
+          'A signature request is already open in your wallet. Please complete or cancel it before confirming again.'
+        );
       } else {
         toast.error(`Failed to confirm transaction: ${errorMessage}`);
       }

@@ -414,7 +414,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     try {
       await receiverConfirm(tx);
-      console.log('Transaction confirmed by receiver successfully');
     } catch (error) {
       console.error('Error confirming transaction by receiver:', error);
       throw error;
