@@ -423,7 +423,7 @@ export default function Wallets() {
             {userWallets.map((wallet) => (
               <div key={wallet.address} className="relative">
                 <Card 
-                  className="bg-[#0D1B1B] border-[#4A5853]/20 relative cursor-pointer active:bg-[#0D1B1B]/80 transition-colors"
+                  className="bg-[#0D1B1B] border-transparent relative cursor-pointer active:bg-[#0D1B1B]/80 transition-colors"
                   onMouseDown={() => handleLongPressStart(wallet.id)}
                   onMouseUp={handleLongPressEnd}
                   onMouseLeave={handleLongPressEnd}

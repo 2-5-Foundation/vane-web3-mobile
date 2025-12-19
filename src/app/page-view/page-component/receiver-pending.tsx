@@ -26,7 +26,7 @@ const utf8ToHex = (value: string) =>
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
-  <Card className="bg-[#0D1B1B] border-[#4A5853]/20 relative animate-pulse">
+  <Card className="bg-[#0D1B1B] border-transparent relative animate-pulse">
     <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">
       <div className="space-y-3">
         {/* Sender Address Skeleton */}
@@ -409,7 +409,7 @@ export default function ReceiverPending() {
   if (!recvTransactions || recvTransactions.length === 0) {
     return (
       <div className="space-y-3 pb-24">
-        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+        <Card className="bg-[#0D1B1B] border-transparent">
           <CardContent className="p-6">
             <div className="text-center">
 
@@ -465,7 +465,7 @@ export default function ReceiverPending() {
           ))}
         </>
       ) : recvTransactions.map((transaction, index) => (
-        <Card key={`${transaction.txNonce}-${index}`} className="bg-[#0D1B1B] border-[#4A5853]/20 relative">
+        <Card key={`${transaction.txNonce}-${index}`} className="bg-[#0D1B1B] border-transparent relative">
           <CardContent className="p-3 space-y-3 flex flex-col h-full justify-between">            
             
             <div className="space-y-2">

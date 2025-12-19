@@ -100,9 +100,9 @@ export function Frame({ children }: { children: React.ReactNode }) {
   const regularNavItems = navItems.filter(item => !item.isTransfer)
 
   return (
-    <div className="min-h-screen bg-[#1a2628]">
+    <div className="min-h-screen bg-[#151d1f]">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#4A5853]/20 bg-[#1a2628]/95 backdrop-blur supports-[backdrop-filter]:bg-[#1a2628]/60">
+      <header className="sticky top-0 z-50 w-full border-b border-[#4A5853]/20 bg-[#151d1f]/95 backdrop-blur supports-[backdrop-filter]:bg-[#151d1f]/60">
         <div className="flex justify-between items-center h-14 px-[15px]">
           {/* Logo section */}
           <div className="flex items-center">
@@ -125,7 +125,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Footer Navigation */}
-      <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-[#1a2628]/95 backdrop-blur-lg border-t border-[#4A5853]/20 md:hidden">
+      <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-[#151d1f]/95 backdrop-blur-lg border-t border-[#4A5853]/20 md:hidden">
         <div className="relative grid h-full grid-cols-4 mx-auto max-w-md px-6">
           {/* First item */}
           {regularNavItems.slice(0, 1).map((item) => (

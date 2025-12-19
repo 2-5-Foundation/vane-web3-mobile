@@ -30,7 +30,7 @@ import { usePhantomSignTransaction } from "./phantomSigning"
 
 // Skeleton loading component
 const TransactionSkeleton = () => (
-  <Card className="w-full bg-[#0D1B1B] border-r-2 border-white/10 relative animate-pulse">
+  <Card className="w-full bg-[#0D1B1B] border-r-2 border-transparent relative animate-pulse">
     <CardContent className="p-3">
       <div className="space-y-3">
         {/* Sender Address Skeleton */}
@@ -1017,7 +1017,7 @@ export default function SenderPending() {
   if (isLoadingTransactions) {
     return (
       <div className="space-y-3 pb-24">
-        <Card className="bg-[#0D1B1B] border-[#4A5853]/20">
+        <Card className="bg-[#0D1B1B] border-transparent">
           <CardContent className="p-6">
           <div className="text-center">
             <p className="text-[#9EB2AD] text-sm inline-flex items-center gap-1 whitespace-nowrap">
@@ -1058,7 +1058,7 @@ export default function SenderPending() {
       })() ? (
         <>
           <div className="">
-            <Card className="w-full bg-[#0D1B1B] border-[#4A5853]/20">
+            <Card className="w-full bg-[#0D1B1B] border-transparent">
               <CardContent className="p-3">
                 <div className="flex items-center justify-center gap-2 text-[#9EB2AD]">
                   <span className="text-sm">No pending updates — initiate a transaction</span>
@@ -1091,7 +1091,7 @@ export default function SenderPending() {
         const isExpanded = expandedCards.has(txKey);
         
         return (
-          <Card key={txKey} className="w-full bg-[#0D1B1B] border-r-2 border-white/10 relative">
+          <Card key={txKey} className="w-full bg-[#0D1B1B] border-r-2 border-transparent relative">
             <CardContent className="p-3">
               {/* Collapsed View - Always visible */}
               <div className="space-y-2">
