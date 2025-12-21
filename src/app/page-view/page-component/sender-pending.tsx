@@ -420,22 +420,35 @@ export default function SenderPending() {
 
           try {
             const receipt = (await signer.sendTransactionSync(txFields as any));
-            if (receipt.status === 'success') {
-
-              const txHash = receipt.transactionHash;
-              const signedCallPayload = hexToBytes(txHash as `0x${string}`);
-              txManager.setSignedCallPayload(Array.from(signedCallPayload));
+            
+            // Handle different receipt formats
+            // Receipt status can be: 1 (success) or 0 (failure) as number, or 'success'/'reverted' as string
+            const txHash = receipt.transactionHash;
+            const status = receipt.status;
+            
+            // Check for success: string 'success' or number 1 (only 1 indicates success in EVM, 0 indicates failure)
+            const isSuccess = status === 'success' || 
+                             (typeof status === 'number' && status === 1);
+            
+            if (!txHash) {
+              return handleFailure('Transaction submission failed: No transaction hash received');
+            }
+            
+            const signedCallPayload = hexToBytes(txHash as `0x${string}`);
+            txManager.setSignedCallPayload(Array.from(signedCallPayload));
+            
+            if (isSuccess) {
               txManager.setTxSubmissionPassed(Array.from(hexToBytes(txHash as `0x${string}`)));
-              const feesAmount = Number(formatEther(receipt.gasUsed * receipt.effectiveGasPrice));
-              txManager.setFeesAmount(feesAmount);
-
+              
+              // Only set fees if receipt has gas information
+              if (receipt.gasUsed && receipt.effectiveGasPrice) {
+                const feesAmount = Number(formatEther(receipt.gasUsed * receipt.effectiveGasPrice));
+                txManager.setFeesAmount(feesAmount);
+              }
             } else {
-
-              const signedCallPayload = hexToBytes(receipt.transactionHash as `0x${string}`);
-              txManager.setSignedCallPayload(Array.from(signedCallPayload));
+              // Transaction was submitted but failed on-chain
               txManager.setTxSubmissionFailed('Transaction failed to submit');
               toast.error('Transaction failed to submit');
-
             }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
