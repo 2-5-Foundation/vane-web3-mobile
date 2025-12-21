@@ -15,12 +15,6 @@ import { mainnet,polygon,optimism,arbitrum,base } from 'viem/chains'
 
 export const runtime = 'nodejs' 
 
-const ETH_RPC_URL = process.env.ETHEREUM_MAINNET_API!
-const BASE_RPC_URL = process.env.BASE_MAINNET_API!
-const POLYGON_RPC_URL = process.env.POLYGON_MAINNET_API!
-const OPTIMISM_RPC_URL = process.env.OPTIMISM_MAINNET_API!
-const ARBITRUM_RPC_URL = process.env.ARBITRUM_MAINNET_API!
-
 const bad = (status: number, msg: string) =>
     NextResponse.json({ error: msg }, { status });
  
@@ -34,18 +28,46 @@ const isNative = (token: Token) => {
          ("Arbitrum" in token && token.Arbitrum === "ETH")  
 }
 
-const isRpcAvailable = (network: ChainSupported):{rpcUrl: string, chain: Chain} | null => {
+// Get RPC URL at runtime to ensure env vars are available
+const getRpcConfig = (network: ChainSupported):{rpcUrl: string, chain: Chain} | null => {
+  // Read env vars at runtime, not module load time
+  const ETH_RPC_URL = process.env.ETHEREUM_MAINNET_API;
+  const BASE_RPC_URL = process.env.BASE_MAINNET_API;
+  const POLYGON_RPC_URL = process.env.POLYGON_MAINNET_API;
+  const OPTIMISM_RPC_URL = process.env.OPTIMISM_MAINNET_API;
+  const ARBITRUM_RPC_URL = process.env.ARBITRUM_MAINNET_API;
+
   switch (network) {
     case ChainSupported.Ethereum:
-      return {rpcUrl: ETH_RPC_URL, chain: mainnet};
+      if (!ETH_RPC_URL) {
+        console.error('ETHEREUM_MAINNET_API is not set');
+        return null;
+      }
+      return {rpcUrl: ETH_RPC_URL.trim(), chain: mainnet};
     case ChainSupported.Base:
-      return {rpcUrl: BASE_RPC_URL, chain: base};
+      if (!BASE_RPC_URL) {
+        console.error('BASE_MAINNET_API is not set');
+        return null;
+      }
+      return {rpcUrl: BASE_RPC_URL.trim(), chain: base};
     case ChainSupported.Polygon:
-      return {rpcUrl: POLYGON_RPC_URL, chain: polygon};
+      if (!POLYGON_RPC_URL) {
+        console.error('POLYGON_MAINNET_API is not set');
+        return null;
+      }
+      return {rpcUrl: POLYGON_RPC_URL.trim(), chain: polygon};
     case ChainSupported.Optimism:
-      return {rpcUrl: OPTIMISM_RPC_URL, chain: optimism};
+      if (!OPTIMISM_RPC_URL) {
+        console.error('OPTIMISM_MAINNET_API is not set');
+        return null;
+      }
+      return {rpcUrl: OPTIMISM_RPC_URL.trim(), chain: optimism};
     case ChainSupported.Arbitrum:
-      return {rpcUrl: ARBITRUM_RPC_URL, chain: arbitrum};
+      if (!ARBITRUM_RPC_URL) {
+        console.error('ARBITRUM_MAINNET_API is not set');
+        return null;
+      }
+      return {rpcUrl: ARBITRUM_RPC_URL.trim(), chain: arbitrum};
     default:
       return null;
   }
@@ -84,26 +106,31 @@ const getTokenAddress = (token: Token, network: ChainSupported): string | null =
 
 
 export async function POST(req: NextRequest) {
-  
+  try {
     const body = await req.json().catch(() => null) as { tx?: any } | null;
     if (!body?.tx) return bad(400, 'Missing { tx }');
 
     const tx = fromWire(body.tx);
 
-    // Ensure senderAddressNetwork is a supported EVM network, with precise type check
+    // Ensure senderAddressNetwork is a supported EVM network
     if (!EVM_NETWORKS.some(network => network === tx.senderAddressNetwork)) {
       return bad(400, 'Unsupported EVM network');
     }
-    if (!isRpcAvailable(tx.senderAddressNetwork)) return bad(500, 'Server not configured');
+
+    // Get RPC config at runtime
+    const rpcConfig = getRpcConfig(tx.senderAddressNetwork);
+    if (!rpcConfig) {
+      console.error('RPC not configured for network:', tx.senderAddressNetwork);
+      return bad(500, 'Server not configured: RPC URL missing for network');
+    }
 
     // Setup the client for EVM chains
     const client = createPublicClient({
-      chain: isRpcAvailable(tx.senderAddressNetwork)?.chain,
-      transport: http(isRpcAvailable(tx.senderAddressNetwork)?.rpcUrl),
+      chain: rpcConfig.chain,
+      transport: http(rpcConfig.rpcUrl),
     });
 
-  
-    const sender   = tx.senderAddress as Address;
+    const sender = tx.senderAddress as Address;
     const receiver = tx.receiverAddress as Address;
     
     // Build calldata just for gas estimation (not returned)
@@ -129,20 +156,36 @@ export async function POST(req: NextRequest) {
       value = 0n;
     }
   
-    const [nonce, gas, fees] = await Promise.all([
-      client.getTransactionCount({ address: sender }),
-      client.estimateGas({ account: sender, to, value, data }),
-      client.estimateFeesPerGas().catch(async () => {
-        const gasPrice = await client.getGasPrice();
-        return { maxFeePerGas: gasPrice, maxPriorityFeePerGas: gasPrice };
-      }),
-    ]);
-  
+    // Wrap RPC calls in try-catch to handle failures gracefully
+    let nonce, gas, fees;
+    try {
+      [nonce, gas, fees] = await Promise.all([
+        client.getTransactionCount({ address: sender }),
+        client.estimateGas({ account: sender, to, value, data }),
+        client.estimateFeesPerGas().catch(async () => {
+          const gasPrice = await client.getGasPrice();
+          return { maxFeePerGas: gasPrice, maxPriorityFeePerGas: gasPrice };
+        }),
+      ]);
+    } catch (rpcError: any) {
+      console.error('RPC call failed:', {
+        network: tx.senderAddressNetwork,
+        error: rpcError?.message || String(rpcError),
+        cause: rpcError?.cause?.message || rpcError?.cause,
+        url: rpcConfig.rpcUrl.substring(0, 50) + '...',
+        sender,
+        receiver,
+      });
+      
+      // Provide more helpful error message
+      const errorMessage = rpcError?.message || rpcError?.cause?.message || 'Unknown RPC error';
+      return bad(500, `RPC call failed: ${errorMessage}`);
+    }
 
     const fields: UnsignedEip1559 = {
       to: to,
       value: value,
-      chainId: isRpcAvailable(tx.senderAddressNetwork)?.chain.id,
+      chainId: rpcConfig.chain.id,
       nonce: nonce,
       gas: gas,
       maxFeePerGas: fees.maxFeePerGas,
@@ -152,10 +195,13 @@ export async function POST(req: NextRequest) {
       type: 'eip1559',
     };
   
-    const feesInEth = formatEther(gas * fees.maxFeePerGas); // this takes care of polygon too
+    const feesInEth = formatEther(BigInt(gas) * BigInt(fees.maxFeePerGas));
   
     const signingPayload = serializeTransaction(fields as TransactionSerializableEIP1559) as Hex;
-    if (!signingPayload.startsWith('0x02')) throw new Error('Expected 0x02 typed payload');
+    if (!signingPayload.startsWith('0x02')) {
+      console.error('Invalid transaction payload format:', signingPayload.substring(0, 10));
+      return bad(500, 'Invalid transaction payload format');
+    }
     const digest = keccak256(signingPayload) as Hex;
   
     const updated: TxStateMachine = {
@@ -173,4 +219,12 @@ export async function POST(req: NextRequest) {
     };  
   
     return NextResponse.json({ prepared: toWire(updated) });
+  } catch (error: any) {
+    console.error('Error in prepare-evm route:', {
+      error: error?.message || String(error),
+      stack: error?.stack,
+      cause: error?.cause,
+    });
+    return bad(500, `Internal server error: ${error?.message || 'Unknown error'}`);
   }
+}
