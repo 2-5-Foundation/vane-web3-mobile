@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { RefreshCw, AlertCircle, ChevronDown, ChevronUp, Shield } from "lucide-react"
 import { useState, useEffect} from "react"
 import { useDynamicContext, WalletConnector} from "@dynamic-labs/sdk-react-core";
 import { useTransactionStore } from "@/app/lib/useStore"
@@ -26,6 +26,9 @@ import {
 } from '@solana/web3.js';
 
 import { usePhantomSignTransaction } from "./phantomSigning"
+import { prepareEvmTransactionAction, prepareBscTransactionAction, prepareSolanaTransactionAction } from '@/app/actions/txActions'
+import { toWire, fromWire } from '@/lib/vane_lib/pkg/host_functions/networking'
+import { motion } from "framer-motion"
 
 
 // Skeleton loading component
@@ -68,6 +71,14 @@ const TransactionSkeleton = () => (
     </CardContent>
   </Card>
 );
+
+const isEVMChain = (network: ChainSupported): boolean => {
+  return network === ChainSupported.Ethereum ||
+         network === ChainSupported.Base || 
+         network === ChainSupported.Polygon ||
+         network === ChainSupported.Optimism ||
+        network === ChainSupported.Arbitrum;
+}
 
 export const getTokenLabel = (token: Token): string => {
   if ('Ethereum' in token) {
@@ -188,16 +199,7 @@ const setSubmissionPending = (txNonce: string, isPending: boolean) => {
   } catch {}
 };
 
-const clearAllSubmissionPending = () => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem('SubmissionPending');
-  } catch {}
-};
 
-const isSubmissionPending = (txNonce: string): boolean => {
-  return getSubmissionPending()[txNonce] === true;
-};
 
 export default function SenderPending() {
 
@@ -206,7 +208,9 @@ export default function SenderPending() {
 
   // ----------------------------------------------------------------- //
  
- 
+  const [showCorruptedModal, setShowCorruptedModal] = useState(false);
+
+
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showSkeleton, setShowSkeleton] = useState(false)
   const [showActionConfirmMap, setShowActionConfirmMap] = useState<Record<string, boolean>>({});
@@ -224,6 +228,10 @@ export default function SenderPending() {
   const senderConfirmTransaction = useTransactionStore(state => state.senderConfirmTransaction)
   const revertTransaction = useTransactionStore(state => state.revertTransaction)
   const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
+  const verifyTxCallPayload = useTransactionStore(state => state.verifyTxCallPayload)
+  const initializeWasm = useTransactionStore(state => state.initializeWasm)
+  const startWatching = useTransactionStore(state => state.startWatching)
+  const isWasmCorrupted = useTransactionStore(state => state.isWasmCorrupted)
 
   const { primaryWallet } = useDynamicContext();
 
@@ -296,7 +304,6 @@ export default function SenderPending() {
     console.log('transaction', transaction);
     await revertTransaction(transaction, "User requested revert");
     removeTransaction(transaction);
-    toast.info(`Transaction to ${transaction.receiverAddress} Reverted Safely`);
   }
 
 
@@ -310,8 +317,45 @@ export default function SenderPending() {
   };
 
   const handleConfirm = async(transaction:TxStateMachine) => {
+
+    if (!isWasmInitialized()) {
+      try {
+        if (!primaryWallet) {
+          toast.error('Please connect your wallet first');
+          return;
+        }
+        await initializeWasm(
+          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+          primaryWallet.address,
+          primaryWallet.chain,
+          false, // self_node: false (default for wallet connection)
+          true   // live: true
+        );
+        await startWatching();
+        console.log('WASM not initialized, re initialized and started watching');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+      } catch (error) {
+        toast.error("Failed to start app. Refreshing should fix it.");
+        console.error('Failed to start app on receiver pending:', error);   
+      }
+    }
+    // check if wasm is not corrupted
+    const isCorrupted = await isWasmCorrupted();
+    if (isCorrupted){
+
+      setShowCorruptedModal(true);
+      return;
+    }
+
+
       // Save txNonce to localStorage to track submission pending state
       const txNonce = String(transaction.txNonce);
+
+      if (submissionPending[txNonce]) {
+        return;
+      }
+
       setSubmissionPending(txNonce, true);
       setSubmissionPendingState(prev => ({ ...prev, [txNonce]: true }));
       const handleFailure = (message?: string) => {
@@ -320,9 +364,49 @@ export default function SenderPending() {
         }
         clearSubmissionPendingFlag(txNonce);
         setSubmissionPendingState(prev => ({ ...prev, [txNonce]: false }));
-        setShowActionConfirmMap(prev => ({ ...prev, [txNonce]: true }));
+        // Hide confirm UI on failure - user must explicitly retry
+        setShowActionConfirmMap(prev => ({ ...prev, [txNonce]: false }));
       };
+
+      //  construct the payload and verify it.
+      // Prepare transaction using Server Action based on network
+      let preparedTransaction: TxStateMachine;
       
+      try {
+        if (
+          isEVMChain(transaction.senderAddressNetwork)
+        ) {
+          const result = await prepareEvmTransactionAction(toWire(transaction));
+          preparedTransaction = fromWire(result.prepared);
+        } else if (transaction.senderAddressNetwork === ChainSupported.Bnb) {
+          const result = await prepareBscTransactionAction(toWire(transaction));
+          preparedTransaction = fromWire(result.prepared);
+        } else if (transaction.senderAddressNetwork === ChainSupported.Solana) {
+          const result = await prepareSolanaTransactionAction(toWire(transaction));
+          preparedTransaction = fromWire(result.prepared);
+        } else {
+          return handleFailure('Unsupported network for transaction preparation');
+        }
+        
+        // Update transaction with prepared payload
+        transaction = preparedTransaction;
+      } catch (error) {
+        console.error('Error preparing transaction:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return handleFailure(`Failed to prepare transaction: ${errorMessage}`);
+      }
+      
+      try {
+        console.log('Verifying transaction payload');
+        console.log('transaction', transaction);
+        // verify the transaction payload
+        await verifyTxCallPayload(transaction);
+      } catch (error) {
+        console.error('Transaction verification failed:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return handleFailure(`${errorMessage}`);
+      }
+     
       try {
       // Handle confirm logic
       // sign the transaction payload & update the transaction state
@@ -360,11 +444,10 @@ export default function SenderPending() {
 
             const isRedirectWallet = isPhantomRedirectConnector(primaryWallet?.connector);
 
-            if(isRedirectWallet){
-              // await execute(versionSolTx);
-              // toast.success("Signed tx: " + tx);
-              toast.info("Please use another wallet for now (not Phantom)");
-
+            if (isRedirectWallet) {
+              toast.info("Phantom redirect signing is not supported yet.");
+              return handleFailure();
+              
             } else{
               const signedTx = await signer.signTransaction(versionSolTx as any);
                txManager.setCallPayload({solana: {callPayload: Array.from(signedTx.message.serialize()), latestBlockHeight: latesBlockHeight}});
@@ -1044,6 +1127,7 @@ export default function SenderPending() {
   }
 
   return (
+    
     <div className="pt-2 space-y-3 pb-24">
       {/* Header with Refresh */}
       <div className="flex justify-end">
@@ -1058,6 +1142,32 @@ export default function SenderPending() {
           {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </Button>
       </div>
+
+      {showCorruptedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Overlay */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative bg-[#0D1B1B] rounded-lg p-4 w-[320px]"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-3 h-3 text-gray-400" />
+              <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">
+                Dont worry
+              </span>
+            </div>
+
+            <div className="text-sm font-light text-white">
+              This session needs a refresh.
+              Please unlink your wallet and reload the page.
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {showSkeleton ? (
         <>

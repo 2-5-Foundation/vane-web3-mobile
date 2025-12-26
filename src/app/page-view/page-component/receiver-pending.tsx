@@ -10,7 +10,7 @@ import { isSolanaWallet } from "@dynamic-labs/solana";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { TxStateMachine, TxStateMachineManager, Token, ChainSupported } from '@/lib/vane_lib/main';
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle, RefreshCw, Shield } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatAmount, getTokenLabel} from "./sender-pending";
 import bs58 from 'bs58';
@@ -19,6 +19,7 @@ import {usePhantomSignTransaction} from "./phantomSigning"
 import {
   isPhantomRedirectConnector,
 } from '@dynamic-labs/wallet-connector-core';
+import { motion } from "framer-motion";
 
 // Helper: Convert UTF-8 string to hex (forces consistent byte encoding across wallets)
 const utf8ToHex = (value: string) =>
@@ -75,8 +76,17 @@ const TransactionSkeleton = () => (
 );
 
 export default function ReceiverPending() {
+  const [showCorruptedModal, setShowCorruptedModal] = useState(false);
+
+
   const { primaryWallet } = useDynamicContext()
-  const { recvTransactions, receiverConfirmTransaction, isWasmInitialized, fetchPendingUpdates } = useTransactionStore()
+  const isWasmCorrupted = useTransactionStore(state => state.isWasmCorrupted)
+  const recvTransactions = useTransactionStore(state => state.recvTransactions)
+  const receiverConfirmTransaction = useTransactionStore(state => state.receiverConfirmTransaction)
+  const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
+  const initializeWasm = useTransactionStore(state => state.initializeWasm)
+  const startWatching = useTransactionStore(state => state.startWatching)
+  const fetchPendingUpdates = useTransactionStore(state => state.fetchPendingUpdates)
   const { tokenBalances } = useTokenBalances({
     includeFiat: true,
     includeNativeBalance: true
@@ -153,7 +163,6 @@ export default function ReceiverPending() {
         fetchPendingUpdates(),
         new Promise(resolve => setTimeout(resolve, 1000))
       ]);
-      toast.success('Transactions refreshed');
     } catch (e) {
       console.error('Error refreshing transactions:', e);
       toast.error('Failed to refresh transactions');
@@ -165,7 +174,32 @@ export default function ReceiverPending() {
 
   const handleApprove = async (transaction: TxStateMachine) => {
     if (!isWasmInitialized()) {
-      toast.error('Connection not initialized. Please refresh the page.');
+      try {
+        if (!primaryWallet) {
+          toast.error('Please connect your wallet first');
+          return;
+        }
+        await initializeWasm(
+          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+          primaryWallet.address,
+          primaryWallet.chain,
+          false, // self_node: false (default for wallet connection)
+          true   // live: true
+        );
+        await startWatching();
+        console.log('WASM not initialized, re initialized and started watching');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+      } catch (error) {
+        toast.error("Failed to start app. Refreshing should fix it.");
+        console.error('Failed to start app on receiver pending:', error);   
+      }
+    }
+    // check if wasm is not corrupted
+    const isCorrupted = await isWasmCorrupted();
+    if (isCorrupted){
+
+      setShowCorruptedModal(true);
       return;
     }
 
@@ -372,7 +406,6 @@ export default function ReceiverPending() {
       await receiverConfirmTransaction(updatedTx);
 
       setApprovedTransactions(prev => new Set(prev).add(String(transaction.txNonce)));
-      toast.success('Transaction confirmed successfully');
     } catch (error) {
       console.error('Error approving transaction:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -455,6 +488,32 @@ export default function ReceiverPending() {
           {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </Button>
       </div>
+
+      {showCorruptedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Overlay */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative bg-[#0D1B1B] rounded-lg p-4 w-[320px]"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-3 h-3 text-gray-400" />
+              <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">
+                Dont worry
+              </span>
+            </div>
+
+            <div className="text-sm font-light text-white">
+              This session needs a refresh.
+              Please unlink your wallet and reload the page.
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Pending Transactions */}
       {showSkeleton ? (

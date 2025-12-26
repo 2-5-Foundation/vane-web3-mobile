@@ -37,7 +37,9 @@ import {
   LogLevel,
   addAccount,
   clearRevertedFromCache,
-  deleteTxInCache
+  deleteTxInCache,
+  verifyTxCallPayload,
+  clearCache
 } from '@/lib/vane_lib/main'
 
 import { config } from 'dotenv';
@@ -83,18 +85,21 @@ export interface TransactionState {
   // receiver context
   addRecvTransaction: (tx: TxStateMachine) => void;
   removeRecvTransaction: (txNonce: number) => void;
+  isWasmCorrupted: () => Promise<boolean>;
   
   // WASM initialization and management
   initializeWasm: (relayMultiAddr: string, account: string, network: string, selfNode:boolean, live: boolean) => Promise<void>;
   startWatching: () => Promise<void>;
   stopWatching: () => void;
   isWasmInitialized: () => boolean;
+  clearCache: () => void;
   
   // WASM transaction methods
   initiateTransaction: (sender: string, receiver: string, amount: bigint, token: Token, codeWord: string, senderNetwork: ChainSupported, receiverNetwork: ChainSupported) => Promise<TxStateMachine>;
   addAccount: (accountId: string, network: string) => Promise<void>;
   senderConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
   receiverConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
+  verifyTxCallPayload: (tx: TxStateMachine) => Promise<void>;
   revertTransaction: (tx: TxStateMachine, reason?: string) => Promise<void>;
   fetchPendingUpdates: () => Promise<TxStateMachine[]>;
   exportStorageData: () => Promise<StorageExport>;
@@ -257,6 +262,35 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }));
   },
 
+  isWasmCorrupted: async () => {
+  
+    const TIMEOUT_MS = 1500;
+  
+    try {
+      await Promise.race([
+        exportStorage(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("WASM_HEALTHCHECK_TIMEOUT")), TIMEOUT_MS)
+        ),
+      ]);
+  
+      console.log("WASM is not corrupted");
+      return false;
+    } catch (e) {
+      console.log("WASM is corrupted");
+      const msg = String((e as any)?.message ?? e);
+  
+      return (
+        msg.includes("WASM_HEALTHCHECK_TIMEOUT") ||
+        msg.includes("unreachable") ||
+        msg.includes("RuntimeError") ||
+        msg.includes("memory") ||
+        msg.includes("out of bounds") ||
+        msg.includes("memory access out of bounds")
+      );
+    }
+  },
+
   // WASM initialization and management
   initializeWasm: async (relayMultiAddr: string, account: string, network: string, selfNode:boolean, live: boolean = true) => {
     try {
@@ -326,6 +360,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   isWasmInitialized: () => isInitialized(),
+  clearCache: async () => await clearCache(),
 
   // WASM transaction methods
   initiateTransaction: async (
@@ -365,6 +400,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     } catch (error) {
       console.error('Error adding account:', error);
+      throw error;
+    }
+  },
+
+  verifyTxCallPayload: async (tx: TxStateMachine) => {
+    if (!isInitialized()) {
+      throw new Error('WASM node not initialized');
+    }
+    try {
+      await verifyTxCallPayload(tx);
+    } catch (error) {
+      console.error(error);
       throw error;
     }
   },

@@ -1,7 +1,4 @@
-// app/api/prepare-bsc/route.ts
-
-import { fromWire, toWire, UnsignedLegacy } from '@/lib/vane_lib/pkg/host_functions/networking'
-import { NextRequest, NextResponse } from 'next/server'
+import { UnsignedLegacy } from '@/lib/vane_lib/pkg/host_functions/networking'
 import {
   createPublicClient, http, encodeFunctionData,
   erc20Abi, type Address, type Hex, type PublicClient,
@@ -14,43 +11,23 @@ import {
 import { bsc } from 'viem/chains'
 import type { TxStateMachine } from '@/lib/vane_lib/primitives'
 
-export const runtime = 'nodejs'
-
 const RPC_URL = process.env.BSC_RPC_URL!
-
-// tiny helpers
-const bad = (status: number, msg: string) =>
-  NextResponse.json({ error: msg }, { status })
-
-const toU8 = (x: any): Uint8Array | undefined =>
-  x == null ? undefined
-  : x instanceof Uint8Array ? x
-  : Array.isArray(x) ? new Uint8Array(x)
-  : typeof x === 'object' ? Uint8Array.from(Object.values(x))
-  : undefined
-
-const toBig = (x: any) => (typeof x === 'string' ? BigInt(x) : x)
 
 // check if address has code (token contract)
 type HasGetCode = Pick<PublicClient, 'getCode'>
 const isContract = async (client: HasGetCode, addr: Address) =>
   (await client.getCode({ address: addr })) !== '0x'
 
+export async function prepareBscTransaction(tx: TxStateMachine): Promise<TxStateMachine> {
+  if (!RPC_URL) throw new Error('Server not configured')
 
-export async function POST(req: NextRequest) {
-  if (!RPC_URL) return bad(500, 'Server not configured')
-
-  const body = await req.json().catch(() => null) as { tx?: any } | null
-  if (!body?.tx) return bad(400, 'Missing { tx }')
-
-  const tx = fromWire(body.tx)
   if (tx.senderAddressNetwork !== 'Bnb') {
-    return bad(400, 'Only BSC supported in this endpoint')
+    throw new Error('Only BSC supported in this endpoint')
   }
 
   const client = createPublicClient({ chain: bsc, transport: http(RPC_URL) })
 
-  const sender   = tx.senderAddress as Address
+  const sender = tx.senderAddress as Address
   const receiver = tx.receiverAddress as Address
 
   // native BNB if token.Bnb === 'BNB'
@@ -70,8 +47,8 @@ export async function POST(req: NextRequest) {
     // BEP-20 transfer
     const bep20 = ("Bnb" in tx.token && typeof tx.token.Bnb === "object" && "BEP20" in tx.token.Bnb) ?
       tx.token.Bnb.BEP20.address : null;
-    if (!bep20) return bad(400, 'Missing BEP20 token address');
-    if (!(await isContract(client, bep20 as Address))) return bad(400, 'Invalid BEP20 address (no code)');
+    if (!bep20) throw new Error('Missing BEP20 token address');
+    if (!(await isContract(client, bep20 as Address))) throw new Error('Invalid BEP20 address (no code)');
 
     // encode transfer(to, amount)
     data = encodeFunctionData({
@@ -105,7 +82,7 @@ export async function POST(req: NextRequest) {
   const feesInBNB = formatEther(gas * gasPrice);
 
   const signingPayload = serializeTransaction(fields as TransactionSerializableLegacy) as Hex;
- 
+
   const digest = keccak256(signingPayload) as Hex;
   const updated: TxStateMachine = {
     ...tx,
@@ -123,5 +100,6 @@ export async function POST(req: NextRequest) {
     }
   };
 
-  return NextResponse.json({ prepared: toWire(updated) })
+  return updated;
 }
+

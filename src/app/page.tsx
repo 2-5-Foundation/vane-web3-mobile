@@ -113,7 +113,7 @@ export default function Home() {
         if ('SenderRequestHandled' in event) {
           const txStateMachine = decodeTxStateMachine(event.SenderRequestHandled.data);
           if (isPrimaryWalletSender(txStateMachine)) {
-            toast.success(`Request received ${txStateMachine.receiverAddress}`);
+            console.log('Request received', txStateMachine.receiverAddress);
           }
           return;
         }
@@ -123,9 +123,13 @@ export default function Home() {
         if ('SenderReverted' in event) {
           const txStateMachine = decodeTxStateMachine(event.SenderReverted.data);
           if (isPrimaryWalletSender(txStateMachine)) {
-            toast.error(`Sender reverted for receiver ${txStateMachine.receiverAddress}`, {
-              style: { background: '#fee2e2', color: '#991b1b' },
-            });
+            toast.success(
+              `You reverted successfully for receiver ${txStateMachine.receiverAddress}`,
+              {
+                className:
+                  "bg-transparent border border-green-500/40 text-green-400",
+              }
+            );
           }
           return;
         }

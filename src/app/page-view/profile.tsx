@@ -27,7 +27,9 @@ const CHAIN_TO_NETWORK_ID: Record<ChainSupported, number> = {
 const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453];
 
 export default function Profile() {
-  const { exportStorageData, isWasmInitialized } = useTransactionStore();
+  const exportStorageData = useTransactionStore(state => state.exportStorageData)
+  const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
+  const isWasmCorrupted = useTransactionStore(state => state.isWasmCorrupted)
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [primaryNetworkId, setPrimaryNetworkId] = useState<number | null>(null);
@@ -44,6 +46,18 @@ export default function Profile() {
       console.warn('Unable to clear persisted storage export', e);
     }
   }, [isWasmInitialized]);
+
+  useEffect(() => {
+    if (isWasmInitialized()) {
+      async function checkWasmCorrupted() {
+       const isCorrupted = await isWasmCorrupted();
+       if (isCorrupted){
+        return;
+       }
+      }
+      checkWasmCorrupted();
+    }
+  }, [isWasmInitialized, isWasmCorrupted]);
 
   // Get token balances with network-specific parameters
   const tokenBalanceArgs = useMemo(() => {

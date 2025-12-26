@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, ArrowLeft, ArrowRight, DollarSign, Network } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, DollarSign, Network, Shield } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
@@ -125,9 +125,16 @@ const truncateAddress = (address: string, startChars: number = 16, endChars: num
 };
 
 export default function TransferForm({ tokenList, transferType, userWallets = [], onNetworkChange }: TransferFormProps) {
-  const setTransferStatus = useTransactionStore().setTransferStatus;
-  const storeSetTransferFormData = useTransactionStore().storeSetTransferFormData;
-  const { initiateTransaction, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore();
+
+  const [showCorruptedModal, setShowCorruptedModal] = useState(false);
+
+  const setTransferStatus = useTransactionStore(state => state.setTransferStatus)
+  const storeSetTransferFormData = useTransactionStore(state => state.storeSetTransferFormData)
+  const isWasmCorrupted = useTransactionStore(state => state.isWasmCorrupted)
+  const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
+  const initializeWasm = useTransactionStore(state => state.initializeWasm)
+  const startWatching = useTransactionStore(state => state.startWatching)
+  const initiateTransaction = useTransactionStore(state => state.initiateTransaction)
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
   
   const setCurrentView = useStore(state => state.setCurrentView);
@@ -306,7 +313,13 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     setFormData(prev => ({ ...prev, amount: cleanValue }));
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
+    const isCorrupted = await isWasmCorrupted();
+    if (isCorrupted){
+       setShowCorruptedModal(true);
+       return;
+    }
+    
     if (currentStep === 'recipient') {
       if (formData.recipient.trim()) {
         setCurrentStep('amount');
@@ -332,12 +345,32 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     setFormData(prev => ({ ...prev, asset: value }));
   };
 
-  const handleNetworkChange = (value: string) => {
-    console.log('handleNetworkChange', value);
-    setFormData(prev => ({ ...prev, network: value }));
-  };
 
   const submitInitiateTx = async() => {
+    if (!isWasmInitialized()) {
+      try {
+        if (!primaryWallet) {
+          toast.error('Please connect your wallet first');
+          return;
+        }
+        await initializeWasm(
+          process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
+          primaryWallet.address,
+          primaryWallet.chain,
+          false, // self_node: false (default for wallet connection)
+          true   // live: true
+        );
+        await startWatching();
+        console.log('WASM not initialized, re initialized and started watching');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+      } catch (error) {
+        toast.error("Failed to start app. Refreshing should fix it.");
+        console.error('Failed to start app on receiver pending:', error);   
+      }
+    }
+
+    
     try {
       setIsSubmitting(true);
       
@@ -479,6 +512,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
  
 
   return (
+    
     <motion.div 
       initial={{ opacity: 0, y: 20 }} 
       animate={{ opacity: 1, y: 0 }}
@@ -520,6 +554,33 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
           border-color: rgba(255, 255, 255, 0.12);
         }
       `}</style>
+
+      {showCorruptedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Overlay */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative bg-[#0D1B1B] rounded-lg p-4 w-[320px]"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-3 h-3 text-gray-400" />
+              <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">
+                Dont worry
+              </span>
+            </div>
+
+            <div className="text-sm font-light text-white">
+              This session needs a refresh.
+              Please unlink your wallet and reload the page.
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Progressive Transfer Form */}
       <div className="flex-none">
         <Card className="bg-[#1a2628] border border-transparent">
