@@ -1348,9 +1348,9 @@ export default function SenderPending() {
                      {/* Fees and Codeword */}
                      <div className="flex justify-between gap-3">
                        <div className="flex-1">
-                         <span className="text-xs text-[#9EB2AD] font-medium">Fees</span>
+                         <span className="text-xs text-[#9EB2AD] font-medium">Vane Protection Fees</span>
                          <p className="text-sm text-white">
-                          {transaction.feesAmount.toFixed(6)}
+                          {formatAmount(transaction.vaneFeesAmount, transaction.token)}
                          </p>
                        </div>
                        <div className="flex-1">

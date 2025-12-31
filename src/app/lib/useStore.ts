@@ -97,7 +97,7 @@ export interface TransactionState {
   clearCache: () => void;
   
   // WASM transaction methods
-  initiateTransaction: (sender: string, receiver: string, amount: bigint, token: Token, codeWord: string, senderNetwork: ChainSupported, receiverNetwork: ChainSupported) => Promise<TxStateMachine>;
+  initiateTransaction: (sender: string, receiver: string, amount: bigint, token: Token, codeWord: string, senderNetwork: ChainSupported, receiverNetwork: ChainSupported, vaneFeesAmount: bigint) => Promise<TxStateMachine>;
   addAccount: (accountId: string, network: string) => Promise<void>;
   senderConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
   receiverConfirmTransaction: (tx: TxStateMachine) => Promise<void>;
@@ -121,9 +121,10 @@ const normalizeChainAddress = (value?: string | null): string => {
 };
 
 const stringToChainSupported = (network: string): ChainSupported => {
+  if(network === 'SOL') return ChainSupported.Solana;
+
   const upper = network.toUpperCase();
   if (upper === 'EVM') return ChainSupported.Ethereum;
-
   const normalized = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
   const chain = Object.values(ChainSupported).find(c => c === normalized || c === network);
   
@@ -380,7 +381,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     token: Token, 
     codeWord: string, 
     senderNetwork: ChainSupported, 
-    receiverNetwork: ChainSupported
+    receiverNetwork: ChainSupported,
+    vaneFeesAmount: bigint
   ) => {
     if (!isInitialized()) {
       throw new Error('WASM node not initialized');
@@ -391,7 +393,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
 
     try {
-      const tx = await initiateTransaction(vaneAuth, sender, receiver, amount, token, codeWord, senderNetwork, receiverNetwork);
+      const tx = await initiateTransaction(vaneAuth, sender, receiver, amount, token, codeWord, senderNetwork, receiverNetwork, vaneFeesAmount);
       console.log('Transaction initiated successfully:', tx);
       
       // Add to local state

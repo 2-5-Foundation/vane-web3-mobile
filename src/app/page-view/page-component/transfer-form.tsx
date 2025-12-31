@@ -118,6 +118,32 @@ function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
   }
 }
 
+// Calculate fee amount directly in base units without rounding
+// feeUsd: fee amount in USD (e.g., 0.05)
+// usdPricePerToken: price of 1 token in USD
+// tokenDecimals: number of decimals for the token (e.g., 18 for ETH, 9 for SOL, 6 for TRX)
+function calculateFeeInBaseUnits(feeUsd: number, usdPricePerToken: number, tokenDecimals: number): bigint {
+  // Calculate: (feeUsd / usdPricePerToken) * 10^tokenDecimals
+  // Use high precision to avoid floating point errors
+  
+  // Use 18 decimal places for intermediate calculation (sufficient for USD prices)
+  const PRECISION = 1000000000000000000n; // 10^18
+  
+  // Convert to integers with 18 decimal precision
+  // This preserves the exact ratio between fee and price
+  const feeUsdScaled = BigInt(Math.round(feeUsd * Number(PRECISION)));
+  const priceScaled = BigInt(Math.round(usdPricePerToken * Number(PRECISION)));
+  
+  // Calculate: (feeUsd / price) * 10^tokenDecimals
+  // = (feeUsdScaled * 10^tokenDecimals) / priceScaled
+  // The PRECISION (10^18) cancels out in the division, leaving the correct ratio
+  const tokenDecimalsPower = BigInt(10) ** BigInt(tokenDecimals);
+  const numerator = feeUsdScaled * tokenDecimalsPower;
+  const result = numerator / priceScaled;
+  
+  return result;
+}
+
 // Helper function to truncate address in the middle to fit placeholder width
 const truncateAddress = (address: string, startChars: number = 16, endChars: number = 16): string => {
   if (address.length <= startChars + endChars) return address;
@@ -173,10 +199,22 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
 
 
   useEffect(() => {
-    const amountValue = parseFloat(formData.amount.toString());
-    if (amountValue > 0 && formData.recipient.trim() !== '') {
-      storeSetTransferFormData(formData);
-    }
+    // Use requestAnimationFrame to defer the update and prevent blocking the input
+    const timeoutId = setTimeout(() => {
+      try {
+        const amountStr = formData.amount?.toString() || '0';
+        const amountValue = parseFloat(amountStr);
+        // Only update store if amount is valid and positive, and recipient is filled
+        if (!isNaN(amountValue) && amountValue > 0 && formData.recipient.trim() !== '') {
+          storeSetTransferFormData(formData);
+        }
+      } catch (error) {
+        // Silently handle errors to prevent UI freezing
+        console.error('Error updating transfer form data:', error);
+      }
+    }, 100); // Debounce by 100ms to prevent excessive updates while typing
+
+    return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
 
@@ -292,6 +330,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Use a synchronous update to prevent blocking
     const value = e.target.value;
     
     // Allow empty string
@@ -310,7 +349,14 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     }
     
     // Store the cleaned value (can be partial like "0." or ".90")
-    setFormData(prev => ({ ...prev, amount: cleanValue }));
+    // Use functional update to ensure we get the latest state
+    setFormData(prev => {
+      // Only update if the value actually changed to prevent unnecessary re-renders
+      if (prev.amount === cleanValue) {
+        return prev;
+      }
+      return { ...prev, amount: cleanValue };
+    });
   };
 
   const handleNextStep = async () => {
@@ -343,6 +389,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
   const handleAssetChange = (value: string) => {
     console.log('handleAssetChange', value);
     setFormData(prev => ({ ...prev, asset: value }));
+    console.log('formData', formData);
   };
 
 
@@ -374,8 +421,9 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     try {
       setIsSubmitting(true);
       
-      const amountValue = parseFloat(formData.amount.toString());
-      if (!formData.recipient || !amountValue || amountValue <= 0 || !formData.asset || !formData.network) {
+      const amountStr = formData.amount?.toString() || '0';
+      const amountValue = parseFloat(amountStr);
+      if (!formData.recipient || isNaN(amountValue) || amountValue <= 0 || !formData.asset || !formData.network) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
@@ -473,8 +521,27 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
       const walletNetworkId = await primaryWallet.getNetwork();
       const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
       
+      // Validate token decimals before conversion
+      if (tokenDecimals === undefined || tokenDecimals === null || isNaN(tokenDecimals)) {
+        toast.error('Token decimals not available. Please select a valid token.');
+        setIsSubmitting(false);
+        return;
+      }
+      
       // Convert amount string to base units using token decimals
       const amountInBaseUnits = toBaseUnits8dp(formData.amount.toString(), tokenDecimals);
+      
+      // Calculate vaneFeesAmount: 0.05 USD worth of the selected token
+      const usdPrice = getUsdPriceFromToken(formData.asset);
+      if (!usdPrice || usdPrice <= 0) {
+        toast.error('Unable to determine token price. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Calculate fee directly in base units without rounding
+      // This preserves full precision regardless of token decimals (ETH 18, SOL 9, TRX 6, etc.)
+      const vaneFeesAmount = calculateFeeInBaseUnits(0.05, usdPrice, tokenDecimals);
       
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
       await initiateTransaction(
@@ -484,7 +551,8 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
         token,
         primaryWallet.connector.metadata.name,
         walletNetwork, // sender network from wallet
-        selectedNetwork // receiver network from user selection
+        selectedNetwork, // receiver network from user selection
+        vaneFeesAmount
       );
 
       setTransferStatus('Genesis');
@@ -688,7 +756,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
                 >
                   {!primaryWallet ? 'Connect Wallet' : (
                     <>
-                      Next: Enter Amount
+                       Enter Amount
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -700,30 +768,7 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
             {currentStep === 'amount' && (
               <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-400 font-medium">Amount</Label>
-                    <div className="relative">
-                      <Input 
-                        name="amount"
-                        type="text"
-                        value={formData.amount || ''}
-                        onChange={handleAmountChange}
-                        placeholder="0.00"
-                        className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8"
-                      />
-                      {/* USD Tooltip */}
-                      {parseFloat(formData.amount.toString()) > 0 && formData.asset && (() => {
-                        const usdPrice = getUsdPriceFromToken(formData.asset);
-                        return usdPrice ? (
-                          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-gray-400">
-                            <DollarSign className="h-3 w-3" />
-                            <span>{(parseFloat(formData.amount.toString()) * usdPrice).toFixed(2)}</span>
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
+                <div className="space-y-1.5">
                     <Label className="text-xs text-gray-400 font-medium">Asset</Label>
                     <Select 
                       value={formData.asset}
@@ -763,6 +808,40 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
                       </SelectContent>
                     </Select>
                   </div>
+                  {/*Amount Input*/}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-400 font-medium">Amount</Label>
+                    <div className="relative">
+                      <Input 
+                        name="amount"
+                        type="text"
+                        value={formData.amount || ''}
+                        onChange={handleAmountChange}
+                        placeholder="0.00"
+                        className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8"
+                      />
+                      {/* USD Tooltip */}
+                      {(() => {
+                        try {
+                          const amountStr = formData.amount?.toString() || '0';
+                          const amountValue = parseFloat(amountStr);
+                          if (!isNaN(amountValue) && amountValue > 0 && formData.asset) {
+                            const usdPrice = getUsdPriceFromToken(formData.asset);
+                            return usdPrice ? (
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-gray-400">
+                                <DollarSign className="h-3 w-3" />
+                                <span>{(amountValue * usdPrice).toFixed(2)}</span>
+                              </div>
+                            ) : null;
+                          }
+                        } catch (error) {
+                          // Silently handle errors
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+                  
                 </div>
 
                 {/* Note for Step 2 */}

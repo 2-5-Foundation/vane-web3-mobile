@@ -8,6 +8,8 @@ import {
 
 const RPC_URL = process.env.SOLANA_RPC_URL!
 
+const VANE_SOLANA_ADDRESS = 'Ga432eFUBVwnyF9tdVFqwaTwd79FKwCGNWeEXub8UPZw';
+
 function isNativeSolToken(token: Token): boolean {
   if ('Solana' in token) {
     return token.Solana === 'SOL';
@@ -39,6 +41,7 @@ export async function prepareSolanaTransaction(tx: TxStateMachine): Promise<TxSt
   if (isNativeSol) {
     const from = new PublicKey(tx.senderAddress);
     const to = new PublicKey(tx.receiverAddress);
+    const vaneAddress = new PublicKey(VANE_SOLANA_ADDRESS);
   
     // Build the transfer instruction
     const lamports = tx.amount;
@@ -53,12 +56,26 @@ export async function prepareSolanaTransaction(tx: TxStateMachine): Promise<TxSt
       toPubkey: to,
       lamports: lamports,
     });
+
+    // Add Vane fee transfer instruction
+    const vaneFeesLamports = tx.vaneFeesAmount;
+    
+    // Safety check for vane fees lamports precision
+    if (vaneFeesLamports > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error('vane fees lamports exceed JS safe integer range');
+    }
+
+    const vaneFeeTransferIx = SystemProgram.transfer({
+      fromPubkey: from,
+      toPubkey: vaneAddress,
+      lamports: vaneFeesLamports,
+    });
   
     // Compile to a v0 message
     const msgV0 = new TransactionMessage({
       payerKey: from,
       recentBlockhash: blockhash,
-      instructions: [transferIx],
+      instructions: [transferIx, vaneFeeTransferIx],
     }).compileToV0Message();
   
     const unsigned = new VersionedTransaction(msgV0);
@@ -93,6 +110,8 @@ export async function prepareSolanaTransaction(tx: TxStateMachine): Promise<TxSt
     
     const fromAta = await getAssociatedTokenAddress(mint, new PublicKey(tx.senderAddress), false, programId);
     const toAta = await getAssociatedTokenAddress(mint, new PublicKey(tx.receiverAddress), false, programId);
+    const vaneAddress = new PublicKey(VANE_SOLANA_ADDRESS);
+    const vaneAta = await getAssociatedTokenAddress(mint, vaneAddress, false, programId);
     const ixs = [];
     const toInfo = await connection.getAccountInfo(toAta);
 
@@ -108,12 +127,34 @@ export async function prepareSolanaTransaction(tx: TxStateMachine): Promise<TxSt
       );
     }
 
+    // Check if Vane ATA exists, create if not
+    const vaneAtaInfo = await connection.getAccountInfo(vaneAta);
+    if (!vaneAtaInfo) {
+      ixs.push(
+        createAssociatedTokenAccountInstruction(
+          new PublicKey(tx.senderAddress),
+          vaneAta,
+          vaneAddress,
+          mint,
+          programId
+        )
+      );
+    }
+
     const minInfo = await getMint(connection, mint, 'confirmed', programId);
     const decimals = minInfo.decimals;
     
+    // Transfer amount to receiver
     ixs.push(
       createTransferCheckedInstruction(
         fromAta, mint, toAta, new PublicKey(tx.senderAddress), tx.amount, decimals, [], programId
+      )
+    );
+
+    // Transfer Vane fee amount to Vane address
+    ixs.push(
+      createTransferCheckedInstruction(
+        fromAta, mint, vaneAta, new PublicKey(tx.senderAddress), tx.vaneFeesAmount, decimals, [], programId
       )
     );
    

@@ -106,6 +106,7 @@ export async function initiateTransaction(
   codeWord: string,
   sender_network: ChainSupported,
   receiver_network: ChainSupported,
+  vaneFeesAmount: bigint
 ): Promise<TxStateMachine> {
   const amt = typeof amount === "bigint" ? amount : BigInt(amount);
   const res = await requireWorker().initiateTransaction(
@@ -117,6 +118,7 @@ export async function initiateTransaction(
     codeWord,
     sender_network,
     receiver_network,
+    vaneFeesAmount
   );
   return res as TxStateMachine;
 }

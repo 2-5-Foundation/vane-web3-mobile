@@ -742,6 +742,7 @@ export function toWire(tx: TxStateMachine): any {
         return {
           ethereum: {
             ...tx.callPayload.ethereum,
+            vaneFeesAmount: tx.vaneFeesAmount.toString(),
             ethUnsignedTxFields: {
               ...f,
               value: f.value.toString(),
@@ -783,6 +784,7 @@ export function fromWire(wireTx: any): TxStateMachine {
             return {
               ethereum: {
                 ...wireTx.callPayload.ethereum,
+                vaneFeesAmount: BigInt(wireTx.vaneFeesAmount),
                 ethUnsignedTxFields: {
                   ...fields,
                   value: BigInt(fields.value),
