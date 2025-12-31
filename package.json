@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "update_vane_lib": "rm -rf ./src/lib/vane_lib && cp -R /Users/mrisholukamba/Desktop/subzero/vane_web3/node/wasm/vane_lib ./src/lib/vane_lib"
-
+  },
+   "overrides": {
+    "@noble/hashes": "1.8.0"
   },
   "dependencies": {
     "@dynamic-labs-sdk/client": "^0.0.1-alpha.1",
@@ -19,7 +21,7 @@
     "@dynamic-labs/solana": "^4.8.2",
     "@farcaster/miniapp-sdk": "^0.2.1",
     "@polkadot/keyring": "^13.5.6",
-    "@polkadot/util-crypto": "^13.5.6",
+    "@polkadot/util-crypto": "^14.0.1",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-label": "^2.1.2",
     "@radix-ui/react-progress": "^1.1.7",

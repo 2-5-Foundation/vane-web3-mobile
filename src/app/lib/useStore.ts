@@ -63,6 +63,7 @@ export interface UserProfile {
 export interface TransactionState {
   userProfile: UserProfile;
   transferFormData: TransferFormData;
+  vaneAuth: Uint8Array;
   // storing incoming transactions that serve as sender notifications
   senderPendingTransactions: TxStateMachine[];  // Store all transaction updates
   // storing incoming transactions that serve as receiver notifications the receiver needs to confirm or reject
@@ -73,6 +74,7 @@ export interface TransactionState {
   isWatchingUpdates: boolean;
 
   // Methods
+  setVaneAuth: (vaneAuth: Uint8Array) => void;
   setUserProfile: (userProfile: UserProfile) => void;
   storeSetTransferFormData: (formData: TransferFormData) => void;
   setTransferStatus: (status: 'Genesis' | 'RecvAddrConfirmed' | 'RecvAddrConfirmationPassed' | 'NetConfirmed' | 'SenderConfirmed' | 'SenderConfirmationfailed' | 'RecvAddrFailed' | 'FailedToSubmitTxn' | 'TxSubmissionPassed' | 'ReceiverNotRegistered' | 'Reverted') => void;
@@ -134,6 +136,7 @@ const stringToChainSupported = (network: string): ChainSupported => {
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   // state
+  vaneAuth: new Uint8Array(),
   userProfile: {
     account: '',
     network: ''
@@ -151,6 +154,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   isWatchingUpdates: false,
 
   // method
+  setVaneAuth: (vaneAuth: Uint8Array) => set({vaneAuth}),
   setUserProfile: (userProfile: UserProfile) => {
     set({
       userProfile: {
@@ -299,6 +303,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         return;
       }
 
+      const vaneAuth = get().vaneAuth;
+      if (vaneAuth.length === 0) {
+        throw new Error('vane auth is not set');
+      }
+
       console.log('Initializing WASM node...');
       
       // Load storage export from localStorage if it exists
@@ -311,6 +320,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
       
       await initializeNode({
+        sig: vaneAuth,
         relayMultiAddr,
         account,
         network,
@@ -375,9 +385,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (!isInitialized()) {
       throw new Error('WASM node not initialized');
     }
+    const vaneAuth = get().vaneAuth;
+    if (vaneAuth.length === 0) {
+      throw new Error('vane auth is not set');
+    }
 
     try {
-      const tx = await initiateTransaction(sender, receiver, amount, token, codeWord, senderNetwork, receiverNetwork);
+      const tx = await initiateTransaction(vaneAuth, sender, receiver, amount, token, codeWord, senderNetwork, receiverNetwork);
       console.log('Transaction initiated successfully:', tx);
       
       // Add to local state
@@ -421,8 +435,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw new Error('WASM node not initialized');
     }
 
+    const vaneAuth = get().vaneAuth;
+    if (vaneAuth.length === 0) {
+      throw new Error('vane auth is not set');
+    }
+
     try {
-      await senderConfirm(tx);      
+      await senderConfirm(vaneAuth, tx);      
       // Export storage and save to localStorage
       const storageExport = await get().exportStorageData();
       // convert all amounts to their decimals
@@ -459,8 +478,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw new Error('WASM node not initialized');
     }
 
+    const vaneAuth = get().vaneAuth;
+    if (vaneAuth.length === 0) {
+      throw new Error('vane auth is not set');
+    }
+
     try {
-      await receiverConfirm(tx);
+      await receiverConfirm(vaneAuth, tx);
     } catch (error) {
       console.error('Error confirming transaction by receiver:', error);
       throw error;
@@ -472,8 +496,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw new Error('WASM node not initialized');
     }
 
+    const vaneAuth = get().vaneAuth;
+    if (vaneAuth.length === 0) {
+      throw new Error('vane auth is not set');
+    }
+
     try {
-      await revertTransaction(tx, reason);
+      await revertTransaction(vaneAuth, tx, reason);
       console.log('Transaction reverted successfully');
     } catch (error) {
       console.error('Error reverting transaction:', error);
@@ -490,8 +519,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return [];
     }
 
+    const vaneAuth = get().vaneAuth;
+    if (vaneAuth.length === 0) {
+      throw new Error('vane auth is not set');
+    }
+
     try {
-      const updates = await fetchPendingTxUpdates();
+      const updates = await fetchPendingTxUpdates(vaneAuth);
       console.log('Fetched pending updates:', updates);
       
       // If updates is empty, clear all transactions

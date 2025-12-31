@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useTransactionStore } from "@/app/lib/useStore";
 import { Copy, Plus, X, MoreVertical } from "lucide-react";
 import Image from "next/image";
+import { signClientAuth } from "../actions/verificationAction";
 
 
 export default function Wallets() {
@@ -26,6 +27,7 @@ export default function Wallets() {
   const startWatching = useTransactionStore((s) => s.startWatching);
   const addAccount = useTransactionStore((s) => s.addAccount);
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
+  const setVaneAuth = useTransactionStore((s) => s.setVaneAuth);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const exportStorageData = useTransactionStore((s) => s.exportStorageData);
 
@@ -374,6 +376,9 @@ export default function Wallets() {
 
       setIsInitializing(true);
       try {
+        const vaneAuth = await signClientAuth(primaryWallet.address);
+        setVaneAuth(vaneAuth);
+        
         await initializeWasm(
           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
           primaryWallet.address,
