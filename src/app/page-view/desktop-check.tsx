@@ -1,29 +1,29 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import Image from 'next/image'
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from "react";
+import Image from "next/image";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function DesktopCheck({ children }: { children: React.ReactNode }) {
-  const [isDesktop, setIsDesktop] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true)
+    setMounted(true);
     const checkSize = () => {
-      setIsDesktop(window.innerWidth >= 640)
-    }
-    
+      setIsDesktop(window.innerWidth >= 640);
+    };
+
     // Check on mount after hydration
-    checkSize()
-    
-    window.addEventListener('resize', checkSize)
-    return () => window.removeEventListener('resize', checkSize)
-  }, [])
+    checkSize();
+
+    window.addEventListener("resize", checkSize);
+    return () => window.removeEventListener("resize", checkSize);
+  }, []);
 
   // Don't check until after hydration to prevent mismatch
   if (!mounted) {
-    return <>{children}</>
+    return <>{children}</>;
   }
 
   // If desktop, show the message - NEVER render children (prevents providers from mounting)
@@ -32,16 +32,16 @@ export function DesktopCheck({ children }: { children: React.ReactNode }) {
       <div className="fixed inset-0 bg-[#0A1919] flex items-center justify-center p-4 z-[9999]">
         <div className="flex flex-col items-center space-y-6 w-full max-w-lg">
           <div className="w-full">
-            <Image 
-              src="/vane-safety-net.png" 
-              alt="Vane Logo" 
+            <Image
+              src="/vane-safety-net.png"
+              alt="Vane Logo"
               width={400}
               height={400}
               className="w-full h-auto"
               priority
             />
           </div>
-          
+
           <div className="w-full">
             <Alert className="bg-[#0D1B1B] border-[#4A5853]/20 w-full">
               <AlertDescription className="text-[#9EB2AD] text-center">
@@ -51,10 +51,9 @@ export function DesktopCheck({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // Not desktop: show the app (providers will mount here)
-  return <>{children}</>
+  return <>{children}</>;
 }
-

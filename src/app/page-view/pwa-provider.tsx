@@ -1,79 +1,83 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import Image from 'next/image'
+import { useEffect, useState } from "react";
+import Image from "next/image";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
   readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
+    outcome: "accepted" | "dismissed";
     platform: string;
   }>;
   prompt(): Promise<void>;
 }
 
 export function PWAProvider() {
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       return;
     }
 
     const registerServiceWorker = () => {
-      if (!('serviceWorker' in navigator)) {
+      if (!("serviceWorker" in navigator)) {
         return;
       }
 
       navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
+        .register("/sw.js", { scope: "/" })
         .catch((error) => {
-          console.error('Failed to register service worker', error);
+          console.error("Failed to register service worker", error);
         });
     };
 
-    if (document.readyState === 'complete') {
+    if (document.readyState === "complete") {
       registerServiceWorker();
     } else {
-      window.addEventListener('load', registerServiceWorker);
+      window.addEventListener("load", registerServiceWorker);
       return () => {
-        window.removeEventListener('load', registerServiceWorker);
+        window.removeEventListener("load", registerServiceWorker);
       };
     }
   }, []);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault()
-      setDeferredPrompt(event as BeforeInstallPromptEvent)
-      setShowInstallPrompt(true)
-    }
+      event.preventDefault();
+      setDeferredPrompt(event as BeforeInstallPromptEvent);
+      setShowInstallPrompt(true);
+    };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-    }
-  }, [])
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
+    };
+  }, []);
 
   const handleInstall = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt()
-      const { outcome } = await deferredPrompt.userChoice
-      if (outcome === 'accepted') {
-        setShowInstallPrompt(false)
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        setShowInstallPrompt(false);
       }
-      setDeferredPrompt(null)
+      setDeferredPrompt(null);
     }
-  }
+  };
 
-  if (!showInstallPrompt) return null
+  if (!showInstallPrompt) return null;
 
   return (
     <div className="fixed bottom-20 left-4 right-4 bg-[#0D1B1B] border border-[#4A5853]/20 rounded-lg p-4 flex items-center justify-between md:left-auto md:right-4 md:w-80">
       <div className="flex items-center gap-3">
-        <Image 
+        <Image
           src="/vane-logo.png"
           alt="Vane Logo"
           width={32}
@@ -82,7 +86,9 @@ export function PWAProvider() {
         />
         <div>
           <h3 className="text-white text-sm font-medium">Install Vane Web3</h3>
-          <p className="text-[#9EB2AD] text-xs">Add to home screen for quick access</p>
+          <p className="text-[#9EB2AD] text-xs">
+            Add to home screen for quick access
+          </p>
         </div>
       </div>
       <button
@@ -92,5 +98,5 @@ export function PWAProvider() {
         Install
       </button>
     </div>
-  )
-} 
+  );
+}

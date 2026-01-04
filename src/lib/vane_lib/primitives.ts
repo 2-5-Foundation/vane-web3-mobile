@@ -1,175 +1,202 @@
 import { hexToBytes } from "viem/utils";
 
 export enum ChainSupported {
-    Ethereum = "Ethereum",
-    Polkadot = "Polkadot",
-    Bnb = "Bnb",
-    Solana = "Solana",
-    Tron = "Tron",
-    Optimism = "Optimism",
-    Arbitrum = "Arbitrum",
-    Polygon = "Polygon",
-    Base = "Base",
-    Bitcoin = "Bitcoin"
+  Ethereum = "Ethereum",
+  Polkadot = "Polkadot",
+  Bnb = "Bnb",
+  Solana = "Solana",
+  Tron = "Tron",
+  Optimism = "Optimism",
+  Arbitrum = "Arbitrum",
+  Polygon = "Polygon",
+  Base = "Base",
+  Bitcoin = "Bitcoin",
 }
 
 /** Ethereum ecosystem tokens */
 export enum EthereumToken {
-    ETH = "ETH",
-    ERC20 = "ERC20"
+  ETH = "ETH",
+  ERC20 = "ERC20",
 }
 
 /** ERC20 token with name, contract address, and decimals */
 export interface ERC20Token {
-    name: string;
-    address: string;
-    decimals: number;
+  name: string;
+  address: string;
+  decimals: number;
 }
 
 /** BNB Smart Chain ecosystem tokens */
 export enum BnbToken {
-    BNB = "BNB",
-    BEP20 = "BEP20"
+  BNB = "BNB",
+  BEP20 = "BEP20",
 }
 
 /** BEP20 token with name, contract address, and decimals */
 export interface BEP20Token {
-    name: string;
-    address: string;
-    decimals: number;
+  name: string;
+  address: string;
+  decimals: number;
 }
 
 /** Polkadot ecosystem tokens */
 export enum PolkadotToken {
-    DOT = "DOT",
-    Asset = "Asset"
+  DOT = "DOT",
+  Asset = "Asset",
 }
 
 /** Polkadot asset with name and asset ID */
 export interface PolkadotAsset {
-    name: string;
-    id: string;
+  name: string;
+  id: string;
 }
 
 /** Solana ecosystem tokens */
 export enum SolanaToken {
-    SOL = "SOL",
-    SPL = "SPL"
+  SOL = "SOL",
+  SPL = "SPL",
 }
 
 /** SPL token with name, mint address, and decimals */
 export interface SPLToken {
-    name: string;
-    address: string;
-    decimals: number;
+  name: string;
+  address: string;
+  decimals: number;
 }
 
 /** TRON ecosystem tokens */
 export enum TronToken {
-    TRX = "TRX",
-    TRC20 = "TRC20"
+  TRX = "TRX",
+  TRC20 = "TRC20",
 }
 
 /** TRC20 token with name, contract address, and decimals */
 export interface TRC20Token {
-    name: string;
-    address: string;
-    decimals: number;
+  name: string;
+  address: string;
+  decimals: number;
 }
 
 /** Optimism ecosystem tokens */
 export enum OptimismToken {
-    ETH = "ETH",
-    ERC20 = "ERC20"
+  ETH = "ETH",
+  ERC20 = "ERC20",
 }
 
 /** Arbitrum ecosystem tokens */
 export enum ArbitrumToken {
-    ETH = "ETH",
-    ERC20 = "ERC20"
+  ETH = "ETH",
+  ERC20 = "ERC20",
 }
 
 /** Polygon ecosystem tokens */
 export enum PolygonToken {
-    POL = "POL",
-    ERC20 = "ERC20"
+  POL = "POL",
+  ERC20 = "ERC20",
 }
 
 /** Base ecosystem tokens */
 export enum BaseToken {
-    ETH = "ETH",
-    ERC20 = "ERC20"
+  ETH = "ETH",
+  ERC20 = "ERC20",
 }
 
 /** Bitcoin ecosystem tokens */
 export enum BitcoinToken {
-    BTC = "BTC"
+  BTC = "BTC",
 }
 
 /** Supported tokens (flexible) */
-export type Token = 
-    | { Ethereum: EthereumToken | { ERC20: ERC20Token } }
-    | { Bnb: BnbToken | { BEP20: BEP20Token } }
-    | { Polkadot: PolkadotToken | { Asset: PolkadotAsset } }
-    | { Solana: SolanaToken | { SPL: SPLToken } }
-    | { Tron: TronToken | { TRC20: TRC20Token } }
-    | { Optimism: OptimismToken | { ERC20: ERC20Token } }
-    | { Arbitrum: ArbitrumToken | { ERC20: ERC20Token } }
-    | { Polygon: PolygonToken | { ERC20: ERC20Token } }
-    | { Base: BaseToken | { ERC20: ERC20Token } }
-    | { Bitcoin: BitcoinToken }
-
+export type Token =
+  | { Ethereum: EthereumToken | { ERC20: ERC20Token } }
+  | { Bnb: BnbToken | { BEP20: BEP20Token } }
+  | { Polkadot: PolkadotToken | { Asset: PolkadotAsset } }
+  | { Solana: SolanaToken | { SPL: SPLToken } }
+  | { Tron: TronToken | { TRC20: TRC20Token } }
+  | { Optimism: OptimismToken | { ERC20: ERC20Token } }
+  | { Arbitrum: ArbitrumToken | { ERC20: ERC20Token } }
+  | { Polygon: PolygonToken | { ERC20: ERC20Token } }
+  | { Base: BaseToken | { ERC20: ERC20Token } }
+  | { Bitcoin: BitcoinToken };
 
 export function getTokenDecimals(token: Token): number | null {
   // NATIVE TOKENS
-  if ('Ethereum' in token && token.Ethereum === EthereumToken.ETH) {
+  if ("Ethereum" in token && token.Ethereum === EthereumToken.ETH) {
     return 18;
   }
-  if ('Optimism' in token && token.Optimism === OptimismToken.ETH) {
+  if ("Optimism" in token && token.Optimism === OptimismToken.ETH) {
     return 18;
   }
-  if ('Arbitrum' in token && token.Arbitrum === ArbitrumToken.ETH) {
+  if ("Arbitrum" in token && token.Arbitrum === ArbitrumToken.ETH) {
     return 18;
   }
-  if ('Polygon' in token && token.Polygon === PolygonToken.POL) {
+  if ("Polygon" in token && token.Polygon === PolygonToken.POL) {
     return 18;
   }
-  if ('Base' in token && token.Base === BaseToken.ETH) {
+  if ("Base" in token && token.Base === BaseToken.ETH) {
     return 18;
   }
-  if ('Bnb' in token && token.Bnb === BnbToken.BNB) {
+  if ("Bnb" in token && token.Bnb === BnbToken.BNB) {
     return 18;
   }
-  if ('Solana' in token && token.Solana === SolanaToken.SOL) {
+  if ("Solana" in token && token.Solana === SolanaToken.SOL) {
     return 9;
   }
-  if ('Tron' in token && token.Tron === TronToken.TRX) {
+  if ("Tron" in token && token.Tron === TronToken.TRX) {
     return 6;
   }
 
   // TOKENS
-  if ('Ethereum' in token && typeof token.Ethereum === 'object' && 'ERC20' in token.Ethereum) {
+  if (
+    "Ethereum" in token &&
+    typeof token.Ethereum === "object" &&
+    "ERC20" in token.Ethereum
+  ) {
     return token.Ethereum.ERC20.decimals;
   }
-  if ('Optimism' in token && typeof token.Optimism === 'object' && 'ERC20' in token.Optimism) {
+  if (
+    "Optimism" in token &&
+    typeof token.Optimism === "object" &&
+    "ERC20" in token.Optimism
+  ) {
     return token.Optimism.ERC20.decimals;
   }
-  if ('Arbitrum' in token && typeof token.Arbitrum === 'object' && 'ERC20' in token.Arbitrum) {
+  if (
+    "Arbitrum" in token &&
+    typeof token.Arbitrum === "object" &&
+    "ERC20" in token.Arbitrum
+  ) {
     return token.Arbitrum.ERC20.decimals;
   }
-  if ('Polygon' in token && typeof token.Polygon === 'object' && 'ERC20' in token.Polygon) {
+  if (
+    "Polygon" in token &&
+    typeof token.Polygon === "object" &&
+    "ERC20" in token.Polygon
+  ) {
     return token.Polygon.ERC20.decimals;
   }
-  if ('Base' in token && typeof token.Base === 'object' && 'ERC20' in token.Base) {
+  if (
+    "Base" in token &&
+    typeof token.Base === "object" &&
+    "ERC20" in token.Base
+  ) {
     return token.Base.ERC20.decimals;
   }
-  if ('Bnb' in token && typeof token.Bnb === 'object' && 'BEP20' in token.Bnb) {
+  if ("Bnb" in token && typeof token.Bnb === "object" && "BEP20" in token.Bnb) {
     return token.Bnb.BEP20.decimals;
   }
-  if ('Solana' in token && typeof token.Solana === 'object' && 'SPL' in token.Solana) {
+  if (
+    "Solana" in token &&
+    typeof token.Solana === "object" &&
+    "SPL" in token.Solana
+  ) {
     return token.Solana.SPL.decimals;
   }
-  if ('Tron' in token && typeof token.Tron === 'object' && 'TRC20' in token.Tron) {
+  if (
+    "Tron" in token &&
+    typeof token.Tron === "object" &&
+    "TRC20" in token.Tron
+  ) {
   }
 }
 
@@ -210,7 +237,12 @@ export class TokenManager {
   /**
    * Create an ERC-20 token for Ethereum-compatible chains
    */
-  static createERC20Token(chain: ChainSupported, name: string, address: string, decimals: number): Token {
+  static createERC20Token(
+    chain: ChainSupported,
+    name: string,
+    address: string,
+    decimals: number,
+  ): Token {
     const erc20Token: ERC20Token = { name, address, decimals };
     switch (chain) {
       case ChainSupported.Ethereum:
@@ -231,7 +263,11 @@ export class TokenManager {
   /**
    * Create a BEP-20 token for BNB Smart Chain
    */
-  static createBEP20Token(name: string, address: string, decimals: number): Token {
+  static createBEP20Token(
+    name: string,
+    address: string,
+    decimals: number,
+  ): Token {
     const bep20Token: BEP20Token = { name, address, decimals };
     return { Bnb: { BEP20: bep20Token } };
   }
@@ -239,7 +275,11 @@ export class TokenManager {
   /**
    * Create an SPL token for Solana
    */
-  static createSPLToken(name: string, address: string, decimals: number): Token {
+  static createSPLToken(
+    name: string,
+    address: string,
+    decimals: number,
+  ): Token {
     const splToken: SPLToken = { name, address, decimals };
     return { Solana: { SPL: splToken } };
   }
@@ -247,7 +287,11 @@ export class TokenManager {
   /**
    * Create a TRC-20 token for TRON
    */
-  static createTRC20Token(name: string, address: string, decimals: number): Token {
+  static createTRC20Token(
+    name: string,
+    address: string,
+    decimals: number,
+  ): Token {
     const trc20Token: TRC20Token = { name, address, decimals };
     return { Tron: { TRC20: trc20Token } };
   }
@@ -264,16 +308,16 @@ export class TokenManager {
    * Get the chain from a token
    */
   static getChainFromToken(token: Token): ChainSupported {
-    if ('Ethereum' in token) return ChainSupported.Ethereum;
-    if ('Bnb' in token) return ChainSupported.Bnb;
-    if ('Polkadot' in token) return ChainSupported.Polkadot;
-    if ('Solana' in token) return ChainSupported.Solana;
-    if ('Tron' in token) return ChainSupported.Tron;
-    if ('Optimism' in token) return ChainSupported.Optimism;
-    if ('Arbitrum' in token) return ChainSupported.Arbitrum;
-    if ('Polygon' in token) return ChainSupported.Polygon;
-    if ('Base' in token) return ChainSupported.Base;
-    if ('Bitcoin' in token) return ChainSupported.Bitcoin;
+    if ("Ethereum" in token) return ChainSupported.Ethereum;
+    if ("Bnb" in token) return ChainSupported.Bnb;
+    if ("Polkadot" in token) return ChainSupported.Polkadot;
+    if ("Solana" in token) return ChainSupported.Solana;
+    if ("Tron" in token) return ChainSupported.Tron;
+    if ("Optimism" in token) return ChainSupported.Optimism;
+    if ("Arbitrum" in token) return ChainSupported.Arbitrum;
+    if ("Polygon" in token) return ChainSupported.Polygon;
+    if ("Base" in token) return ChainSupported.Base;
+    if ("Bitcoin" in token) return ChainSupported.Bitcoin;
     throw new Error(`Unknown token type: ${JSON.stringify(token)}`);
   }
 
@@ -282,64 +326,100 @@ export class TokenManager {
    */
   static getTokenString(token: Token): string {
     const chain = this.getChainFromToken(token);
-    
-    if ('Ethereum' in token && token.Ethereum === EthereumToken.ETH) {
+
+    if ("Ethereum" in token && token.Ethereum === EthereumToken.ETH) {
       return "Ethereum:ETH";
     }
-    if ('Bnb' in token && token.Bnb === BnbToken.BNB) {
+    if ("Bnb" in token && token.Bnb === BnbToken.BNB) {
       return "BNB:BNB";
     }
-    if ('Polkadot' in token && token.Polkadot === PolkadotToken.DOT) {
+    if ("Polkadot" in token && token.Polkadot === PolkadotToken.DOT) {
       return "Polkadot:DOT";
     }
-    if ('Solana' in token && token.Solana === SolanaToken.SOL) {
+    if ("Solana" in token && token.Solana === SolanaToken.SOL) {
       return "Solana:SOL";
     }
-    if ('Tron' in token && token.Tron === TronToken.TRX) {
+    if ("Tron" in token && token.Tron === TronToken.TRX) {
       return "TRON:TRX";
     }
-    if ('Optimism' in token && token.Optimism === OptimismToken.ETH) {
+    if ("Optimism" in token && token.Optimism === OptimismToken.ETH) {
       return "Optimism:ETH";
     }
-    if ('Arbitrum' in token && token.Arbitrum === ArbitrumToken.ETH) {
+    if ("Arbitrum" in token && token.Arbitrum === ArbitrumToken.ETH) {
       return "Arbitrum:ETH";
     }
-    if ('Polygon' in token && token.Polygon === PolygonToken.POL) {
+    if ("Polygon" in token && token.Polygon === PolygonToken.POL) {
       return "Polygon:POL";
     }
-    if ('Base' in token && token.Base === BaseToken.ETH) {
+    if ("Base" in token && token.Base === BaseToken.ETH) {
       return "Base:ETH";
     }
-    if ('Bitcoin' in token && token.Bitcoin === BitcoinToken.BTC) {
+    if ("Bitcoin" in token && token.Bitcoin === BitcoinToken.BTC) {
       return "Bitcoin:BTC";
     }
 
     // Handle ecosystem tokens
-    if ('Ethereum' in token && typeof token.Ethereum === 'object' && 'ERC20' in token.Ethereum) {
+    if (
+      "Ethereum" in token &&
+      typeof token.Ethereum === "object" &&
+      "ERC20" in token.Ethereum
+    ) {
       return `Ethereum:${token.Ethereum.ERC20.name} (${token.Ethereum.ERC20.address})`;
     }
-    if ('Bnb' in token && typeof token.Bnb === 'object' && 'BEP20' in token.Bnb) {
+    if (
+      "Bnb" in token &&
+      typeof token.Bnb === "object" &&
+      "BEP20" in token.Bnb
+    ) {
       return `BNB:${token.Bnb.BEP20.name} (${token.Bnb.BEP20.address})`;
     }
-    if ('Solana' in token && typeof token.Solana === 'object' && 'SPL' in token.Solana) {
+    if (
+      "Solana" in token &&
+      typeof token.Solana === "object" &&
+      "SPL" in token.Solana
+    ) {
       return `Solana:${token.Solana.SPL.name} (${token.Solana.SPL.address})`;
     }
-    if ('Tron' in token && typeof token.Tron === 'object' && 'TRC20' in token.Tron) {
+    if (
+      "Tron" in token &&
+      typeof token.Tron === "object" &&
+      "TRC20" in token.Tron
+    ) {
       return `TRON:${token.Tron.TRC20.name} (${token.Tron.TRC20.address})`;
     }
-    if ('Polkadot' in token && typeof token.Polkadot === 'object' && 'Asset' in token.Polkadot) {
+    if (
+      "Polkadot" in token &&
+      typeof token.Polkadot === "object" &&
+      "Asset" in token.Polkadot
+    ) {
       return `Polkadot:${token.Polkadot.Asset.name} (${token.Polkadot.Asset.id})`;
     }
-    if ('Optimism' in token && typeof token.Optimism === 'object' && 'ERC20' in token.Optimism) {
+    if (
+      "Optimism" in token &&
+      typeof token.Optimism === "object" &&
+      "ERC20" in token.Optimism
+    ) {
       return `Optimism:${token.Optimism.ERC20.name} (${token.Optimism.ERC20.address})`;
     }
-    if ('Arbitrum' in token && typeof token.Arbitrum === 'object' && 'ERC20' in token.Arbitrum) {
+    if (
+      "Arbitrum" in token &&
+      typeof token.Arbitrum === "object" &&
+      "ERC20" in token.Arbitrum
+    ) {
       return `Arbitrum:${token.Arbitrum.ERC20.name} (${token.Arbitrum.ERC20.address})`;
     }
-    if ('Polygon' in token && typeof token.Polygon === 'object' && 'ERC20' in token.Polygon) {
+    if (
+      "Polygon" in token &&
+      typeof token.Polygon === "object" &&
+      "ERC20" in token.Polygon
+    ) {
       return `Polygon:${token.Polygon.ERC20.name} (${token.Polygon.ERC20.address})`;
     }
-    if ('Base' in token && typeof token.Base === 'object' && 'ERC20' in token.Base) {
+    if (
+      "Base" in token &&
+      typeof token.Base === "object" &&
+      "ERC20" in token.Base
+    ) {
       return `Base:${token.Base.ERC20.name} (${token.Base.ERC20.address})`;
     }
 
@@ -350,8 +430,8 @@ export class TokenManager {
    * Parse a token string back to a Token object
    */
   static parseTokenString(tokenString: string): Token {
-    const [chain, symbol] = tokenString.split(':');
-    
+    const [chain, symbol] = tokenString.split(":");
+
     switch (chain) {
       case "Ethereum":
         if (symbol === "ETH") {
@@ -361,11 +441,15 @@ export class TokenManager {
         const erc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (erc20Match) {
           const [, name, address] = erc20Match;
-          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
+          throw new Error(
+            `Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`,
+          );
         }
         // Fallback: treat as name only, address will need to be resolved elsewhere
-        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`,
+        );
+
       case "BNB":
         if (symbol === "BNB") {
           return { Bnb: BnbToken.BNB };
@@ -374,10 +458,14 @@ export class TokenManager {
         const bep20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (bep20Match) {
           const [, name, address] = bep20Match;
-          throw new Error(`Cannot parse BEP20 token "${name}" without decimals. Use TokenManager.createBEP20Token() instead.`);
+          throw new Error(
+            `Cannot parse BEP20 token "${name}" without decimals. Use TokenManager.createBEP20Token() instead.`,
+          );
         }
-        throw new Error(`Cannot parse BEP20 token "${symbol}" without decimals. Use TokenManager.createBEP20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse BEP20 token "${symbol}" without decimals. Use TokenManager.createBEP20Token() instead.`,
+        );
+
       case "Polkadot":
         if (symbol === "DOT") {
           return { Polkadot: PolkadotToken.DOT };
@@ -389,7 +477,7 @@ export class TokenManager {
           return { Polkadot: { Asset: { name: name.trim(), id: id.trim() } } };
         }
         return { Polkadot: { Asset: { name: symbol, id: "" } } };
-      
+
       case "Solana":
         if (symbol === "SOL") {
           return { Solana: SolanaToken.SOL };
@@ -398,10 +486,14 @@ export class TokenManager {
         const splMatch = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (splMatch) {
           const [, name, address] = splMatch;
-          throw new Error(`Cannot parse SPL token "${name}" without decimals. Use TokenManager.createSPLToken() instead.`);
+          throw new Error(
+            `Cannot parse SPL token "${name}" without decimals. Use TokenManager.createSPLToken() instead.`,
+          );
         }
-        throw new Error(`Cannot parse SPL token "${symbol}" without decimals. Use TokenManager.createSPLToken() instead.`);
-      
+        throw new Error(
+          `Cannot parse SPL token "${symbol}" without decimals. Use TokenManager.createSPLToken() instead.`,
+        );
+
       case "TRON":
         if (symbol === "TRX") {
           return { Tron: TronToken.TRX };
@@ -410,10 +502,14 @@ export class TokenManager {
         const trc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (trc20Match) {
           const [, name, address] = trc20Match;
-          throw new Error(`Cannot parse TRC20 token "${name}" without decimals. Use TokenManager.createTRC20Token() instead.`);
+          throw new Error(
+            `Cannot parse TRC20 token "${name}" without decimals. Use TokenManager.createTRC20Token() instead.`,
+          );
         }
-        throw new Error(`Cannot parse TRC20 token "${symbol}" without decimals. Use TokenManager.createTRC20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse TRC20 token "${symbol}" without decimals. Use TokenManager.createTRC20Token() instead.`,
+        );
+
       case "Optimism":
         if (symbol === "ETH") {
           return { Optimism: OptimismToken.ETH };
@@ -422,10 +518,14 @@ export class TokenManager {
         const optimismErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (optimismErc20Match) {
           const [, name, address] = optimismErc20Match;
-          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
+          throw new Error(
+            `Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`,
+          );
         }
-        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`,
+        );
+
       case "Arbitrum":
         if (symbol === "ETH") {
           return { Arbitrum: ArbitrumToken.ETH };
@@ -434,10 +534,14 @@ export class TokenManager {
         const arbitrumErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (arbitrumErc20Match) {
           const [, name, address] = arbitrumErc20Match;
-          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
+          throw new Error(
+            `Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`,
+          );
         }
-        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`,
+        );
+
       case "Polygon":
         if (symbol === "POL") {
           return { Polygon: PolygonToken.POL };
@@ -446,10 +550,14 @@ export class TokenManager {
         const polygonErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (polygonErc20Match) {
           const [, name, address] = polygonErc20Match;
-          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
+          throw new Error(
+            `Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`,
+          );
         }
-        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`,
+        );
+
       case "Base":
         if (symbol === "ETH") {
           return { Base: BaseToken.ETH };
@@ -458,16 +566,20 @@ export class TokenManager {
         const baseErc20Match = symbol.match(/^(.+?)\s*\((.+)\)$/);
         if (baseErc20Match) {
           const [, name, address] = baseErc20Match;
-          throw new Error(`Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`);
+          throw new Error(
+            `Cannot parse ERC20 token "${name}" without decimals. Use TokenManager.createERC20Token() instead.`,
+          );
         }
-        throw new Error(`Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`);
-      
+        throw new Error(
+          `Cannot parse ERC20 token "${symbol}" without decimals. Use TokenManager.createERC20Token() instead.`,
+        );
+
       case "Bitcoin":
         if (symbol === "BTC") {
           return { Bitcoin: BitcoinToken.BTC };
         }
         throw new Error("Bitcoin only supports BTC token");
-      
+
       default:
         throw new Error(`Unknown chain: ${chain}`);
     }
@@ -509,296 +621,299 @@ export class TokenManager {
     ];
   }
 }
-   
+
 // For status that contains data
 interface TxStatusData {
-    FailedToSubmitTxn: string;
-    TxError: string;
-    TxSubmissionPassed: { hash: number[] };
-    Reverted: string;
+  FailedToSubmitTxn: string;
+  TxError: string;
+  TxSubmissionPassed: { hash: number[] };
+  Reverted: string;
 }
-   
-export type TxStatus = 
-    | { type: "Genesis" }
-    | { type: "RecvAddrConfirmed" }
-    | { type: "RecvAddrConfirmationPassed" }
-    | { type: "NetConfirmed" }
-    | { type: "SenderConfirmed" }
-    | { type: "SenderConfirmationfailed" }
-    | { type: "RecvAddrFailed" }
-    | { type: "FailedToSubmitTxn", data: TxStatusData["FailedToSubmitTxn"] }
-    | { type: "TxError", data: TxStatusData["TxError"] }
-    | { type: "TxSubmissionPassed", data: TxStatusData["TxSubmissionPassed"] }
-    | { type: "ReceiverNotRegistered" }
-    | { type: "Reverted", data: TxStatusData["Reverted"] }
+
+export type TxStatus =
+  | { type: "Genesis" }
+  | { type: "RecvAddrConfirmed" }
+  | { type: "RecvAddrConfirmationPassed" }
+  | { type: "NetConfirmed" }
+  | { type: "SenderConfirmed" }
+  | { type: "SenderConfirmationfailed" }
+  | { type: "RecvAddrFailed" }
+  | { type: "FailedToSubmitTxn"; data: TxStatusData["FailedToSubmitTxn"] }
+  | { type: "TxError"; data: TxStatusData["TxError"] }
+  | { type: "TxSubmissionPassed"; data: TxStatusData["TxSubmissionPassed"] }
+  | { type: "ReceiverNotRegistered" }
+  | { type: "Reverted"; data: TxStatusData["Reverted"] };
 
 export interface UnsignedEip1559 {
-    to: string;
-    value: bigint;
-    chainId: number;
-    nonce: number;
-    gas: bigint;
-    maxFeePerGas: bigint;
-    maxPriorityFeePerGas: bigint;
-    data?: string;
-    accessList?: any[];
-    type: 'eip1559';
+  to: string;
+  value: bigint;
+  chainId: number;
+  nonce: number;
+  gas: bigint;
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+  data?: string;
+  accessList?: any[];
+  type: "eip1559";
 }
 
 // BNB legacy unsigned transaction (no EIP-1559)
 export interface UnsignedBnbLegacy {
-    to: string;
-    value: bigint;
-    chainId: number;
-    nonce: number;
-    gas: bigint;
-    gasPrice: bigint;
-    data?: string;
-    type: 'legacy';
+  to: string;
+  value: bigint;
+  chainId: number;
+  nonce: number;
+  gas: bigint;
+  gasPrice: bigint;
+  data?: string;
+  type: "legacy";
 }
 
-
-export type ChainTransactionType = 
-    | {
-        ethereum: {
-            ethUnsignedTxFields: UnsignedEip1559;
-            callPayload: [number[], number[]];
-        };
+export type ChainTransactionType =
+  | {
+      ethereum: {
+        ethUnsignedTxFields: UnsignedEip1559;
+        callPayload: [number[], number[]];
+      };
     }
-    | {
-        solana: {
-            callPayload: number[];
-            latestBlockHeight: number;
-        };
+  | {
+      solana: {
+        callPayload: number[];
+        latestBlockHeight: number;
+      };
     }
-    | {
-        bnb: {
-            callPayload: [number[], number[]];
-            bnbLegacyTxFields: UnsignedBnbLegacy;
-        };
+  | {
+      bnb: {
+        callPayload: [number[], number[]];
+        bnbLegacyTxFields: UnsignedBnbLegacy;
+      };
     };
 
 /** Transaction data structure state machine, passed in rpc and p2p swarm */
 export interface TxStateMachine {
-    senderAddress: string;
-    senderPublicKey: string | null;
-    receiverPublicKey: string | null;
-    receiverAddress: string;
-    /** Hashed sender and receiver address to bind the addresses while sending */
-    multiId: number[]; // [u8; 32] in Rust -> number[] in TS
-    /** Signature of the receiver id */
-    recvSignature?: number[];
-    /** Token type */
-    token: Token;
-    /** State Machine status */
-    status: TxStatus;
-    /** Code word */
-    codeWord: string;
-    /** Amount to be sent */
-    amount: bigint; // u128 in Rust -> bigint in TS
-    /** Fees amount */
-    feesAmount: number; // u8 in Rust -> number in TS
-    /** Vane fees amount */
-    vaneFeesAmount: bigint; // u128 in Rust -> bigint in TS
-    /** Signed call payload (signed hash of the transaction) */
-    signedCallPayload?: number[];
-    /** Call payload (hash of transaction and raw transaction bytes) */
-    callPayload?: ChainTransactionType;
-    /** Inbound Request id for p2p */
-    inboundReqId?: number; // Option<u64> in Rust -> number | undefined in TS
-    /** Outbound Request id for p2p */
-    outboundReqId?: number; // Option<u64> in Rust -> number | undefined in TS
-    /** Stores the current nonce of the transaction per vane not the nonce for the blockchain network */
-    txNonce: number; // u32 in Rust -> number in TS
-    /** Monotonic version for conflict/race resolution across async boundaries */
-    txVersion: number; // u32 in Rust -> number in TS
-    /** Sender address network */
-    senderAddressNetwork: ChainSupported;
-    /** Receiver address network */
-    receiverAddressNetwork: ChainSupported;
+  senderAddress: string;
+  senderPublicKey: string | null;
+  receiverPublicKey: string | null;
+  receiverAddress: string;
+  /** Hashed sender and receiver address to bind the addresses while sending */
+  multiId: number[]; // [u8; 32] in Rust -> number[] in TS
+  /** Signature of the receiver id */
+  recvSignature?: number[];
+  /** Token type */
+  token: Token;
+  /** State Machine status */
+  status: TxStatus;
+  /** Code word */
+  codeWord: string;
+  /** Amount to be sent */
+  amount: bigint; // u128 in Rust -> bigint in TS
+  /** Fees amount */
+  feesAmount: number; // u8 in Rust -> number in TS
+  /** Vane fees amount */
+  vaneFeesAmount: bigint; // u128 in Rust -> bigint in TS
+  /** Signed call payload (signed hash of the transaction) */
+  signedCallPayload?: number[];
+  /** Call payload (hash of transaction and raw transaction bytes) */
+  callPayload?: ChainTransactionType;
+  /** Inbound Request id for p2p */
+  inboundReqId?: number; // Option<u64> in Rust -> number | undefined in TS
+  /** Outbound Request id for p2p */
+  outboundReqId?: number; // Option<u64> in Rust -> number | undefined in TS
+  /** Stores the current nonce of the transaction per vane not the nonce for the blockchain network */
+  txNonce: number; // u32 in Rust -> number in TS
+  /** Monotonic version for conflict/race resolution across async boundaries */
+  txVersion: number; // u32 in Rust -> number in TS
+  /** Sender address network */
+  senderAddressNetwork: ChainSupported;
+  /** Receiver address network */
+  receiverAddressNetwork: ChainSupported;
 }
 
 const textDecoder = new TextDecoder();
 
 function normalizeAmount(amount: number | string | bigint): bigint {
-    if (typeof amount === "bigint") return amount;
-    if (typeof amount === "string") return BigInt(amount);
-    return BigInt(amount);
+  if (typeof amount === "bigint") return amount;
+  if (typeof amount === "string") return BigInt(amount);
+  return BigInt(amount);
 }
 
-export function decodeTxStateMachine(data: Uint8Array | number[]): TxStateMachine {
-    const bytes = data instanceof Uint8Array ? data : Uint8Array.from(data);
-    const json = textDecoder.decode(bytes);
-    const parsed = JSON.parse(json) as TxStateMachine & { amount: number | string | bigint };
-    return { ...parsed, amount: normalizeAmount(parsed.amount) };
+export function decodeTxStateMachine(
+  data: Uint8Array | number[],
+): TxStateMachine {
+  const bytes = data instanceof Uint8Array ? data : Uint8Array.from(data);
+  const json = textDecoder.decode(bytes);
+  const parsed = JSON.parse(json) as TxStateMachine & {
+    amount: number | string | bigint;
+  };
+  return { ...parsed, amount: normalizeAmount(parsed.amount) };
 }
 
 export class TxStateMachineManager {
-    private tx: TxStateMachine;
-   
-    constructor(tx: TxStateMachine) {
-      this.tx = tx;
-    }
-   
-    setReceiverSignature(signature: number[]): void {
-      this.tx.recvSignature = signature;
-    }
-   
-    setCallPayload(payload: ChainTransactionType | null): void {
-      this.tx.callPayload = payload;
-    }
-   
-    setSignedCallPayload(payload: number[]): void {
-      this.tx.signedCallPayload = payload;
-    }
-    setRevertedReason(reason: string): void {
-      this.tx.status = {type: "Reverted", data: reason};
-    }
-   
-    setTxSubmissionPassed(hash: number[]): void {
-      this.tx.status = {type: "TxSubmissionPassed", data: {hash: hash}};
-    }
+  private tx: TxStateMachine;
 
-    setFeesAmount(amount: number): void {
-      this.tx.feesAmount = amount;
-    }
+  constructor(tx: TxStateMachine) {
+    this.tx = tx;
+  }
 
-    setVaneFeesAmount(amount: bigint): void {
-      this.tx.vaneFeesAmount = amount;
-    }
-    setTxSubmissionFailed(reason: string): void {
-      this.tx.status = {type: "FailedToSubmitTxn", data: reason};
-    }
-    
-    updateStatus(status: TxStatus): void {
-      this.tx.status = status;
-    }
-   
-    setRequestIds(inbound?: number, outbound?: number): void {
-      if (inbound) this.tx.inboundReqId = inbound;
-      if (outbound) this.tx.outboundReqId = outbound;
-    }
-   
-    // Utility methods
-    isSignedByReceiver(): boolean {
-      return !!this.tx.recvSignature;
-    }
-   
-    hasCallPayload(): boolean {
-      return !!this.tx.callPayload;
-    }
-   
-    // Getters
-    getTx(): TxStateMachine {
-      return {...this.tx};
-    }
-   
-    // Create new instance
-    static create(
-      senderAddress: string,
-      receiverAddress: string,
-      senderNetwork: ChainSupported,
-      receiverNetwork: ChainSupported,
-      token: Token,
-      amount: bigint,
-      codeWord: string,
-      senderPublicKey: string | null,
-      receiverPublicKey: string | null,
-      feesAmount: number = 0,
-      vaneFeesAmount: bigint
-    ): TxStateMachineManager {
-      return new TxStateMachineManager({
-        senderAddress,
-        senderPublicKey,
-        receiverPublicKey,
-        receiverAddress,
-        multiId: [], // Generate hash of sender+receiver
-        token,
-        status: {type: "Genesis"},
-        amount,
-        feesAmount,
-        vaneFeesAmount,
-        txNonce: 0,
-        txVersion: 0,
-        codeWord,
-        senderAddressNetwork: senderNetwork,
-        receiverAddressNetwork: receiverNetwork
-      });
-    }
+  setReceiverSignature(signature: number[]): void {
+    this.tx.recvSignature = signature;
+  }
+
+  setCallPayload(payload: ChainTransactionType | null): void {
+    this.tx.callPayload = payload;
+  }
+
+  setSignedCallPayload(payload: number[]): void {
+    this.tx.signedCallPayload = payload;
+  }
+  setRevertedReason(reason: string): void {
+    this.tx.status = { type: "Reverted", data: reason };
+  }
+
+  setTxSubmissionPassed(hash: number[]): void {
+    this.tx.status = { type: "TxSubmissionPassed", data: { hash: hash } };
+  }
+
+  setFeesAmount(amount: number): void {
+    this.tx.feesAmount = amount;
+  }
+
+  setVaneFeesAmount(amount: bigint): void {
+    this.tx.vaneFeesAmount = amount;
+  }
+  setTxSubmissionFailed(reason: string): void {
+    this.tx.status = { type: "FailedToSubmitTxn", data: reason };
+  }
+
+  updateStatus(status: TxStatus): void {
+    this.tx.status = status;
+  }
+
+  setRequestIds(inbound?: number, outbound?: number): void {
+    if (inbound) this.tx.inboundReqId = inbound;
+    if (outbound) this.tx.outboundReqId = outbound;
+  }
+
+  // Utility methods
+  isSignedByReceiver(): boolean {
+    return !!this.tx.recvSignature;
+  }
+
+  hasCallPayload(): boolean {
+    return !!this.tx.callPayload;
+  }
+
+  // Getters
+  getTx(): TxStateMachine {
+    return { ...this.tx };
+  }
+
+  // Create new instance
+  static create(
+    senderAddress: string,
+    receiverAddress: string,
+    senderNetwork: ChainSupported,
+    receiverNetwork: ChainSupported,
+    token: Token,
+    amount: bigint,
+    codeWord: string,
+    senderPublicKey: string | null,
+    receiverPublicKey: string | null,
+    feesAmount: number = 0,
+    vaneFeesAmount: bigint,
+  ): TxStateMachineManager {
+    return new TxStateMachineManager({
+      senderAddress,
+      senderPublicKey,
+      receiverPublicKey,
+      receiverAddress,
+      multiId: [], // Generate hash of sender+receiver
+      token,
+      status: { type: "Genesis" },
+      amount,
+      feesAmount,
+      vaneFeesAmount,
+      txNonce: 0,
+      txVersion: 0,
+      codeWord,
+      senderAddressNetwork: senderNetwork,
+      receiverAddressNetwork: receiverNetwork,
+    });
+  }
 }
 
 export interface AccountProfile {
-    accounts: {address: string, network: string}[];
-    peer_id: string;
-    multi_addr: string;
-    rpc: string;
+  accounts: { address: string; network: string }[];
+  peer_id: string;
+  multi_addr: string;
+  rpc: string;
 }
 
 // ===================== Database Storage Export Types ===================== //
 
 /** User account structure containing multi-address and associated accounts */
 export interface UserAccount {
-    /** User's libp2p multi-address */
-    multi_addr: string;
-    /** Array of account addresses paired with their respective chains */
-    accounts: [string, ChainSupported][];
+  /** User's libp2p multi-address */
+  multi_addr: string;
+  /** Array of account addresses paired with their respective chains */
+  accounts: [string, ChainSupported][];
 }
 
 /** Transaction data structure as stored in the database */
 export interface DbTxStateMachine {
-    /** Transaction hash based on the chain's hashing algorithm */
-    tx_hash: number[]; // Vec<u8> in Rust -> number[] in TS
-    /** Amount sent in the transaction */
-    amount: number; // u128 in Rust -> number in TS
-    /** Token type */
-    token: Token;
-    /** Sender address */
-    sender: string;
-    /** Receiver address */
-    receiver: string;
-    /** Sender address network */
-    sender_network: ChainSupported;
-    /** Receiver address network */
-    receiver_network: ChainSupported;
-    /** Whether the transaction was successful */
-    success: boolean;
+  /** Transaction hash based on the chain's hashing algorithm */
+  tx_hash: number[]; // Vec<u8> in Rust -> number[] in TS
+  /** Amount sent in the transaction */
+  amount: number; // u128 in Rust -> number in TS
+  /** Token type */
+  token: Token;
+  /** Sender address */
+  sender: string;
+  /** Receiver address */
+  receiver: string;
+  /** Sender address network */
+  sender_network: ChainSupported;
+  /** Receiver address network */
+  receiver_network: ChainSupported;
+  /** Whether the transaction was successful */
+  success: boolean;
 }
 
 /** Information about a saved peer */
 export interface SavedPeerInfo {
-    /** The peer's ID */
-    peer_id: string;
-    /** The peer's multi-address */
-    multi_addr: string;
-    /** All account IDs associated with this peer */
-    account_ids: string[];
+  /** The peer's ID */
+  peer_id: string;
+  /** The peer's multi-address */
+  multi_addr: string;
+  /** All account IDs associated with this peer */
+  account_ids: string[];
 }
 
-/** 
+/**
  * Complete database storage export structure
  * Contains all data from the database using getter methods
  */
 export interface StorageExport {
-    /** User account information (multi-address and associated chain accounts) */
-    user_account?: UserAccount;
-    
-    /** Current nonce value for transaction ordering */
-    nonce: number; // u32 in Rust -> number in TS
-    
-    /** All successful transactions */
-    success_transactions: DbTxStateMachine[];
-    
-    /** All failed transactions */
-    failed_transactions: DbTxStateMachine[];
+  /** User account information (multi-address and associated chain accounts) */
+  user_account?: UserAccount;
+
+  /** Current nonce value for transaction ordering */
+  nonce: number; // u32 in Rust -> number in TS
+
+  /** All successful transactions */
+  success_transactions: DbTxStateMachine[];
+
+  /** All failed transactions */
+  failed_transactions: DbTxStateMachine[];
 }
 
 /** Node connection status information */
 export interface NodeConnectionStatus {
-    relay_connected: boolean;
-    peer_id: string;
-    relay_address: string;
-    connection_uptime_seconds?: number;
-    last_connection_change?: number; // Unix timestamp
+  relay_connected: boolean;
+  peer_id: string;
+  relay_address: string;
+  connection_uptime_seconds?: number;
+  last_connection_change?: number; // Unix timestamp
 }
 
 /**
@@ -807,142 +922,163 @@ export interface NodeConnectionStatus {
  * - Variants with data: { "VariantName": {...data...} }
  */
 export type BackendEvent =
-    | { SenderRequestReceived: { address: string; data: number[] } }
-    | { SenderRequestHandled: { address: string; data: number[] } }
-    | { SenderConfirmed: { address: string; data: number[] } }
-    | { SenderReverted: { address: string; data: number[] } }
-    | { ReceiverResponseReceived: { address: string; data: number[] } }
-    | { ReceiverResponseHandled: { address: string; data: number[] } }
-    | { PeerDisconnected: { account_id: string } }
-    | { DataExpired: { multi_id: string; data: number[] } }
-    | { PendingTransactionsFetched: { address: string; transactions: TxStateMachine[] } }
-    | { TxSubmitted: { address: string; data: number[] } };
+  | { SenderRequestReceived: { address: string; data: number[] } }
+  | { SenderRequestHandled: { address: string; data: number[] } }
+  | { SenderConfirmed: { address: string; data: number[] } }
+  | { SenderReverted: { address: string; data: number[] } }
+  | { ReceiverResponseReceived: { address: string; data: number[] } }
+  | { ReceiverResponseHandled: { address: string; data: number[] } }
+  | { PeerDisconnected: { account_id: string } }
+  | { DataExpired: { multi_id: string; data: number[] } }
+  | {
+      PendingTransactionsFetched: {
+        address: string;
+        transactions: TxStateMachine[];
+      };
+    }
+  | { TxSubmitted: { address: string; data: number[] } };
 
 /** User metrics structure */
 export interface UserMetrics {
-    user_account: UserAccount;
-    total_success_txns: DbTxStateMachine[];
-    total_failed_txns: DbTxStateMachine[];
-    saved_target_peers: [string[], string]; // (Vec<String>, String) in Rust -> [string[], string] in TS
+  user_account: UserAccount;
+  total_success_txns: DbTxStateMachine[];
+  total_failed_txns: DbTxStateMachine[];
+  saved_target_peers: [string[], string]; // (Vec<String>, String) in Rust -> [string[], string] in TS
 }
 
 /**
  * Helper class for working with StorageExport data
  */
 export class StorageExportManager {
-    private storage: StorageExport;
+  private storage: StorageExport;
 
-    constructor(storage: StorageExport) {
-        this.storage = storage;
-    }
+  constructor(storage: StorageExport) {
+    this.storage = storage;
+  }
 
-    /**
-     * Get the total number of transactions (successful + failed)
-     */
-    getTotalTransactionCount(): number {
-        return this.storage.success_transactions.length + this.storage.failed_transactions.length;
-    }
+  /**
+   * Get the total number of transactions (successful + failed)
+   */
+  getTotalTransactionCount(): number {
+    return (
+      this.storage.success_transactions.length +
+      this.storage.failed_transactions.length
+    );
+  }
 
-    /**
-     * Get the success rate as a percentage
-     */
-    getSuccessRate(): number {
-        const total = this.getTotalTransactionCount();
-        if (total === 0) return 0;
-        return (this.storage.success_transactions.length / total) * 100;
-    }
+  /**
+   * Get the success rate as a percentage
+   */
+  getSuccessRate(): number {
+    const total = this.getTotalTransactionCount();
+    if (total === 0) return 0;
+    return (this.storage.success_transactions.length / total) * 100;
+  }
 
-    /**
-     * Get all unique networks from transactions (both sender and receiver networks)
-     */
-    getNetworksUsed(): ChainSupported[] {
-        const networks = new Set<ChainSupported>();
-        [...this.storage.success_transactions, ...this.storage.failed_transactions]
-            .forEach(tx => {
-                networks.add(tx.sender_network);
-                networks.add(tx.receiver_network);
-            });
-        return Array.from(networks);
-    }
+  /**
+   * Get all unique networks from transactions (both sender and receiver networks)
+   */
+  getNetworksUsed(): ChainSupported[] {
+    const networks = new Set<ChainSupported>();
+    [
+      ...this.storage.success_transactions,
+      ...this.storage.failed_transactions,
+    ].forEach((tx) => {
+      networks.add(tx.sender_network);
+      networks.add(tx.receiver_network);
+    });
+    return Array.from(networks);
+  }
 
-    /**
-     * Get transactions by network (matches either sender or receiver network)
-     */
-    getTransactionsByNetwork(network: ChainSupported): {
-        successful: DbTxStateMachine[];
-        failed: DbTxStateMachine[];
-    } {
-        return {
-            successful: this.storage.success_transactions.filter(tx => 
-                tx.sender_network === network || tx.receiver_network === network),
-            failed: this.storage.failed_transactions.filter(tx => 
-                tx.sender_network === network || tx.receiver_network === network),
-        };
-    }
+  /**
+   * Get transactions by network (matches either sender or receiver network)
+   */
+  getTransactionsByNetwork(network: ChainSupported): {
+    successful: DbTxStateMachine[];
+    failed: DbTxStateMachine[];
+  } {
+    return {
+      successful: this.storage.success_transactions.filter(
+        (tx) =>
+          tx.sender_network === network || tx.receiver_network === network,
+      ),
+      failed: this.storage.failed_transactions.filter(
+        (tx) =>
+          tx.sender_network === network || tx.receiver_network === network,
+      ),
+    };
+  }
 
-    /**
-     * Get transactions by sender address
-     */
-    getTransactionsBySender(senderAddress: string): {
-        successful: DbTxStateMachine[];
-        failed: DbTxStateMachine[];
-    } {
-        return {
-            successful: this.storage.success_transactions.filter(tx => tx.sender === senderAddress),
-            failed: this.storage.failed_transactions.filter(tx => tx.sender === senderAddress),
-        };
-    }
+  /**
+   * Get transactions by sender address
+   */
+  getTransactionsBySender(senderAddress: string): {
+    successful: DbTxStateMachine[];
+    failed: DbTxStateMachine[];
+  } {
+    return {
+      successful: this.storage.success_transactions.filter(
+        (tx) => tx.sender === senderAddress,
+      ),
+      failed: this.storage.failed_transactions.filter(
+        (tx) => tx.sender === senderAddress,
+      ),
+    };
+  }
 
-    /**
-     * Get transactions by receiver address
-     */
-    getTransactionsByReceiver(receiverAddress: string): {
-        successful: DbTxStateMachine[];
-        failed: DbTxStateMachine[];
-    } {
-        return {
-            successful: this.storage.success_transactions.filter(tx => tx.receiver === receiverAddress),
-            failed: this.storage.failed_transactions.filter(tx => tx.receiver === receiverAddress),
-        };
-    }
+  /**
+   * Get transactions by receiver address
+   */
+  getTransactionsByReceiver(receiverAddress: string): {
+    successful: DbTxStateMachine[];
+    failed: DbTxStateMachine[];
+  } {
+    return {
+      successful: this.storage.success_transactions.filter(
+        (tx) => tx.receiver === receiverAddress,
+      ),
+      failed: this.storage.failed_transactions.filter(
+        (tx) => tx.receiver === receiverAddress,
+      ),
+    };
+  }
 
+  /**
+   * Get storage export data
+   */
+  getStorage(): StorageExport {
+    return { ...this.storage };
+  }
 
-    /**
-     * Get storage export data
-     */
-    getStorage(): StorageExport {
-        return { ...this.storage };
-    }
-    
-    /**
-     * Get largest transaction failed amount
-     */
-    getLargestFailedTransactionAmount(): number {
-        return this.storage.failed_transactions.reduce((max, tx) => {
-            return Math.max(max, tx.amount);
-        }, 0);
-    }
+  /**
+   * Get largest transaction failed amount
+   */
+  getLargestFailedTransactionAmount(): number {
+    return this.storage.failed_transactions.reduce((max, tx) => {
+      return Math.max(max, tx.amount);
+    }, 0);
+  }
 
-    /**
-     * Create a human-readable summary
-     */
-    getSummary(): {
-        totalTransactions: number;
-        successfulTransactions: number;
-        failedTransactions: number;
-        largestFailedTransactionAmount: number;
-        successRate: string;
-        networksUsed: ChainSupported[];
-        currentNonce: number;
-    } {
-        return {
-            totalTransactions: this.getTotalTransactionCount(),
-            successfulTransactions: this.storage.success_transactions.length,
-            largestFailedTransactionAmount: this.getLargestFailedTransactionAmount(),
-            failedTransactions: this.storage.failed_transactions.length,
-            successRate: `${this.getSuccessRate().toFixed(2)}%`,
-            networksUsed: this.getNetworksUsed(),
-            currentNonce: this.storage.nonce,
-        };
-    }
+  /**
+   * Create a human-readable summary
+   */
+  getSummary(): {
+    totalTransactions: number;
+    successfulTransactions: number;
+    failedTransactions: number;
+    largestFailedTransactionAmount: number;
+    successRate: string;
+    networksUsed: ChainSupported[];
+    currentNonce: number;
+  } {
+    return {
+      totalTransactions: this.getTotalTransactionCount(),
+      successfulTransactions: this.storage.success_transactions.length,
+      largestFailedTransactionAmount: this.getLargestFailedTransactionAmount(),
+      failedTransactions: this.storage.failed_transactions.length,
+      successRate: `${this.getSuccessRate().toFixed(2)}%`,
+      networksUsed: this.getNetworksUsed(),
+      currentNonce: this.storage.nonce,
+    };
+  }
 }

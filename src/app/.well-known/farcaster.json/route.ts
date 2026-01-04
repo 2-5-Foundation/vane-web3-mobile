@@ -1,45 +1,55 @@
-const ROOT_URL = 'https://vaneweb3.com';
+const ROOT_URL = "https://vaneweb3.com";
 
 const baseMiniAppManifest = {
-    "accountAssociation": {
-      "header": "eyJmaWQiOjIzODkwMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweEYzQzMwN0E2RTc5RkI0OEZiNkJkRDJBQWJEN2I4MmRCNDg5YWI1MzcifQ",
-      "payload": "eyJkb21haW4iOiJ2YW5ld2ViMy5jb20ifQ",
-      "signature": "CN6DB5Xd/RYNm9PHtr3wbyuuDbANDjf+c5GkhMia+Vl4ZRf3z+8381L3FiT78H7dnx9kkVJ9W4j0CyByLt6A+xs="
-    },
-    "baseBuilder": {
-      "ownerAddress": "0xd4D7db1Ca4C5DC58a5315d4CF0ca4bc0656f6827" 
-    },
-    "miniapp": {
-      "version": "1",
-      "name": "Vane Web3",
-      "homeUrl": "https://vaneweb3.com",
-      "iconUrl": `${ROOT_URL}/vane-logo-icon.png`,
-      "splashImageUrl": `${ROOT_URL}/vane-logo.png`,
-      "splashBackgroundColor": "#0A1919",
-      "subtitle": "Your safety net for transfers",
-      "description": "Your safety net for transfers",
-      "primaryCategory": "finance",
-      "tags": ["vane", "crypto", "transfers", "lostfunds"],
-      "heroImageUrl": `${ROOT_URL}/vane-safety-net.png`,
-      "tagline": "Safety net for your transfers",
-      "ogTitle": "vane",
-      "ogDescription": "Your safety net for crypto transactions",
-      "ogImageUrl": `${ROOT_URL}/vane-safety-net.png`,
-      "noindex": true
-    }
-  }
+  accountAssociation: {
+    header:
+      "eyJmaWQiOjIzODkwMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweEYzQzMwN0E2RTc5RkI0OEZiNkJkRDJBQWJEN2I4MmRCNDg5YWI1MzcifQ",
+    payload: "eyJkb21haW4iOiJ2YW5ld2ViMy5jb20ifQ",
+    signature:
+      "CN6DB5Xd/RYNm9PHtr3wbyuuDbANDjf+c5GkhMia+Vl4ZRf3z+8381L3FiT78H7dnx9kkVJ9W4j0CyByLt6A+xs=",
+  },
+  baseBuilder: {
+    ownerAddress: "0xd4D7db1Ca4C5DC58a5315d4CF0ca4bc0656f6827",
+  },
+  miniapp: {
+    version: "1",
+    name: "Vane Web3",
+    homeUrl: "https://vaneweb3.com",
+    iconUrl: `${ROOT_URL}/vane-logo-icon.png`,
+    splashImageUrl: `${ROOT_URL}/vane-logo.png`,
+    splashBackgroundColor: "#0A1919",
+    subtitle: "Your safety net for transfers",
+    description: "Your safety net for transfers",
+    primaryCategory: "finance",
+    tags: ["vane", "crypto", "transfers", "lostfunds"],
+    heroImageUrl: `${ROOT_URL}/vane-safety-net.png`,
+    tagline: "Safety net for your transfers",
+    ogTitle: "vane",
+    ogDescription: "Your safety net for crypto transactions",
+    ogImageUrl: `${ROOT_URL}/vane-safety-net.png`,
+    noindex: true,
+  },
+};
 
-
-function withValidProperties(properties: Record<string, undefined | string | string[]>) {
-    return Object.fromEntries(
-        Object.entries(properties).filter(([_, value]) => (Array.isArray(value) ? value.length > 0 : !!value))
-    );
+function withValidProperties(
+  properties: Record<string, undefined | string | string[]>,
+) {
+  return Object.fromEntries(
+    Object.entries(properties).filter(([_, value]) =>
+      Array.isArray(value) ? value.length > 0 : !!value,
+    ),
+  );
 }
 
 export async function GET() {
-    return Response.json({
-        accountAssociation: baseMiniAppManifest.accountAssociation,
-        baseBuilder: baseMiniAppManifest.baseBuilder,
-        miniapp: withValidProperties(baseMiniAppManifest.miniapp as unknown as Record<string, undefined | string | string[]>)
-    });
+  return Response.json({
+    accountAssociation: baseMiniAppManifest.accountAssociation,
+    baseBuilder: baseMiniAppManifest.baseBuilder,
+    miniapp: withValidProperties(
+      baseMiniAppManifest.miniapp as unknown as Record<
+        string,
+        undefined | string | string[]
+      >,
+    ),
+  });
 }

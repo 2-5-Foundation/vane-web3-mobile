@@ -1,17 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
-import {
-  VersionedTransaction,
-  Transaction,
-} from '@solana/web3.js';
+import { VersionedTransaction, Transaction } from "@solana/web3.js";
 
-import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
-import { ISolana, isSolanaWallet } from '@dynamic-labs/solana-core';
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { ISolana, isSolanaWallet } from "@dynamic-labs/solana-core";
 import {
   isPhantomRedirectConnector,
   SignMessageListener,
   SignTransactionListener,
-} from '@dynamic-labs/wallet-connector-core';
+} from "@dynamic-labs/wallet-connector-core";
 
 export const usePhantomSignTransaction = () => {
   const { primaryWallet } = useDynamicContext();
@@ -54,19 +51,19 @@ export const usePhantomSignTransaction = () => {
       setMessageErrorMessage(response.errorMessage);
     };
 
-    connector.on('signTransaction', handleSignTransaction);
-    connector.on('signMessage', handleSignMessage);
+    connector.on("signTransaction", handleSignTransaction);
+    connector.on("signMessage", handleSignMessage);
     return () => {
       if (!isPhantomRedirectConnector(connector)) return;
-      connector.off('signTransaction', handleSignTransaction);
-      connector.off('signMessage', handleSignMessage);
+      connector.off("signTransaction", handleSignTransaction);
+      connector.off("signMessage", handleSignMessage);
     };
   }, [connector]);
 
   const execute = async (transaction: VersionedTransaction) => {
     if (!primaryWallet) return;
-    if (!isSolanaWallet(primaryWallet)){
-        return;
+    if (!isSolanaWallet(primaryWallet)) {
+      return;
     }
     const signer = await primaryWallet.getSigner();
     await signer.signTransaction(transaction as any);
@@ -74,8 +71,8 @@ export const usePhantomSignTransaction = () => {
 
   const signMessage = async (message: Uint8Array) => {
     if (!primaryWallet) return;
-    if (!isSolanaWallet(primaryWallet)){
-        return;
+    if (!isSolanaWallet(primaryWallet)) {
+      return;
     }
     const signer = await primaryWallet.getSigner();
     await signer.signMessage(message);

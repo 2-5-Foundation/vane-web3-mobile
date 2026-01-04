@@ -20,7 +20,7 @@ const eslintConfig = [
       "**/*.js.map",
       "**/dist/**/*",
       "**/node_modules/**/*",
-    ]
+    ],
   },
   {
     // Global rule overrides for more permissive linting
@@ -31,8 +31,8 @@ const eslintConfig = [
       "import/no-anonymous-default-export": "warn",
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/prefer-as-const": "off",
-    }
-  }
+    },
+  },
 ];
 
 export default eslintConfig;

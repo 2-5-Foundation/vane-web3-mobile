@@ -1,37 +1,59 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react"
-import { motion } from "framer-motion"
-import TransferForm from "../page-view/page-component/transfer-form"
-import TransferReceive from "./page-component/transfer-receive"
-import { useDynamicContext, useTokenBalances, useUserWallets } from '@dynamic-labs/sdk-react-core'
-import { toast } from 'sonner'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { useTransactionStore } from "@/app/lib/useStore"
-import { Rocket, Download, TrendingUp, ArrowLeft, User, Send } from "lucide-react"
-import { ChainEnum, TokenBalance } from "@dynamic-labs/sdk-api-core"
-import { Button } from "@/components/ui/button"
-import { Token, getTokenDecimals } from "@/lib/vane_lib/primitives"
-import { getTokenLabel } from "./page-component/sender-pending"
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { motion } from "framer-motion";
+import TransferForm from "../page-view/page-component/transfer-form";
+import TransferReceive from "./page-component/transfer-receive";
+import {
+  useDynamicContext,
+  useTokenBalances,
+  useUserWallets,
+} from "@dynamic-labs/sdk-react-core";
+import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useTransactionStore } from "@/app/lib/useStore";
+import {
+  Rocket,
+  Download,
+  TrendingUp,
+  ArrowLeft,
+  User,
+  Send,
+} from "lucide-react";
+import { ChainEnum, TokenBalance } from "@dynamic-labs/sdk-api-core";
+import { Button } from "@/components/ui/button";
+import { Token, getTokenDecimals } from "@/lib/vane_lib/primitives";
+import { getTokenLabel } from "./page-component/sender-pending";
 
 // Supported network IDs
 const SOLANA_NETWORK_ID = 101;
 const EVM_NETWORK_IDS = [1, 56, 10, 42161, 137, 8453]; // Ethereum, BNB, Optimism, Arbitrum, Polygon, Base
 
 export default function Transfer() {
-  const [activeTab, setActiveTab] = useState<'transfer' | 'receive'>('transfer')
-  const [balance, setBalance] = useState("0")
-  const [availableTokens, setAvailableTokens] = useState<any[]>([])
-  const [currentNetworkId, setCurrentNetworkId] = useState<number | null>(null)
-  const [showTransferForm, setShowTransferForm] = useState(false)
-  const [transferType, setTransferType] = useState<'self' | 'external' | null>(null)
-  const [failedTransactionsValue, setFailedTransactionsValue] = useState<number>(0)
-  const [failedTransactionCount, setFailedTransactionCount] = useState<number>(0)
+  const [activeTab, setActiveTab] = useState<"transfer" | "receive">(
+    "transfer",
+  );
+  const [balance, setBalance] = useState("0");
+  const [availableTokens, setAvailableTokens] = useState<any[]>([]);
+  const [currentNetworkId, setCurrentNetworkId] = useState<number | null>(null);
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [transferType, setTransferType] = useState<"self" | "external" | null>(
+    null,
+  );
+  const [failedTransactionsValue, setFailedTransactionsValue] =
+    useState<number>(0);
+  const [failedTransactionCount, setFailedTransactionCount] =
+    useState<number>(0);
 
-  const { primaryWallet } = useDynamicContext()
-  const userWallets = useUserWallets()
-  const { exportStorageData, isWasmInitialized, initializeWasm, startWatching } = useTransactionStore()
-  const [isInitializing, setIsInitializing] = useState(false)
+  const { primaryWallet } = useDynamicContext();
+  const userWallets = useUserWallets();
+  const {
+    exportStorageData,
+    isWasmInitialized,
+    initializeWasm,
+    startWatching,
+  } = useTransactionStore();
+  const [isInitializing, setIsInitializing] = useState(false);
   const syncNetworkIdOnce = useCallback(async () => {
     if (!primaryWallet) return;
 
@@ -41,13 +63,16 @@ export default function Transfer() {
 
       // If Dynamic returns a non-numeric value (e.g. "solana"), default to Ethereum (1)
       if (Number.isNaN(networkId)) {
-        console.warn('Non-numeric network from Dynamic, defaulting to Ethereum:', rawNetwork);
+        console.warn(
+          "Non-numeric network from Dynamic, defaulting to Ethereum:",
+          rawNetwork,
+        );
         networkId = 1;
       }
 
       setCurrentNetworkId(networkId);
     } catch (error) {
-      console.error('Error syncing network for balances:', error);
+      console.error("Error syncing network for balances:", error);
     }
   }, [primaryWallet]);
 
@@ -60,17 +85,17 @@ export default function Transfer() {
     if (!currentNetworkId) {
       return base;
     }
-    
+
     // Solana
     if (currentNetworkId === SOLANA_NETWORK_ID) {
       return { ...base, chainName: ChainEnum.Sol };
     }
-    
+
     // EVM chains: Ethereum (1), BNB (56), Optimism (10), Arbitrum (42161), Polygon (137), Base (8453)
     if (EVM_NETWORK_IDS.includes(currentNetworkId)) {
       return { ...base, chainName: ChainEnum.Evm, networkId: currentNetworkId };
     }
-    
+
     // Fallback to base if unsupported
     return base;
   }, [currentNetworkId]);
@@ -98,41 +123,49 @@ export default function Transfer() {
   }, [tokenBalances]);
 
   // Calculate USD value for a failed transaction
-  const calculateTransactionValue = useCallback((amount: bigint, token: Token, balances: TokenBalance[]): number => {
-    if (!balances?.length) return 0;
+  const calculateTransactionValue = useCallback(
+    (amount: bigint, token: Token, balances: TokenBalance[]): number => {
+      if (!balances?.length) return 0;
 
-    const tokenSymbol = getTokenLabel(token);
-    if (!tokenSymbol) return 0;
+      const tokenSymbol = getTokenLabel(token);
+      if (!tokenSymbol) return 0;
 
-    const balance = balances.find((b: any) => 
-      b.symbol?.toUpperCase() === tokenSymbol.toUpperCase() || 
-      b.name?.toUpperCase() === tokenSymbol.toUpperCase()
-    );
-    if (!balance) return 0;
+      const balance = balances.find(
+        (b: any) =>
+          b.symbol?.toUpperCase() === tokenSymbol.toUpperCase() ||
+          b.name?.toUpperCase() === tokenSymbol.toUpperCase(),
+      );
+      if (!balance) return 0;
 
-    const decimals = getTokenDecimals(token);
-    if (!decimals) return 0;
+      const decimals = getTokenDecimals(token);
+      if (!decimals) return 0;
 
-    const tokenAmount = Number(amount) / Math.pow(10, decimals);
-    const pricePerToken = balance.price || (balance.marketValue && balance.balance > 0 ? balance.marketValue / balance.balance : 0);
-    
-    return tokenAmount * pricePerToken;
-  }, [])
- 
-   // Handle token balances from the separate component
-   const handleBalancesChange = useCallback((balances: any[]) => {
-     if (balances && balances.length > 0) {
-       // Sum all tokens' marketValue
-       const totalValue = balances.reduce((sum, token) => {
-         return sum + (token.marketValue || 0);
-       }, 0);
-       setBalance(totalValue.toString());
-       setAvailableTokens(balances);
-     } else {
-       setBalance("0");
-       setAvailableTokens([]);
-     }
-   }, [])
+      const tokenAmount = Number(amount) / Math.pow(10, decimals);
+      const pricePerToken =
+        balance.price ||
+        (balance.marketValue && balance.balance > 0
+          ? balance.marketValue / balance.balance
+          : 0);
+
+      return tokenAmount * pricePerToken;
+    },
+    [],
+  );
+
+  // Handle token balances from the separate component
+  const handleBalancesChange = useCallback((balances: any[]) => {
+    if (balances && balances.length > 0) {
+      // Sum all tokens' marketValue
+      const totalValue = balances.reduce((sum, token) => {
+        return sum + (token.marketValue || 0);
+      }, 0);
+      setBalance(totalValue.toString());
+      setAvailableTokens(balances);
+    } else {
+      setBalance("0");
+      setAvailableTokens([]);
+    }
+  }, []);
 
   // Derive network ID from Dynamic SDK for token balances (with fallback)
   useEffect(() => {
@@ -147,13 +180,16 @@ export default function Transfer() {
         let networkId = Number(rawNetwork);
 
         if (Number.isNaN(networkId)) {
-          console.warn('Non-numeric network from Dynamic in poll, defaulting to Ethereum:', rawNetwork);
+          console.warn(
+            "Non-numeric network from Dynamic in poll, defaulting to Ethereum:",
+            rawNetwork,
+          );
           networkId = 1;
         }
 
         setCurrentNetworkId(networkId);
       } catch (error) {
-        console.error('Error fetching network from Dynamic:', error);
+        console.error("Error fetching network from Dynamic:", error);
       }
     };
 
@@ -172,14 +208,14 @@ export default function Transfer() {
 
   // Ensure current network is synced when wallet connects or form opens
   useEffect(() => {
-    syncNetworkIdOnce()
-  }, [primaryWallet, syncNetworkIdOnce])
+    syncNetworkIdOnce();
+  }, [primaryWallet, syncNetworkIdOnce]);
 
-   // Calculate total value and count of failed transactions using useTokenBalances
-   useEffect(() => {
+  // Calculate total value and count of failed transactions using useTokenBalances
+  useEffect(() => {
     const calculateFailedTransactionsValue = async () => {
       if (!isWasmInitialized()) return;
-      
+
       try {
         const storageExport = await exportStorageData();
         if (!storageExport?.failed_transactions) {
@@ -199,36 +235,68 @@ export default function Transfer() {
 
         let totalValue = 0;
         storageExport.failed_transactions.forEach((tx) => {
-          const value = calculateTransactionValue(BigInt(tx.amount), tx.token, tokenBalances);
+          const value = calculateTransactionValue(
+            BigInt(tx.amount),
+            tx.token,
+            tokenBalances,
+          );
           totalValue += value;
         });
 
         setFailedTransactionsValue(totalValue);
-    } catch (error) {
-        console.error('Error calculating failed transactions value:', error);
+      } catch (error) {
+        console.error("Error calculating failed transactions value:", error);
         setFailedTransactionsValue(0);
         setFailedTransactionCount(0);
-    }
+      }
     };
 
     calculateFailedTransactionsValue();
-  }, [isWasmInitialized, exportStorageData, tokenBalances, calculateTransactionValue])
+  }, [
+    isWasmInitialized,
+    exportStorageData,
+    tokenBalances,
+    calculateTransactionValue,
+  ]);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 px-4 max-w-sm mx-auto">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="pt-2 px-4 max-w-sm mx-auto"
+    >
       {/* Balance Display */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-1 mb-3">
-        <p className="text-gray-400 text-xs font-medium">Total Available Balance</p>
-        <p className="text-2xl font-light text-white">${parseFloat(balance).toFixed(4)}</p>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center space-y-1 mb-3"
+      >
+        <p className="text-gray-400 text-xs font-medium">
+          Total Available Balance
+        </p>
+        <p className="text-2xl font-light text-white">
+          ${parseFloat(balance).toFixed(4)}
+        </p>
       </motion.div>
 
       {/* Tabs */}
-      <Tabs defaultValue="transfer" value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mb-6">
+      <Tabs
+        defaultValue="transfer"
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as any)}
+        className="mb-6"
+      >
         <TabsList className="grid grid-cols-2 bg-[#1a2628] p-0.5 h-auto">
-          <TabsTrigger value="transfer" className="flex items-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]">
+          <TabsTrigger
+            value="transfer"
+            className="flex items-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]"
+          >
             <Rocket className="h-4 w-4" /> Transfer
           </TabsTrigger>
-          <TabsTrigger value="receive" className="flex items-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]">
+          <TabsTrigger
+            value="receive"
+            className="flex items-center gap-2 py-2 data-[state=active]:bg-[#7EDFCD] data-[state=active]:text-[#0B1B1C] data-[state=inactive]:bg-transparent data-[state=inactive]:text-[#9EB2AD]"
+          >
             <Download className="h-4 w-4" /> Verifiable Payment
           </TabsTrigger>
         </TabsList>
@@ -237,20 +305,29 @@ export default function Transfer() {
           {!showTransferForm ? (
             <div className="space-y-4">
               {/* Selection Card */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }} 
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
                 className="bg-[#0D1B1B] rounded-lg p-4 flex flex-col space-y-3"
               >
                 <TrendingUp className="w-3 h-3 text-gray-400 mb-1" />
-                <p className="text-gray-300 text-base font-medium mb-1 tracking-wide">Total funds protected by Vane</p>
-                <p className="text-xs text-gray-500">These funds could have been lost due to transactional mistakes.</p>
+                <p className="text-gray-300 text-base font-medium mb-1 tracking-wide">
+                  Total funds protected by Vane
+                </p>
+                <p className="text-xs text-gray-500">
+                  These funds could have been lost due to transactional
+                  mistakes.
+                </p>
                 <div className="mt-2 flex items-center justify-between">
-                  <p className="text-lg font-light text-gray-300">${failedTransactionsValue.toFixed(4)}</p>
+                  <p className="text-lg font-light text-gray-300">
+                    ${failedTransactionsValue.toFixed(4)}
+                  </p>
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-gray-400">Safe Reverts</p>
-                    <p className="text-lg font-light text-gray-300">{failedTransactionCount}</p>
+                    <p className="text-lg font-light text-gray-300">
+                      {failedTransactionCount}
+                    </p>
                   </div>
                 </div>
               </motion.div>
@@ -261,30 +338,34 @@ export default function Transfer() {
                   onClick={async () => {
                     // Check if wallet list has more than 1 wallet
                     if (userWallets.length <= 1) {
-                      toast.error('Wallet linked should be more than 1')
-                      return
+                      toast.error("Wallet linked should be more than 1");
+                      return;
                     }
-                    
-                    await syncNetworkIdOnce()
-                    setTransferType('self')
-                    setShowTransferForm(true)
-                    
+
+                    await syncNetworkIdOnce();
+                    setTransferType("self");
+                    setShowTransferForm(true);
+
                     // Initialize node once (skip if already initialized)
-                    if (!isWasmInitialized() && primaryWallet && !isInitializing) {
-                      setIsInitializing(true)
+                    if (
+                      !isWasmInitialized() &&
+                      primaryWallet &&
+                      !isInitializing
+                    ) {
+                      setIsInitializing(true);
                       try {
                         await initializeWasm(
                           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
                           primaryWallet.address,
                           primaryWallet.chain,
                           false, // self_node: false for now
-                          true  // live: true
-                        )
-                        await startWatching()
+                          true, // live: true
+                        );
+                        await startWatching();
                       } catch (error) {
-                        console.error('Failed to initialize node:', error)
+                        console.error("Failed to initialize node:", error);
                       } finally {
-                        setIsInitializing(false)
+                        setIsInitializing(false);
                       }
                     }
                   }}
@@ -295,26 +376,30 @@ export default function Transfer() {
                 </Button>
                 <Button
                   onClick={async () => {
-                    await syncNetworkIdOnce()
-                    setTransferType('external')
-                    setShowTransferForm(true)
-                    
+                    await syncNetworkIdOnce();
+                    setTransferType("external");
+                    setShowTransferForm(true);
+
                     // Initialize node once (skip if already initialized)
-                    if (!isWasmInitialized() && primaryWallet && !isInitializing) {
-                      setIsInitializing(true)
+                    if (
+                      !isWasmInitialized() &&
+                      primaryWallet &&
+                      !isInitializing
+                    ) {
+                      setIsInitializing(true);
                       try {
                         await initializeWasm(
                           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
                           primaryWallet.address,
                           primaryWallet.chain,
                           false, // self_node: false
-                          true  // live: true
-                        )
-                        await startWatching()
+                          true, // live: true
+                        );
+                        await startWatching();
                       } catch (error) {
-                        console.error('Failed to initialize node:', error)
+                        console.error("Failed to initialize node:", error);
                       } finally {
-                        setIsInitializing(false)
+                        setIsInitializing(false);
                       }
                     }
                   }}
@@ -330,20 +415,25 @@ export default function Transfer() {
               {/* Back Button with Breadcrumb */}
               <Button
                 onClick={() => {
-                  setShowTransferForm(false)
-                  setTransferType(null)
+                  setShowTransferForm(false);
+                  setTransferType(null);
                 }}
                 variant="ghost"
                 className="flex items-center gap-2 text-gray-400 hover:text-white mb-2 p-0 h-auto"
               >
                 <ArrowLeft className="h-4 w-4" />
                 <span className="text-xs">
-                  Transfer {transferType && '>'} {transferType === 'self' ? 'Self Transfer' : transferType === 'external' ? 'External Transfer' : ''}
+                  Transfer {transferType && ">"}{" "}
+                  {transferType === "self"
+                    ? "Self Transfer"
+                    : transferType === "external"
+                      ? "External Transfer"
+                      : ""}
                 </span>
               </Button>
-              <TransferForm 
-                tokenList={availableTokens} 
-                transferType={transferType} 
+              <TransferForm
+                tokenList={availableTokens}
+                transferType={transferType}
                 userWallets={userWallets}
                 onNetworkChange={(id) => setCurrentNetworkId(id)}
               />
@@ -356,5 +446,5 @@ export default function Transfer() {
         </TabsContent>
       </Tabs>
     </motion.div>
-  )
+  );
 }

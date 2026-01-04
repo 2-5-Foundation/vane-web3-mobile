@@ -1,24 +1,43 @@
-"use client"
+"use client";
 
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, ArrowLeft, ArrowRight, DollarSign, Network, Shield } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
-import { motion } from "framer-motion"
-import { useTransactionStore, TransferFormData, useStore } from "@/app/lib/useStore"
-import { TxStateMachine } from '@/lib/vane_lib/main'
-import { TokenManager, ChainSupported } from '@/lib/vane_lib/primitives'
-import { useDynamicContext, useWalletConnectorEvent } from "@dynamic-labs/sdk-react-core";
-import { toast } from "sonner"
-import { TokenBalance } from "@dynamic-labs/sdk-api-core"
-
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  DollarSign,
+  Network,
+  Shield,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  useTransactionStore,
+  TransferFormData,
+  useStore,
+} from "@/app/lib/useStore";
+import { TxStateMachine } from "@/lib/vane_lib/main";
+import { TokenManager, ChainSupported } from "@/lib/vane_lib/primitives";
+import {
+  useDynamicContext,
+  useWalletConnectorEvent,
+} from "@dynamic-labs/sdk-react-core";
+import { toast } from "sonner";
+import { TokenBalance } from "@dynamic-labs/sdk-api-core";
 
 interface TransferFormProps {
   tokenList: TokenBalance[]; // TokenBalance objects
-  transferType?: 'self' | 'external' | null;
+  transferType?: "self" | "external" | null;
   userWallets?: any[];
   onNetworkChange?: (id: number) => void;
 }
@@ -31,7 +50,7 @@ const EVM_NETWORKS = [
   { id: 8453, name: "Base", value: "base" },
   { id: 10, name: "Optimism", value: "optimism" },
   { id: 42161, name: "Arbitrum", value: "arbitrum" },
-]
+];
 
 // Helper function to convert network ID to ChainSupported
 function getWalletNetworkFromId(networkId: number): ChainSupported {
@@ -57,11 +76,15 @@ function getWalletNetworkFromId(networkId: number): ChainSupported {
 }
 
 // Helper function to determine if a token is native based on symbol and address
-function isNativeTokenBySymbolAndAddress(symbol: string | undefined, address: string | undefined, network: ChainSupported): boolean {
+function isNativeTokenBySymbolAndAddress(
+  symbol: string | undefined,
+  address: string | undefined,
+  network: ChainSupported,
+): boolean {
   if (!symbol) return false;
-  
+
   const upperSymbol = symbol.toUpperCase();
-  
+
   // Check for native token symbols by network
   switch (network) {
     case ChainSupported.Ethereum:
@@ -69,30 +92,29 @@ function isNativeTokenBySymbolAndAddress(symbol: string | undefined, address: st
     case ChainSupported.Arbitrum:
     case ChainSupported.Optimism:
       // ETH is native on these networks
-      return upperSymbol === 'ETH';
+      return upperSymbol === "ETH";
     case ChainSupported.Polygon:
       // POL is native on Polygon
-      return upperSymbol === 'POL';
+      return upperSymbol === "POL";
     case ChainSupported.Bnb:
       // BNB is native on BNB Smart Chain
-      return upperSymbol === 'BNB';
+      return upperSymbol === "BNB";
     case ChainSupported.Solana:
       // SOL is native on Solana
-      return upperSymbol === 'SOL';
+      return upperSymbol === "SOL";
     case ChainSupported.Tron:
       // TRX is native on TRON
-      return upperSymbol === 'TRX';
+      return upperSymbol === "TRX";
     case ChainSupported.Polkadot:
       // DOT is native on Polkadot
-      return upperSymbol === 'DOT';
+      return upperSymbol === "DOT";
     case ChainSupported.Bitcoin:
       // BTC is native on Bitcoin
-      return upperSymbol === 'BTC';
+      return upperSymbol === "BTC";
     default:
       return false;
   }
 }
-
 
 function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
   // 1) validate: up to 8 decimals
@@ -122,102 +144,127 @@ function toBaseUnits8dp(input: string, tokenDecimals: number): bigint {
 // feeUsd: fee amount in USD (e.g., 0.05)
 // usdPricePerToken: price of 1 token in USD
 // tokenDecimals: number of decimals for the token (e.g., 18 for ETH, 9 for SOL, 6 for TRX)
-function calculateFeeInBaseUnits(feeUsd: number, usdPricePerToken: number, tokenDecimals: number): bigint {
+function calculateFeeInBaseUnits(
+  feeUsd: number,
+  usdPricePerToken: number,
+  tokenDecimals: number,
+): bigint {
   // Calculate: (feeUsd / usdPricePerToken) * 10^tokenDecimals
   // Use high precision to avoid floating point errors
-  
+
   // Use 18 decimal places for intermediate calculation (sufficient for USD prices)
   const PRECISION = 1000000000000000000n; // 10^18
-  
+
   // Convert to integers with 18 decimal precision
   // This preserves the exact ratio between fee and price
   const feeUsdScaled = BigInt(Math.round(feeUsd * Number(PRECISION)));
   const priceScaled = BigInt(Math.round(usdPricePerToken * Number(PRECISION)));
-  
+
   // Calculate: (feeUsd / price) * 10^tokenDecimals
   // = (feeUsdScaled * 10^tokenDecimals) / priceScaled
   // The PRECISION (10^18) cancels out in the division, leaving the correct ratio
   const tokenDecimalsPower = BigInt(10) ** BigInt(tokenDecimals);
   const numerator = feeUsdScaled * tokenDecimalsPower;
   const result = numerator / priceScaled;
-  
+
   return result;
 }
 
 // Helper function to truncate address in the middle to fit placeholder width
-const truncateAddress = (address: string, startChars: number = 16, endChars: number = 16): string => {
+const truncateAddress = (
+  address: string,
+  startChars: number = 16,
+  endChars: number = 16,
+): string => {
   if (address.length <= startChars + endChars) return address;
   return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
 };
 
-export default function TransferForm({ tokenList, transferType, userWallets = [], onNetworkChange }: TransferFormProps) {
-
+export default function TransferForm({
+  tokenList,
+  transferType,
+  userWallets = [],
+  onNetworkChange,
+}: TransferFormProps) {
   const [showCorruptedModal, setShowCorruptedModal] = useState(false);
 
-  const setTransferStatus = useTransactionStore(state => state.setTransferStatus)
-  const storeSetTransferFormData = useTransactionStore(state => state.storeSetTransferFormData)
-  const isWasmCorrupted = useTransactionStore(state => state.isWasmCorrupted)
-  const isWasmInitialized = useTransactionStore(state => state.isWasmInitialized)
-  const initializeWasm = useTransactionStore(state => state.initializeWasm)
-  const startWatching = useTransactionStore(state => state.startWatching)
-  const initiateTransaction = useTransactionStore(state => state.initiateTransaction)
+  const setTransferStatus = useTransactionStore(
+    (state) => state.setTransferStatus,
+  );
+  const storeSetTransferFormData = useTransactionStore(
+    (state) => state.storeSetTransferFormData,
+  );
+  const isWasmCorrupted = useTransactionStore((state) => state.isWasmCorrupted);
+  const isWasmInitialized = useTransactionStore(
+    (state) => state.isWasmInitialized,
+  );
+  const initializeWasm = useTransactionStore((state) => state.initializeWasm);
+  const startWatching = useTransactionStore((state) => state.startWatching);
+  const initiateTransaction = useTransactionStore(
+    (state) => state.initiateTransaction,
+  );
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
-  
-  const setCurrentView = useStore(state => state.setCurrentView);
+
+  const setCurrentView = useStore((state) => state.setCurrentView);
 
   const [formData, setFormData] = useState<TransferFormData>({
-    recipient: '',
+    recipient: "",
     amount: 0,
-    asset: '',
-    network: ''
+    asset: "",
+    network: "",
   });
 
-  const [currentStep, setCurrentStep] = useState<'recipient' | 'amount' | 'confirm'>('recipient');
+  const [currentStep, setCurrentStep] = useState<
+    "recipient" | "amount" | "confirm"
+  >("recipient");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [senderNetwork, setSenderNetwork] = useState<ChainSupported | null>(null);
+  const [senderNetwork, setSenderNetwork] = useState<ChainSupported | null>(
+    null,
+  );
   const [networkDisplayName, setNetworkDisplayName] = useState<string>("");
   const [selectedEVMNetwork, setSelectedEVMNetwork] = useState<string>("");
-  const [showNetworkDropdown, setShowNetworkDropdown] = useState<boolean>(false);
+  const [showNetworkDropdown, setShowNetworkDropdown] =
+    useState<boolean>(false);
 
   // Function to get USD price from token balances
   const getUsdPriceFromToken = (asset: string) => {
     if (!tokenList || tokenList.length === 0) return null;
-    
-    const token = tokenList.find(t => 
-      t.symbol === asset || 
-      t.name === asset ||
-      t.address === asset
+
+    const token = tokenList.find(
+      (t) => t.symbol === asset || t.name === asset || t.address === asset,
     );
-    
+
     if (token && token.marketValue && token.balance) {
       // Calculate price per unit: marketValue / balance
       return token.marketValue / parseFloat(token.balance.toString());
     }
-    
+
     return null;
   };
-
 
   useEffect(() => {
     // Use requestAnimationFrame to defer the update and prevent blocking the input
     const timeoutId = setTimeout(() => {
       try {
-        const amountStr = formData.amount?.toString() || '0';
+        const amountStr = formData.amount?.toString() || "0";
         const amountValue = parseFloat(amountStr);
         // Only update store if amount is valid and positive, and recipient is filled
-        if (!isNaN(amountValue) && amountValue > 0 && formData.recipient.trim() !== '') {
+        if (
+          !isNaN(amountValue) &&
+          amountValue > 0 &&
+          formData.recipient.trim() !== ""
+        ) {
           storeSetTransferFormData(formData);
         }
       } catch (error) {
         // Silently handle errors to prevent UI freezing
-        console.error('Error updating transfer form data:', error);
+        console.error("Error updating transfer form data:", error);
       }
     }, 100); // Debounce by 100ms to prevent excessive updates while typing
 
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
-
 
   const updateSenderNetwork = useCallback(async () => {
     if (!primaryWallet) {
@@ -230,10 +277,10 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
       const networkIdNum = Number(walletNetworkId);
       const network = getWalletNetworkFromId(networkIdNum);
       setSenderNetwork(network);
-      setFormData(prev => ({ ...prev, network }));
+      setFormData((prev) => ({ ...prev, network }));
       onNetworkChange?.(networkIdNum);
     } catch (error) {
-      console.error('Error getting wallet network:', error);
+      console.error("Error getting wallet network:", error);
     }
   }, [primaryWallet, onNetworkChange]);
 
@@ -241,14 +288,10 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     updateSenderNetwork();
   }, [updateSenderNetwork]);
 
-  useWalletConnectorEvent(
-    primaryWallet?.connector,
-    'chainChange',
-    () => {
-      updateSenderNetwork();
-      syncNetworkDisplay();
-    }
-  );
+  useWalletConnectorEvent(primaryWallet?.connector, "chainChange", () => {
+    updateSenderNetwork();
+    syncNetworkDisplay();
+  });
 
   // Sync network display from Dynamic SDK
   const syncNetworkDisplay = useCallback(async () => {
@@ -261,10 +304,10 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
 
     try {
       const networkId = Number(await primaryWallet.getNetwork());
-      
+
       // Find matching network from EVM_NETWORKS
-      const matchedNetwork = EVM_NETWORKS.find(n => n.id === networkId);
-      
+      const matchedNetwork = EVM_NETWORKS.find((n) => n.id === networkId);
+
       if (matchedNetwork) {
         // EVM network found
         setNetworkDisplayName(matchedNetwork.name);
@@ -277,13 +320,13 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
         setShowNetworkDropdown(false);
       }
     } catch (error) {
-      console.error('Error fetching network from Dynamic:', error);
+      console.error("Error fetching network from Dynamic:", error);
     }
   }, [primaryWallet]);
 
   useEffect(() => {
     syncNetworkDisplay();
-    
+
     // Poll for network changes (important for redirect mode where page may reload)
     const pollInterval = setInterval(() => {
       if (primaryWallet) {
@@ -294,63 +337,70 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
     return () => clearInterval(pollInterval);
   }, [primaryWallet, syncNetworkDisplay]);
 
-  const handleNetworkSwitch = useCallback(async (networkValue: string) => {
-    if (!primaryWallet) return;
-    
-    try {
-      const targetNetwork = EVM_NETWORKS.find(network => network.value === networkValue);
-      
-      if (!targetNetwork) {
-        console.error('Network not found:', networkValue);
-        return;
-      }
-      
-      // Call switchNetwork - don't update local state here
-      // The useEffect will sync state from Dynamic after the redirect
-      await primaryWallet.switchNetwork(targetNetwork.id);
-      onNetworkChange?.(targetNetwork.id);
-      
-      // Note: We intentionally don't set state here because:
-      // 1. With redirect mode, the page may reload and state is lost
-      // 2. The useEffect will sync from Dynamic's actual network state
-      
-    } catch (error) {
-      console.error('Failed to switch network:', error);
-    }
-  }, [primaryWallet, onNetworkChange]);
+  const handleNetworkSwitch = useCallback(
+    async (networkValue: string) => {
+      if (!primaryWallet) return;
 
-  const handleTransferFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      try {
+        const targetNetwork = EVM_NETWORKS.find(
+          (network) => network.value === networkValue,
+        );
+
+        if (!targetNetwork) {
+          console.error("Network not found:", networkValue);
+          return;
+        }
+
+        // Call switchNetwork - don't update local state here
+        // The useEffect will sync state from Dynamic after the redirect
+        await primaryWallet.switchNetwork(targetNetwork.id);
+        onNetworkChange?.(targetNetwork.id);
+
+        // Note: We intentionally don't set state here because:
+        // 1. With redirect mode, the page may reload and state is lost
+        // 2. The useEffect will sync from Dynamic's actual network state
+      } catch (error) {
+        console.error("Failed to switch network:", error);
+      }
+    },
+    [primaryWallet, onNetworkChange],
+  );
+
+  const handleTransferFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
-    console.log('handleTransferFormChange', name, value);
-    
-    setFormData(prev => ({
+    console.log("handleTransferFormChange", name, value);
+
+    setFormData((prev) => ({
       ...prev,
-      [name]: name === 'amount' ? (value === '' ? 0 : parseFloat(value) || 0) : value
+      [name]:
+        name === "amount" ? (value === "" ? 0 : parseFloat(value) || 0) : value,
     }));
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Use a synchronous update to prevent blocking
     const value = e.target.value;
-    
+
     // Allow empty string
-    if (value === '') {
-      setFormData(prev => ({ ...prev, amount: '' }));
+    if (value === "") {
+      setFormData((prev) => ({ ...prev, amount: "" }));
       return;
     }
-    
+
     // Allow only numbers and decimal point
-    const cleanValue = value.replace(/[^0-9.]/g, '');
-    
+    const cleanValue = value.replace(/[^0-9.]/g, "");
+
     // Ensure only one decimal point
-    const parts = cleanValue.split('.');
+    const parts = cleanValue.split(".");
     if (parts.length > 2) {
       return; // Don't update if more than one decimal point
     }
-    
+
     // Store the cleaned value (can be partial like "0." or ".90")
     // Use functional update to ensure we get the latest state
-    setFormData(prev => {
+    setFormData((prev) => {
       // Only update if the value actually changed to prevent unnecessary re-renders
       if (prev.amount === cleanValue) {
         return prev;
@@ -361,43 +411,42 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
 
   const handleNextStep = async () => {
     const isCorrupted = await isWasmCorrupted();
-    if (isCorrupted){
-       setShowCorruptedModal(true);
-       return;
+    if (isCorrupted) {
+      setShowCorruptedModal(true);
+      return;
     }
-    
-    if (currentStep === 'recipient') {
+
+    if (currentStep === "recipient") {
       if (formData.recipient.trim()) {
-        setCurrentStep('amount');
+        setCurrentStep("amount");
       }
-    } else if (currentStep === 'amount') {
+    } else if (currentStep === "amount") {
       const amountValue = parseFloat(formData.amount.toString());
       if (amountValue > 0) {
-        setCurrentStep('confirm');
+        setCurrentStep("confirm");
       }
     }
   };
 
   const handlePrevStep = () => {
-    if (currentStep === 'amount') {
-      setCurrentStep('recipient');
-    } else if (currentStep === 'confirm') {
-      setCurrentStep('amount');
+    if (currentStep === "amount") {
+      setCurrentStep("recipient");
+    } else if (currentStep === "confirm") {
+      setCurrentStep("amount");
     }
   };
 
   const handleAssetChange = (value: string) => {
-    console.log('handleAssetChange', value);
-    setFormData(prev => ({ ...prev, asset: value }));
-    console.log('formData', formData);
+    console.log("handleAssetChange", value);
+    setFormData((prev) => ({ ...prev, asset: value }));
+    console.log("formData", formData);
   };
 
-
-  const submitInitiateTx = async() => {
+  const submitInitiateTx = async () => {
     if (!isWasmInitialized()) {
       try {
         if (!primaryWallet) {
-          toast.error('Please connect your wallet first');
+          toast.error("Please connect your wallet first");
           return;
         }
         await initializeWasm(
@@ -405,51 +454,62 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
           primaryWallet.address,
           primaryWallet.chain,
           false, // self_node: false (default for wallet connection)
-          true   // live: true
+          true, // live: true
         );
         await startWatching();
-        console.log('WASM not initialized, re initialized and started watching');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
+        console.log(
+          "WASM not initialized, re initialized and started watching",
+        );
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       } catch (error) {
         toast.error("Failed to start app. Refreshing should fix it.");
-        console.error('Failed to start app on receiver pending:', error);   
+        console.error("Failed to start app on receiver pending:", error);
       }
     }
 
-    
     try {
       setIsSubmitting(true);
-      
-      const amountStr = formData.amount?.toString() || '0';
+
+      const amountStr = formData.amount?.toString() || "0";
       const amountValue = parseFloat(amountStr);
-      if (!formData.recipient || isNaN(amountValue) || amountValue <= 0 || !formData.asset || !formData.network) {
-        toast.error('Please fill in all required fields');
+      if (
+        !formData.recipient ||
+        isNaN(amountValue) ||
+        amountValue <= 0 ||
+        !formData.asset ||
+        !formData.network
+      ) {
+        toast.error("Please fill in all required fields");
         setIsSubmitting(false);
         return;
       }
       // Balance check: ensure user has enough of the selected token
-      const selectedTokenForBalance = tokenList.find(t => t.symbol === formData.asset || t.name === formData.asset || t.address === formData.asset);
+      const selectedTokenForBalance = tokenList.find(
+        (t) =>
+          t.symbol === formData.asset ||
+          t.name === formData.asset ||
+          t.address === formData.asset,
+      );
       if (selectedTokenForBalance) {
         const available = Number(selectedTokenForBalance.balance ?? 0);
         if (!Number.isFinite(available)) {
-          toast.error('Unable to read token balance');
+          toast.error("Unable to read token balance");
           setIsSubmitting(false);
           return;
         }
         if (amountValue > available) {
-          toast.error('Insufficient balance for selected token');
+          toast.error("Insufficient balance for selected token");
           setIsSubmitting(false);
           return;
         }
       }
-      
+
       // No need for custom ERC20 validation since we only show wallet tokens
-      
+
       if (!primaryWallet) {
-        toast.info('Please connect a wallet first');
+        toast.info("Please connect a wallet first");
         setShowAuthFlow(true);
-        setCurrentView('wallet');
+        setCurrentView("wallet");
         setIsSubmitting(false);
         return;
       }
@@ -461,35 +521,39 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
             primaryWallet.address,
             primaryWallet.chain,
             true,
-            true
+            true,
           );
           await startWatching();
         } catch (error) {
-          toast.error('Failed to initialize app. Please try again.');
-          console.error('Transfer init self node error:', error);
+          toast.error("Failed to initialize app. Please try again.");
+          console.error("Transfer init self node error:", error);
           setIsSubmitting(false);
           return;
         }
       }
-      
+
       // Create token using TokenManager based on network and asset type
       let token;
-      
+
       // Get the selected network
       const selectedNetwork = formData.network as ChainSupported;
-      
+
       // Find the selected token from tokenList by symbol
-      const selectedToken = tokenList.find(t => t.symbol === formData.asset);
-      
+      const selectedToken = tokenList.find((t) => t.symbol === formData.asset);
+
       // Create token based on network and whether it's native
       const tokenName = selectedToken?.name || formData.asset;
       const tokenAddress = selectedToken?.address;
       const tokenSymbol = selectedToken?.symbol;
       const tokenDecimals = selectedToken?.decimals;
-      
+
       // Check if it's a native token based on symbol and address patterns
-      const isNativeToken = isNativeTokenBySymbolAndAddress(tokenSymbol, tokenAddress, selectedNetwork);
-      
+      const isNativeToken = isNativeTokenBySymbolAndAddress(
+        tokenSymbol,
+        tokenAddress,
+        selectedNetwork,
+      );
+
       if (isNativeToken) {
         token = TokenManager.createNativeToken(selectedNetwork);
       } else {
@@ -501,48 +565,78 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
           case ChainSupported.Polygon:
           case ChainSupported.Optimism:
             // All Ethereum-compatible chains use ERC20
-            token = TokenManager.createERC20Token(selectedNetwork, tokenName, tokenAddress, tokenDecimals);
+            token = TokenManager.createERC20Token(
+              selectedNetwork,
+              tokenName,
+              tokenAddress,
+              tokenDecimals,
+            );
             break;
           case ChainSupported.Bnb:
-            token = TokenManager.createBEP20Token(tokenName, tokenAddress, tokenDecimals);
+            token = TokenManager.createBEP20Token(
+              tokenName,
+              tokenAddress,
+              tokenDecimals,
+            );
             break;
           case ChainSupported.Solana:
-            token = TokenManager.createSPLToken(tokenName, tokenAddress, tokenDecimals);
+            token = TokenManager.createSPLToken(
+              tokenName,
+              tokenAddress,
+              tokenDecimals,
+            );
             break;
           case ChainSupported.Tron:
-            token = TokenManager.createTRC20Token(tokenName, tokenAddress, tokenDecimals);
+            token = TokenManager.createTRC20Token(
+              tokenName,
+              tokenAddress,
+              tokenDecimals,
+            );
             break;
           default:
             throw new Error(`Unsupported network: ${selectedNetwork}`);
         }
       }
-      
+
       // Get wallet network and convert to ChainSupported
       const walletNetworkId = await primaryWallet.getNetwork();
       const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
-      
+
       // Validate token decimals before conversion
-      if (tokenDecimals === undefined || tokenDecimals === null || isNaN(tokenDecimals)) {
-        toast.error('Token decimals not available. Please select a valid token.');
+      if (
+        tokenDecimals === undefined ||
+        tokenDecimals === null ||
+        isNaN(tokenDecimals)
+      ) {
+        toast.error(
+          "Token decimals not available. Please select a valid token.",
+        );
         setIsSubmitting(false);
         return;
       }
-      
+
       // Convert amount string to base units using token decimals
-      const amountInBaseUnits = toBaseUnits8dp(formData.amount.toString(), tokenDecimals);
-      
+      const amountInBaseUnits = toBaseUnits8dp(
+        formData.amount.toString(),
+        tokenDecimals,
+      );
+
       // Calculate vaneFeesAmount: 0.05 USD worth of the selected token
       const usdPrice = getUsdPriceFromToken(formData.asset);
       if (!usdPrice || usdPrice <= 0) {
-        toast.error('Unable to determine token price. Please try again.');
+        toast.error("Unable to determine token price. Please try again.");
         setIsSubmitting(false);
         return;
       }
-      
+
       // Calculate fee directly in base units without rounding
       // This preserves full precision regardless of token decimals (ETH 18, SOL 9, TRX 6, etc.)
-      const vaneFeesAmount = calculateFeeInBaseUnits(0.05, usdPrice, tokenDecimals);
-      
+      const vaneFeesAmount = calculateFeeInBaseUnits(
+        0.05,
+        usdPrice,
+        tokenDecimals,
+      );
+
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
       await initiateTransaction(
         primaryWallet.address,
@@ -552,23 +646,22 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
         primaryWallet.connector.metadata.name,
         walletNetwork, // sender network from wallet
         selectedNetwork, // receiver network from user selection
-        vaneFeesAmount
+        vaneFeesAmount,
       );
 
-      setTransferStatus('Genesis');
+      setTransferStatus("Genesis");
       console.log("Transaction initiated successfully");
-      toast.success('Check your outgoing pending transactions for updates');
+      toast.success("Check your outgoing pending transactions for updates");
       // Clear form after successful submission and reset to step 1
       setFormData({
-        recipient: '',
+        recipient: "",
         amount: 0,
-        asset: '',
-        network: ''
+        asset: "",
+        network: "",
       });
-      setCurrentStep('recipient');
-      
+      setCurrentStep("recipient");
     } catch (error) {
-      console.error('Transaction failed:', error);
+      console.error("Transaction failed:", error);
       toast.error(`Transaction initiation failed`);
     } finally {
       setIsSubmitting(false);
@@ -577,12 +670,10 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
 
   // Determine if form should be disabled
   const isFormDisabled = !isWasmInitialized() || !primaryWallet;
- 
 
   return (
-    
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} 
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className="flex flex-col h-full"
@@ -642,8 +733,8 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
             </div>
 
             <div className="text-sm font-light text-white">
-              This session needs a refresh.
-              Please unlink your wallet and reload the page.
+              This session needs a refresh. Please unlink your wallet and reload
+              the page.
             </div>
           </motion.div>
         </div>
@@ -653,7 +744,6 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
       <div className="flex-none">
         <Card className="bg-[#1a2628] border border-transparent">
           <CardContent className="pt-2 px-3 space-y-3">
-
             {/* Step 1: Recipient Information */}
             <div className="space-y-3">
               {/* Sender Network Display */}
@@ -662,17 +752,20 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
                   <Network className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-400">Your Network</span>
                 </div>
-                
+
                 {showNetworkDropdown ? (
-                  <Select value={selectedEVMNetwork} onValueChange={handleNetworkSwitch}>
+                  <Select
+                    value={selectedEVMNetwork}
+                    onValueChange={handleNetworkSwitch}
+                  >
                     <SelectTrigger className="bg-[#1a2628] border-0 border-b border-[#7EDFCD]/50 text-white rounded-md h-8 w-36 text-sm px-2">
                       <SelectValue className="text-white text-sm" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#253639] border-white/10">
                       {EVM_NETWORKS.map((network) => (
-                        <SelectItem 
-                          key={network.value} 
-                          value={network.value} 
+                        <SelectItem
+                          key={network.value}
+                          value={network.value}
                           className="text-white focus:bg-white/5 text-sm h-7"
                         >
                           {network.name}
@@ -681,7 +774,9 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
                     </SelectContent>
                   </Select>
                 ) : (
-                  <span className="text-gray-300 font-medium text-sm">{networkDisplayName || senderNetwork || ''}</span>
+                  <span className="text-gray-300 font-medium text-sm">
+                    {networkDisplayName || senderNetwork || ""}
+                  </span>
                 )}
               </div>
 
@@ -689,40 +784,53 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
               <div className="border-t border-gray-700/50 my-2"></div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-gray-400 font-medium">Receiver Address</Label>
-                {transferType === 'self' ? (
-                  <Select 
-                    value={formData.recipient} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, recipient: value }))}
+                <Label className="text-xs text-gray-400 font-medium">
+                  Receiver Address
+                </Label>
+                {transferType === "self" ? (
+                  <Select
+                    value={formData.recipient}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, recipient: value }))
+                    }
                   >
                     <SelectTrigger className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white rounded-lg h-9 text-sm px-3 w-full">
-                      <SelectValue placeholder="Select receiver address" className="text-white text-sm">
+                      <SelectValue
+                        placeholder="Select receiver address"
+                        className="text-white text-sm"
+                      >
                         <span className="text-white">
-                          {formData.recipient ? truncateAddress(formData.recipient) : "select receiver address"}
+                          {formData.recipient
+                            ? truncateAddress(formData.recipient)
+                            : "select receiver address"}
                         </span>
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="bg-[#253639] border-white/10 w-[var(--radix-select-trigger-width)]">
                       {userWallets
-                        .filter(wallet => wallet.address !== primaryWallet?.address)
+                        .filter(
+                          (wallet) => wallet.address !== primaryWallet?.address,
+                        )
                         .map((wallet) => (
-                          <SelectItem 
-                            key={wallet.address} 
-                            value={wallet.address} 
+                          <SelectItem
+                            key={wallet.address}
+                            value={wallet.address}
                             className="text-white focus:bg-white/5 text-sm"
                             title={wallet.address}
                           >
-                            <span className="text-white">{truncateAddress(wallet.address,16,16)}</span>
+                            <span className="text-white">
+                              {truncateAddress(wallet.address, 16, 16)}
+                            </span>
                           </SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input 
+                  <Input
                     name="recipient"
                     value={formData.recipient}
                     onChange={handleTransferFormChange}
-                    placeholder="0x..." 
+                    placeholder="0x..."
                     className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white placeholder-gray-500 rounded-lg h-9 text-sm"
                   />
                 )}
@@ -731,32 +839,35 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 text-xs mb-2">
                   <Network className="w-3 h-3 text-gray-400" />
-                  <Label className="text-xs text-gray-400 font-medium">Receiver Network</Label>
+                  <Label className="text-xs text-gray-400 font-medium">
+                    Receiver Network
+                  </Label>
                 </div>
                 <div className="bg-[#1a2628] p-6 border border-[#7EDFCD]/50 text-white rounded-lg h-9 px-3 flex items-center">
-                  <span className="text-sm text-white">
-                    {senderNetwork}
-                  </span>
+                  <span className="text-sm text-white">{senderNetwork}</span>
                 </div>
-                
               </div>
 
               {/* Note for Step 1 */}
               <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-blue-500/20">
                 <AlertCircle className="w-3 h-3 flex-shrink-0 text-blue-400" />
-                <span className="text-blue-300 font-medium">Funds will only be transferred once the receiver confirms.</span>
+                <span className="text-blue-300 font-medium">
+                  Funds will only be transferred once the receiver confirms.
+                </span>
               </div>
 
               {/* Step 1 Button - only show when on recipient step */}
-              {currentStep === 'recipient' && (
-                <Button 
+              {currentStep === "recipient" && (
+                <Button
                   className="w-full h-10 rounded-lg bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   onClick={handleNextStep}
                   disabled={!formData.recipient.trim() || !primaryWallet}
                 >
-                  {!primaryWallet ? 'Connect Wallet' : (
+                  {!primaryWallet ? (
+                    "Connect Wallet"
+                  ) : (
                     <>
-                       Enter Amount
+                      Enter Amount
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -765,57 +876,66 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
             </div>
 
             {/* Step 2: Amount Information */}
-            {currentStep === 'amount' && (
+            {currentStep === "amount" && (
               <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
                 <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-400 font-medium">Asset</Label>
-                    <Select 
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-400 font-medium">
+                      Asset
+                    </Label>
+                    <Select
                       value={formData.asset}
                       onValueChange={handleAssetChange}
                     >
                       <SelectTrigger className="bg-[#1a2628] border-white/10 text-white rounded-lg h-9">
-                        <SelectValue placeholder="select token" className="text-white" />
+                        <SelectValue
+                          placeholder="select token"
+                          className="text-white"
+                        />
                       </SelectTrigger>
                       <SelectContent className="bg-[#253639] border-white/10">
-                        {tokenList.length > 0 && tokenList.map((token) => (
-                          <SelectItem
-                            key={token.symbol ?? token.name ?? token.address}
-                            value={token.symbol}
-                            className="text-white focus:bg-white/5"
-                          >
-                            <span className="flex items-center gap-2">
-                              {token.logoURI && token.logoURI.startsWith('http') ? (
-                                <img
-                                  src={token.logoURI}
-                                  alt={`${token.symbol ?? token.name ?? 'token'} logo`}
-                                  width={20}
-                                  height={20}
-                                  className="rounded-full"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                <span className="h-5 w-5 rounded-full bg-white/10" />
-                              )}
-                              <span className="text-xs uppercase tracking-wide">
-                                {token.symbol ?? token.name ?? 'Token'}
+                        {tokenList.length > 0 &&
+                          tokenList.map((token) => (
+                            <SelectItem
+                              key={token.symbol ?? token.name ?? token.address}
+                              value={token.symbol}
+                              className="text-white focus:bg-white/5"
+                            >
+                              <span className="flex items-center gap-2">
+                                {token.logoURI &&
+                                token.logoURI.startsWith("http") ? (
+                                  <img
+                                    src={token.logoURI}
+                                    alt={`${token.symbol ?? token.name ?? "token"} logo`}
+                                    width={20}
+                                    height={20}
+                                    className="rounded-full"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="h-5 w-5 rounded-full bg-white/10" />
+                                )}
+                                <span className="text-xs uppercase tracking-wide">
+                                  {token.symbol ?? token.name ?? "Token"}
+                                </span>
                               </span>
-                            </span>
-                          </SelectItem>
-                        ))}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
                   {/*Amount Input*/}
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-400 font-medium">Amount</Label>
+                    <Label className="text-xs text-gray-400 font-medium">
+                      Amount
+                    </Label>
                     <div className="relative">
-                      <Input 
+                      <Input
                         name="amount"
                         type="text"
-                        value={formData.amount || ''}
+                        value={formData.amount || ""}
                         onChange={handleAmountChange}
                         placeholder="0.00"
                         className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8"
@@ -823,14 +943,22 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
                       {/* USD Tooltip */}
                       {(() => {
                         try {
-                          const amountStr = formData.amount?.toString() || '0';
+                          const amountStr = formData.amount?.toString() || "0";
                           const amountValue = parseFloat(amountStr);
-                          if (!isNaN(amountValue) && amountValue > 0 && formData.asset) {
-                            const usdPrice = getUsdPriceFromToken(formData.asset);
+                          if (
+                            !isNaN(amountValue) &&
+                            amountValue > 0 &&
+                            formData.asset
+                          ) {
+                            const usdPrice = getUsdPriceFromToken(
+                              formData.asset,
+                            );
                             return usdPrice ? (
                               <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-gray-400">
                                 <DollarSign className="h-3 w-3" />
-                                <span>{(amountValue * usdPrice).toFixed(2)}</span>
+                                <span>
+                                  {(amountValue * usdPrice).toFixed(2)}
+                                </span>
                               </div>
                             ) : null;
                           }
@@ -841,34 +969,39 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
                       })()}
                     </div>
                   </div>
-                  
                 </div>
 
                 {/* Note for Step 2 */}
                 <div className="glass-pane rounded-lg p-2 flex items-center gap-2 text-xs border border-green-500/20">
                   <AlertCircle className="w-3 h-3 flex-shrink-0 text-green-400" />
-                  <span className="text-green-300 font-medium">Your transaction is protected from any mistakes</span>
+                  <span className="text-green-300 font-medium">
+                    Your transaction is protected from any mistakes
+                  </span>
                 </div>
 
                 {/* Step 2 Buttons */}
                 <div className="flex gap-2">
-                  <Button 
+                  <Button
                     className="h-10 w-10 rounded-lg bg-[#253639] border border-white/10 text-white hover:bg-[#2d4044] p-0"
                     onClick={handlePrevStep}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <Button 
+                  <Button
                     className="flex-1 h-10 rounded-lg bg-[#7EDFCD] text-black hover:bg-[#7EDFCD]/90 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed"
                     onClick={submitInitiateTx}
-                      disabled={!formData.amount || parseFloat(formData.amount.toString()) <= 0 || isSubmitting || isFormDisabled}
+                    disabled={
+                      !formData.amount ||
+                      parseFloat(formData.amount.toString()) <= 0 ||
+                      isSubmitting ||
+                      isFormDisabled
+                    }
                   >
-                    {isSubmitting ? 'Processing...' : 'Initiate Transfer'}
+                    {isSubmitting ? "Processing..." : "Initiate Transfer"}
                   </Button>
                 </div>
               </div>
             )}
-
           </CardContent>
         </Card>
       </div>
@@ -879,7 +1012,6 @@ export default function TransferForm({ tokenList, transferType, userWallets = []
       </div>
 
       {/* Scrollable Transaction Pending */}
-     
     </motion.div>
-  )
+  );
 }

@@ -8,11 +8,10 @@
     "jsx": "react-jsx",
     "allowJs": true,
 
-    
     // Add these options
     "declaration": true,
     "outDir": "./dist",
-    
+
     // Since you're using Bun, you might want to add
     "types": ["bun-types"],
 
@@ -32,7 +31,7 @@
     "noImplicitReturns": false,
     "noImplicitThis": false,
     "alwaysStrict": false,
-    
+
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": false,

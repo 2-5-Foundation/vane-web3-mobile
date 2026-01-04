@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "update_vane_lib": "rm -rf ./src/lib/vane_lib && cp -R /Users/mrisholukamba/Desktop/subzero/vane_web3/node/wasm/vane_lib ./src/lib/vane_lib"
+    "update_vane_lib": "rm -rf ./src/lib/vane_lib && cp -R /Users/mrisholukamba/Desktop/subzero/vane_web3/node/wasm/vane_lib ./src/lib/vane_lib",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
-   "overrides": {
+  "overrides": {
     "@noble/hashes": "1.8.0"
   },
   "dependencies": {
@@ -59,6 +61,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.1.6",
     "postcss": "^8",
+    "prettier": "^3.7.4",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }

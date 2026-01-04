@@ -1,4 +1,4 @@
-declare module 'web-push' {
+declare module "web-push" {
   export interface PushSubscription {
     endpoint: string;
     keys: {
@@ -10,13 +10,13 @@ declare module 'web-push' {
   export function setVapidDetails(
     subject: string,
     publicKey: string,
-    privateKey: string
+    privateKey: string,
   ): void;
 
   export function sendNotification(
     subscription: PushSubscription,
-    payload: string | Buffer
+    payload: string | Buffer,
   ): Promise<void>;
 }
 
-export default webpush; 
+export default webpush;

@@ -1,56 +1,61 @@
-'use server'
+"use server";
 
-import { fromWire, toWire } from '@/lib/vane_lib/pkg/host_functions/networking'
-import { prepareEvmTransaction } from '@/lib/server/tx/prepareEvm'
-import { prepareBscTransaction } from '@/lib/server/tx/prepareBsc'
-import { prepareSolanaTransaction } from '@/lib/server/tx/prepareSolana'
-import type { TxStateMachine } from '@/lib/vane_lib/primitives'
+import { fromWire, toWire } from "@/lib/vane_lib/pkg/host_functions/networking";
+import { prepareEvmTransaction } from "@/lib/server/tx/prepareEvm";
+import { prepareBscTransaction } from "@/lib/server/tx/prepareBsc";
+import { prepareSolanaTransaction } from "@/lib/server/tx/prepareSolana";
+import type { TxStateMachine } from "@/lib/vane_lib/primitives";
 
 /**
  * Server Action to prepare an EVM transaction (Ethereum, Base, Polygon, Optimism, Arbitrum)
  * This replaces the direct API route call and keeps the logic server-side only
  */
-export async function prepareEvmTransactionAction(txWireFormat: any): Promise<{ prepared: any }> {
+export async function prepareEvmTransactionAction(
+  txWireFormat: any,
+): Promise<{ prepared: any }> {
   try {
     // Convert from wire format
     const tx = fromWire(txWireFormat);
-    
+
     // Call the shared server function
     const prepared = await prepareEvmTransaction(tx);
-    
+
     // Return in wire format
     return { prepared: toWire(prepared) };
   } catch (error: any) {
-    console.error('Error in prepareEvmTransactionAction:', error);
-    throw new Error(error.message || 'Failed to prepare EVM transaction');
+    console.error("Error in prepareEvmTransactionAction:", error);
+    throw new Error(error.message || "Failed to prepare EVM transaction");
   }
 }
 
 /**
  * Server Action to prepare a BSC transaction
  */
-export async function prepareBscTransactionAction(txWireFormat: any): Promise<{ prepared: any }> {
+export async function prepareBscTransactionAction(
+  txWireFormat: any,
+): Promise<{ prepared: any }> {
   try {
     const tx = fromWire(txWireFormat);
     const prepared = await prepareBscTransaction(tx);
     return { prepared: toWire(prepared) };
   } catch (error: any) {
-    console.error('Error in prepareBscTransactionAction:', error);
-    throw new Error(error.message || 'Failed to prepare BSC transaction');
+    console.error("Error in prepareBscTransactionAction:", error);
+    throw new Error(error.message || "Failed to prepare BSC transaction");
   }
 }
 
 /**
  * Server Action to prepare a Solana transaction
  */
-export async function prepareSolanaTransactionAction(txWireFormat: any): Promise<{ prepared: any }> {
+export async function prepareSolanaTransactionAction(
+  txWireFormat: any,
+): Promise<{ prepared: any }> {
   try {
     const tx = fromWire(txWireFormat);
     const prepared = await prepareSolanaTransaction(tx);
     return { prepared: toWire(prepared) };
   } catch (error: any) {
-    console.error('Error in prepareSolanaTransactionAction:', error);
-    throw new Error(error.message || 'Failed to prepare Solana transaction');
+    console.error("Error in prepareSolanaTransactionAction:", error);
+    throw new Error(error.message || "Failed to prepare Solana transaction");
   }
 }
-
