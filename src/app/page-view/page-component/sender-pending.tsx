@@ -1350,7 +1350,7 @@ export default function SenderPending() {
                        <div className="flex-1">
                          <span className="text-xs text-[#9EB2AD] font-medium">Vane Protection Fees</span>
                          <p className="text-sm text-white">
-                          {formatAmount(transaction.vaneFeesAmount, transaction.token)}
+                          {formatAmount(transaction.vaneFeesAmount, transaction.token).toFixed(6)}
                          </p>
                        </div>
                        <div className="flex-1">
