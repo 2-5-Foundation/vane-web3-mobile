@@ -532,29 +532,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     try {
       await senderConfirm(vaneAuth, tx);
-      // Export storage and save to localStorage
-      const storageExport = await get().exportStorageData();
-      // convert all amounts to their decimals
-
-      // Submit metrics to API
-      try {
-        const response = await fetch("/api/submit-metrics", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(storageExport),
-        });
-
-        if (!response.ok) {
-          console.error("Failed to submit metrics:", await response.text());
-        } else {
-          console.log("Metrics submitted successfully");
-        }
-      } catch (metricsError) {
-        console.error("Error submitting metrics:", metricsError);
-        // Don't throw - metrics submission failure shouldn't block the transaction confirmation
-      }
+  
     } catch (error) {
       console.error("Error confirming transaction by sender:", error);
       toast.error("Error confirming transaction");
