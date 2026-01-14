@@ -1502,6 +1502,7 @@ export default function SenderPending() {
                                   transaction.vaneFeesAmount,
                                   transaction.token,
                                 ).toFixed(6)}
+                                
                               </p>
                             </div>
                             <div className="flex-1">

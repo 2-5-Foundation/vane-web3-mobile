@@ -170,6 +170,17 @@ function calculateFeeInBaseUnits(
   return result;
 }
 
+// Helper function to calculate fee amount in token units (not base units)
+// feeUsd: fee amount in USD (e.g., 0.5)
+// usdPricePerToken: price of 1 token in USD
+function calculateFeeInTokenUnits(
+  feeUsd: number,
+  usdPricePerToken: number,
+): number {
+  if (!usdPricePerToken || usdPricePerToken <= 0) return 0;
+  return feeUsd / usdPricePerToken;
+}
+
 // Helper function to truncate address in the middle to fit placeholder width
 const truncateAddress = (
   address: string,
@@ -225,22 +236,27 @@ export default function TransferForm({
   const [selectedEVMNetwork, setSelectedEVMNetwork] = useState<string>("");
   const [showNetworkDropdown, setShowNetworkDropdown] =
     useState<boolean>(false);
+  const [exceedsBalanceWithFees, setExceedsBalanceWithFees] =
+    useState<boolean>(false);
 
   // Function to get USD price from token balances
-  const getUsdPriceFromToken = (asset: string) => {
-    if (!tokenList || tokenList.length === 0) return null;
+  const getUsdPriceFromToken = useCallback(
+    (asset: string) => {
+      if (!tokenList || tokenList.length === 0) return null;
 
-    const token = tokenList.find(
-      (t) => t.symbol === asset || t.name === asset || t.address === asset,
-    );
+      const token = tokenList.find(
+        (t) => t.symbol === asset || t.name === asset || t.address === asset,
+      );
 
-    if (token && token.marketValue && token.balance) {
-      // Calculate price per unit: marketValue / balance
-      return token.marketValue / parseFloat(token.balance.toString());
-    }
+      if (token && token.marketValue && token.balance) {
+        // Calculate price per unit: marketValue / balance
+        return token.marketValue / parseFloat(token.balance.toString());
+      }
 
-    return null;
-  };
+      return null;
+    },
+    [tokenList],
+  );
 
   useEffect(() => {
     // Use requestAnimationFrame to defer the update and prevent blocking the input
@@ -265,6 +281,60 @@ export default function TransferForm({
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
+
+  // Check if amount + fee exceeds balance
+  useEffect(() => {
+    if (!formData.asset || !formData.amount) {
+      setExceedsBalanceWithFees(false);
+      return;
+    }
+
+    try {
+      const amountStr = formData.amount?.toString() || "0";
+      const amountValue = parseFloat(amountStr);
+
+      if (isNaN(amountValue) || amountValue <= 0) {
+        setExceedsBalanceWithFees(false);
+        return;
+      }
+
+      // Find the selected token
+      const selectedToken = tokenList.find(
+        (t) =>
+          t.symbol === formData.asset ||
+          t.name === formData.asset ||
+          t.address === formData.asset,
+      );
+
+      if (!selectedToken || !selectedToken.balance) {
+        setExceedsBalanceWithFees(false);
+        return;
+      }
+
+      const available = Number(selectedToken.balance ?? 0);
+      if (!Number.isFinite(available) || available <= 0) {
+        setExceedsBalanceWithFees(false);
+        return;
+      }
+
+      // Get USD price and calculate fee
+      const usdPrice = getUsdPriceFromToken(formData.asset);
+      if (!usdPrice || usdPrice <= 0) {
+        setExceedsBalanceWithFees(false);
+        return;
+      }
+
+      // Calculate fee amount in token units (0.5 USD worth)
+      const feeAmount = calculateFeeInTokenUnits(0.5, usdPrice);
+
+      // Check if amount + fee exceeds available balance
+      const totalRequired = amountValue + feeAmount;
+      setExceedsBalanceWithFees(totalRequired > available);
+    } catch (error) {
+      // Silently handle errors
+      setExceedsBalanceWithFees(false);
+    }
+  }, [formData.amount, formData.asset, tokenList, getUsdPriceFromToken]);
 
   const updateSenderNetwork = useCallback(async () => {
     if (!primaryWallet) {
@@ -483,7 +553,7 @@ export default function TransferForm({
         setIsSubmitting(false);
         return;
       }
-      // Balance check: ensure user has enough of the selected token
+      // Balance check: ensure user has enough of the selected token (including fees)
       const selectedTokenForBalance = tokenList.find(
         (t) =>
           t.symbol === formData.asset ||
@@ -497,8 +567,24 @@ export default function TransferForm({
           setIsSubmitting(false);
           return;
         }
-        if (amountValue > available) {
-          toast.error("Insufficient balance for selected token");
+
+        // Calculate fee amount in token units
+        const usdPrice = getUsdPriceFromToken(formData.asset);
+        if (!usdPrice || usdPrice <= 0) {
+          toast.error("Unable to determine token price. Please try again.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const feeAmount = calculateFeeInTokenUnits(0.5, usdPrice);
+        const totalRequired = amountValue + feeAmount;
+
+        if (totalRequired > available) {
+          toast.error(
+            `Insufficient balance. Amount + fees (${totalRequired.toFixed(
+              6,
+            )}) exceeds available balance (${available.toFixed(6)}). Please reduce the amount.`,
+          );
           setIsSubmitting(false);
           return;
         }
@@ -621,7 +707,7 @@ export default function TransferForm({
         tokenDecimals,
       );
 
-      // Calculate vaneFeesAmount: 0.05 USD worth of the selected token
+      // Calculate vaneFeesAmount: 0.5 USD worth of the selected token
       const usdPrice = getUsdPriceFromToken(formData.asset);
       if (!usdPrice || usdPrice <= 0) {
         toast.error("Unable to determine token price. Please try again.");
@@ -632,7 +718,7 @@ export default function TransferForm({
       // Calculate fee directly in base units without rounding
       // This preserves full precision regardless of token decimals (ETH 18, SOL 9, TRX 6, etc.)
       const vaneFeesAmount = calculateFeeInBaseUnits(
-        0.05,
+        0.5,
         usdPrice,
         tokenDecimals,
       );
@@ -938,7 +1024,11 @@ export default function TransferForm({
                         value={formData.amount || ""}
                         onChange={handleAmountChange}
                         placeholder="0.00"
-                        className="bg-[#1a2628] border-white/10 text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8"
+                        className={`bg-[#1a2628] text-white placeholder-gray-500 rounded-lg h-9 text-sm pr-8 ${
+                          exceedsBalanceWithFees
+                            ? "border-2 border-red-500 focus:border-red-500"
+                            : "border-white/10"
+                        }`}
                       />
                       {/* USD Tooltip */}
                       {(() => {
@@ -968,6 +1058,14 @@ export default function TransferForm({
                         return null;
                       })()}
                     </div>
+                    {exceedsBalanceWithFees && (
+                      <div className="flex items-center gap-1.5 text-xs text-red-400">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        <span>
+                          Amount + fees exceeds your balance
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -994,7 +1092,8 @@ export default function TransferForm({
                       !formData.amount ||
                       parseFloat(formData.amount.toString()) <= 0 ||
                       isSubmitting ||
-                      isFormDisabled
+                      isFormDisabled ||
+                      exceedsBalanceWithFees
                     }
                   >
                     {isSubmitting ? "Processing..." : "Initiate Transfer"}
