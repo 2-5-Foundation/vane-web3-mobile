@@ -100,6 +100,9 @@ export default function ReceiverPending() {
   const fetchPendingUpdates = useTransactionStore(
     (state) => state.fetchPendingUpdates,
   );
+  const removeRecvTransaction = useTransactionStore(
+    (state) => state.removeRecvTransaction,
+  );
   const { tokenBalances } = useTokenBalances({
     includeFiat: true,
     includeNativeBalance: true,
@@ -678,6 +681,17 @@ export default function ReceiverPending() {
                         : pendingTxNonce === String(transaction.txNonce)
                           ? "Confirming…"
                           : "Confirm"}
+                  </Button>
+                </div>
+              )}
+              {/* Done Button - only show if approved */}
+              {approvedTransactions.has(String(transaction.txNonce)) && (
+                <div className="mt-4 flex flex-col items-center">
+                  <Button
+                    onClick={() => removeRecvTransaction(transaction.txNonce)}
+                    className="w-full h-10 bg-[#4A5853]/20 text-[#7EDFCD] hover:bg-[#4A5853]/30 text-xs font-medium"
+                  >
+                    Done
                   </Button>
                 </div>
               )}

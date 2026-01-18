@@ -34,7 +34,11 @@ import { toast } from "sonner";
 import { isSolanaWallet } from "@dynamic-labs/solana";
 import { isEthereumWallet } from "@dynamic-labs/ethereum";
 
-import { VersionedMessage, VersionedTransaction } from "@solana/web3.js";
+import {
+  VersionedMessage,
+  VersionedTransaction,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 
 import { usePhantomSignTransaction } from "./phantomSigning";
 import {
@@ -451,9 +455,7 @@ export default function SenderPending() {
   ): Promise<TxStateMachineManager | undefined> => {
     if (isSolanaWallet(primaryWallet)) {
       const signer = await primaryWallet.getSigner();
-
       const conn = await primaryWallet.getConnection();
-      const latesBlockHeight = await conn.getBlockHeight("finalized");
 
       let versionSolTx: VersionedTransaction;
       try {
@@ -466,7 +468,6 @@ export default function SenderPending() {
         return undefined;
       }
 
-      let txSignature: number[];
       try {
         const isRedirectWallet = isPhantomRedirectConnector(
           primaryWallet?.connector,
@@ -475,18 +476,23 @@ export default function SenderPending() {
         if (isRedirectWallet) {
           handleFailure("Phantom redirect signing is not supported yet.");
           return undefined;
-        } else {
-          const signedTx = await signer.signTransaction(versionSolTx as any);
-          txManager.setCallPayload({
-            solana: {
-              callPayload: Array.from(signedTx.message.serialize()),
-              latestBlockHeight: latesBlockHeight,
-            },
-          });
-          txSignature = Array.from(signedTx.signatures[0]);
         }
+
+        // Sign and send the transaction in one step
+        const result = await signer.signAndSendTransaction(versionSolTx as any, {
+          preflightCommitment: "confirmed",
+          maxRetries: 10,
+        });
+        const signature = result.signature;
+
+        // Convert signature string to bytes (like EVM converts hash to bytes)
+        const signatureBytes = bs58.decode(signature);
+        txManager.setSignedCallPayload(Array.from(signatureBytes));
+
+        // Set transaction as passed (like EVM does)
+        txManager.setTxSubmissionPassed(Array.from(signatureBytes));
       } catch (error) {
-        console.error("Error signing Solana transaction:", error);
+        console.error("Error signing or submitting Solana transaction:", error);
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         const errorName = error instanceof Error ? error.name : "";
@@ -500,14 +506,14 @@ export default function SenderPending() {
             errorMessage.toLowerCase().includes("cancelled") ||
             errorName === "UserRejectedRequestError")
         ) {
-          handleFailure("Transaction signature was cancelled");
+          toast.error("Transaction was cancelled");
+          handleFailure("Transaction was cancelled");
           return undefined;
         }
 
-        handleFailure("Failed to sign Solana transaction.");
+        handleFailure("Failed to submit Solana transaction.");
         return undefined;
       }
-      txManager.setSignedCallPayload(txSignature);
     } else {
       handleFailure("Please use a Solana wallet to confirm this transaction");
       return undefined;

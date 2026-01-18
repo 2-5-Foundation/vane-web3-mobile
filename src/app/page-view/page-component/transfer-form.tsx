@@ -324,8 +324,20 @@ export default function TransferForm({
         return;
       }
 
-      // Calculate fee amount in token units (0.5 USD worth)
-      const feeAmount = calculateFeeInTokenUnits(0.5, usdPrice);
+      // Calculate transaction value in USD
+      const transactionValueUsd = amountValue * usdPrice;
+
+      // Check if transaction value < $1.5 and network is Solana or Ethereum
+      const isSolanaOrEthereum =
+        senderNetwork === ChainSupported.Solana ||
+        senderNetwork === ChainSupported.Ethereum;
+      const useReducedFee = isSolanaOrEthereum && transactionValueUsd < 1.5;
+
+      // Use 0.05 USD fee if transaction < $1.5 on Solana/Ethereum, otherwise 0.5 USD
+      const feeUsd = useReducedFee ? 0.05 : 0.5;
+
+      // Calculate fee amount in token units
+      const feeAmount = calculateFeeInTokenUnits(feeUsd, usdPrice);
 
       // Check if amount + fee exceeds available balance
       const totalRequired = amountValue + feeAmount;
@@ -334,7 +346,7 @@ export default function TransferForm({
       // Silently handle errors
       setExceedsBalanceWithFees(false);
     }
-  }, [formData.amount, formData.asset, tokenList, getUsdPriceFromToken]);
+  }, [formData.amount, formData.asset, tokenList, getUsdPriceFromToken, senderNetwork]);
 
   const updateSenderNetwork = useCallback(async () => {
     if (!primaryWallet) {
@@ -553,6 +565,18 @@ export default function TransferForm({
         setIsSubmitting(false);
         return;
       }
+      if (!primaryWallet) {
+        toast.info("Please connect a wallet first");
+        setShowAuthFlow(true);
+        setCurrentView("wallet");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Get wallet network early for fee calculation
+      const walletNetworkId = await primaryWallet.getNetwork();
+      const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
+
       // Balance check: ensure user has enough of the selected token (including fees)
       const selectedTokenForBalance = tokenList.find(
         (t) =>
@@ -576,7 +600,19 @@ export default function TransferForm({
           return;
         }
 
-        const feeAmount = calculateFeeInTokenUnits(0.5, usdPrice);
+        // Calculate transaction value in USD
+        const transactionValueUsd = amountValue * usdPrice;
+
+        // Check if transaction value < $1.5 and network is Solana or Ethereum
+        const isSolanaOrEthereum =
+          walletNetwork === ChainSupported.Solana ||
+          walletNetwork === ChainSupported.Ethereum;
+        const useReducedFee = isSolanaOrEthereum && transactionValueUsd < 1.5;
+
+        // Use 0.05 USD fee if transaction < $1.5 on Solana/Ethereum, otherwise 0.5 USD
+        const feeUsd = useReducedFee ? 0.05 : 0.5;
+
+        const feeAmount = calculateFeeInTokenUnits(feeUsd, usdPrice);
         const totalRequired = amountValue + feeAmount;
 
         if (totalRequired > available) {
@@ -591,14 +627,6 @@ export default function TransferForm({
       }
 
       // No need for custom ERC20 validation since we only show wallet tokens
-
-      if (!primaryWallet) {
-        toast.info("Please connect a wallet first");
-        setShowAuthFlow(true);
-        setCurrentView("wallet");
-        setIsSubmitting(false);
-        return;
-      }
 
       if (!isWasmInitialized()) {
         try {
@@ -684,9 +712,6 @@ export default function TransferForm({
         }
       }
 
-      // Get wallet network and convert to ChainSupported
-      const walletNetworkId = await primaryWallet.getNetwork();
-      const walletNetwork = getWalletNetworkFromId(Number(walletNetworkId));
 
       // Validate token decimals before conversion
       if (
@@ -707,7 +732,7 @@ export default function TransferForm({
         tokenDecimals,
       );
 
-      // Calculate vaneFeesAmount: 0.5 USD worth of the selected token
+      // Calculate vaneFeesAmount: 0.5 USD worth of the selected token (or 0.05 USD if transaction < $1)
       const usdPrice = getUsdPriceFromToken(formData.asset);
       if (!usdPrice || usdPrice <= 0) {
         toast.error("Unable to determine token price. Please try again.");
@@ -715,10 +740,22 @@ export default function TransferForm({
         return;
       }
 
+      // Calculate transaction value in USD
+      const transactionValueUsd = amountValue * usdPrice;
+
+      // Check if transaction value < $1 and network is Solana or Ethereum
+      const isSolanaOrEthereum =
+        walletNetwork === ChainSupported.Solana ||
+        walletNetwork === ChainSupported.Ethereum;
+      const useReducedFee = isSolanaOrEthereum && transactionValueUsd < 1.0;
+
+      // Use 0.05 USD fee if transaction < $1 on Solana/Ethereum, otherwise 0.5 USD
+      const feeUsd = useReducedFee ? 0.05 : 0.5;
+
       // Calculate fee directly in base units without rounding
       // This preserves full precision regardless of token decimals (ETH 18, SOL 9, TRX 6, etc.)
       const vaneFeesAmount = calculateFeeInBaseUnits(
-        0.5,
+        feeUsd,
         usdPrice,
         tokenDecimals,
       );
