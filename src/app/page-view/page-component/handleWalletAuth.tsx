@@ -18,7 +18,7 @@ export default function DynamicWalletClientAuthProvider({
     <DynamicContextProvider
       settings={{
         mobileExperience: {
-          default: "redirect",
+          default: "in-app-browser",
           phantom: "in-app-browser",
         },
         environmentId: process.env.NEXT_PUBLIC_DYNAMIC_API_KEY!,

@@ -743,14 +743,14 @@ export default function TransferForm({
       // Calculate transaction value in USD
       const transactionValueUsd = amountValue * usdPrice;
 
-      // Check if transaction value < $1 and network is Solana or Ethereum
+      // Check if transaction value < $10 and network is Solana or Ethereum
       const isSolanaOrEthereum =
         walletNetwork === ChainSupported.Solana ||
         walletNetwork === ChainSupported.Ethereum;
-      const useReducedFee = isSolanaOrEthereum && transactionValueUsd < 1.0;
+      const useReducedFee = isSolanaOrEthereum && transactionValueUsd < 10.0;
 
-      // Use 0.05 USD fee if transaction < $1 on Solana/Ethereum, otherwise 0.5 USD
-      const feeUsd = useReducedFee ? 0.05 : 0.5;
+      // Use 0.1 USD fee if transaction < $10 on Solana/Ethereum, otherwise 0.5 USD
+      const feeUsd = useReducedFee ? 0.1 : 0.5;
 
       // Calculate fee directly in base units without rounding
       // This preserves full precision regardless of token decimals (ETH 18, SOL 9, TRX 6, etc.)

@@ -228,7 +228,6 @@ export default function Profile() {
             className="bg-[#0D1B1B] rounded-lg p-3"
           >
             <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-3 h-3 text-gray-400" />
               <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">
                 Protected & Recovered
               </span>
@@ -298,11 +297,9 @@ export default function Profile() {
             </div>
             <div className="mt-1">
               <p className="text-[9px] text-gray-500">
-                $0.1 per protected transaction
+                $0.05 - $0.5 per protected transaction
               </p>
-              <p className="text-[9px] text-gray-500 mt-0.5">
-                Current plan: Free
-              </p>
+            
             </div>
           </motion.div>
         </>
