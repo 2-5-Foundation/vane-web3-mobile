@@ -785,14 +785,14 @@ export async function createTestTxSolana(
 }
 
 // Helper function to determine if a token is a native Ethereum token
-function isNativeEthereumToken(token: Token): boolean {
+export function isNativeEthereumToken(token: Token): boolean {
   if ("Ethereum" in token) {
     return token.Ethereum === "ETH";
   }
   return false;
 }
 
-function isNativeBSCToken(token: Token): boolean {
+export function isNativeBSCToken(token: Token): boolean {
   if ("Bnb" in token) {
     return token.Bnb === "BNB";
   }
@@ -800,7 +800,7 @@ function isNativeBSCToken(token: Token): boolean {
 }
 
 // Helper function to get token contract address and validate it's a valid ERC20 contract
-async function getTokenAddress(
+export async function getTokenAddress(
   token: Token,
   network: ChainSupported,
 ): Promise<{ address: string; decimal: number } | null> {
@@ -841,7 +841,7 @@ async function getTokenAddress(
 }
 
 // Helper function to determine if a token is native SOL
-function isNativeSolToken(token: Token): boolean {
+export function isNativeSolToken(token: Token): boolean {
   if ("Solana" in token) {
     return token.Solana === "SOL";
   }

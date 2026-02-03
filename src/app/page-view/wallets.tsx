@@ -423,6 +423,7 @@ export default function Wallets() {
     initializeWasm,
     startWatching,
     isInitializing,
+    setVaneAuth
   ]);
 
   return (
@@ -588,23 +589,6 @@ export default function Wallets() {
               </Button>
             )}
 
-            <Alert className="bg-blue-500/10 border-blue-400/30">
-              <AlertTitle className="text-blue-400">Heads up!</AlertTitle>
-              <AlertDescription className="text-blue-300">
-                For the best experience use vane in wallet in-app browser.
-              </AlertDescription>
-              <AlertDescription className="text-blue-300">
-                if some wallets fail to connect, please share the issue on{" "}
-                <a
-                  href="https://x.com/VaneNetwork_"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-200 hover:text-blue-100 underline font-bold text-base"
-                >
-                  X
-                </a>
-              </AlertDescription>
-            </Alert>
           </div>
         </div>
         <DynamicMultiWalletPromptsWidget />
