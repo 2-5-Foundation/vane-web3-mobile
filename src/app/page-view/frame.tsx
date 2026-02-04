@@ -162,7 +162,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
 
           {/* about vane button */}
           <Link
-            href="https://home.vaneweb3.com"
+            href="https://about.vaneweb3.com"
             className="
         text-sm 
         font-semibold 
