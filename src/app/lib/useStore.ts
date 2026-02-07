@@ -64,6 +64,7 @@ export interface TransactionState {
   userProfile: UserProfile;
   transferFormData: TransferFormData;
   vaneAuth: Uint8Array;
+  metricsTxList: TxStateMachine[];
   // storing incoming transactions that serve as sender notifications
   senderPendingTransactions: TxStateMachine[]; // Store all transaction updates
   // storing incoming transactions that serve as receiver notifications the receiver needs to confirm or reject
@@ -86,6 +87,7 @@ export interface TransactionState {
 
   // Methods
   setVaneAuth: (vaneAuth: Uint8Array) => void;
+  setMetricsTxList: (txList: TxStateMachine[]) => void;
   setUserProfile: (userProfile: UserProfile) => void;
   storeSetTransferFormData: (formData: TransferFormData) => void;
   setTransferStatus: (
@@ -180,6 +182,7 @@ const stringToChainSupported = (network: string): ChainSupported => {
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   // state
   vaneAuth: new Uint8Array(),
+  metricsTxList: [],
   userProfile: {
     account: "",
     network: "",
@@ -198,6 +201,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   // method
   setVaneAuth: (vaneAuth: Uint8Array) => set({ vaneAuth }),
+  setMetricsTxList: (txList: TxStateMachine[]) => set({ metricsTxList: txList }),
   setUserProfile: (userProfile: UserProfile) => {
     set({
       userProfile: {

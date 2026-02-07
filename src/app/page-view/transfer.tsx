@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useTransactionStore } from "@/app/lib/useStore";
+import { useShallow } from "zustand/react/shallow";
 import {
   Rocket,
   Download,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 import { ChainEnum, TokenBalance } from "@dynamic-labs/sdk-api-core";
 import { Button } from "@/components/ui/button";
-import { Token, getTokenDecimals } from "@/lib/vane_lib/primitives";
+import { getTokenDecimals } from "@/lib/vane_lib/primitives";
 import { getTokenLabel } from "./page-component/sender-pending";
 
 // Supported network IDs
@@ -44,15 +45,17 @@ export default function Transfer() {
     useState<number>(0);
   const [failedTransactionCount, setFailedTransactionCount] =
     useState<number>(0);
+  const [revertedTokens, setRevertedTokens] = useState<
+    { symbol: string; amount: number }[]
+  >([]);
+  const [tokensExpanded, setTokensExpanded] = useState(false);
 
   const { primaryWallet } = useDynamicContext();
   const userWallets = useUserWallets();
-  const {
-    exportStorageData,
-    isWasmInitialized,
-    initializeWasm,
-    startWatching,
-  } = useTransactionStore();
+  const metricsTxList = useTransactionStore(useShallow((s) => s.metricsTxList));
+  const isWasmInitialized = useTransactionStore((s) => s.isWasmInitialized);
+  const initializeWasm = useTransactionStore((s) => s.initializeWasm);
+  const startWatching = useTransactionStore((s) => s.startWatching);
   const [isInitializing, setIsInitializing] = useState(false);
   const syncNetworkIdOnce = useCallback(async () => {
     if (!primaryWallet) return;
@@ -122,51 +125,6 @@ export default function Transfer() {
     setAvailableTokens(tokenBalances as any[]);
   }, [tokenBalances]);
 
-  // Calculate USD value for a failed transaction
-  const calculateTransactionValue = useCallback(
-    (amount: bigint, token: Token, balances: TokenBalance[]): number => {
-      if (!balances?.length) return 0;
-
-      const tokenSymbol = getTokenLabel(token);
-      if (!tokenSymbol) return 0;
-
-      const balance = balances.find(
-        (b: any) =>
-          b.symbol?.toUpperCase() === tokenSymbol.toUpperCase() ||
-          b.name?.toUpperCase() === tokenSymbol.toUpperCase(),
-      );
-      if (!balance) return 0;
-
-      const decimals = getTokenDecimals(token);
-      if (!decimals) return 0;
-
-      const tokenAmount = Number(amount) / Math.pow(10, decimals);
-      const pricePerToken =
-        balance.price ||
-        (balance.marketValue && balance.balance > 0
-          ? balance.marketValue / balance.balance
-          : 0);
-
-      return tokenAmount * pricePerToken;
-    },
-    [],
-  );
-
-  // Handle token balances from the separate component
-  const handleBalancesChange = useCallback((balances: any[]) => {
-    if (balances && balances.length > 0) {
-      // Sum all tokens' marketValue
-      const totalValue = balances.reduce((sum, token) => {
-        return sum + (token.marketValue || 0);
-      }, 0);
-      setBalance(totalValue.toString());
-      setAvailableTokens(balances);
-    } else {
-      setBalance("0");
-      setAvailableTokens([]);
-    }
-  }, []);
-
   // Derive network ID from Dynamic SDK for token balances (with fallback)
   useEffect(() => {
     const syncNetworkId = async () => {
@@ -211,53 +169,61 @@ export default function Transfer() {
     syncNetworkIdOnce();
   }, [primaryWallet, syncNetworkIdOnce]);
 
-  // Calculate total value and count of failed transactions using useTokenBalances
+  // Calculate total value and count of reverted transactions from store
   useEffect(() => {
-    const calculateFailedTransactionsValue = async () => {
-      if (!isWasmInitialized()) return;
+    if (!metricsTxList.length) {
+      setFailedTransactionsValue(0);
+      setFailedTransactionCount(0);
+      setRevertedTokens([]);
+      return;
+    }
 
-      try {
-        const storageExport = await exportStorageData();
-        if (!storageExport?.failed_transactions) {
-          setFailedTransactionsValue(0);
-          setFailedTransactionCount(0);
-          return;
-        }
+    const revertedTxs = metricsTxList.filter((tx) => tx.status?.type === "Reverted");
+    setFailedTransactionCount(revertedTxs.length);
 
-        // Set the count
-        setFailedTransactionCount(storageExport.failed_transactions.length);
+    if (!revertedTxs.length) {
+      setFailedTransactionsValue(0);
+      setRevertedTokens([]);
+      return;
+    }
 
-        // Calculate total value if we have token balances
-        if (!tokenBalances?.length) {
-          setFailedTransactionsValue(0);
-          return;
-        }
+    // Aggregate token amounts
+    const tokenMap: Record<string, number> = {};
+    revertedTxs.forEach((tx) => {
+      const tokenSymbol = getTokenLabel(tx.token);
+      if (!tokenSymbol) return;
+      const decimals = getTokenDecimals(tx.token) || 18;
+      const tokenAmount = Number(BigInt(tx.amount)) / Math.pow(10, decimals);
+      tokenMap[tokenSymbol.toUpperCase()] = (tokenMap[tokenSymbol.toUpperCase()] || 0) + tokenAmount;
+    });
 
-        let totalValue = 0;
-        storageExport.failed_transactions.forEach((tx) => {
-          const value = calculateTransactionValue(
-            BigInt(tx.amount),
-            tx.token,
-            tokenBalances,
-          );
-          totalValue += value;
-        });
+    setRevertedTokens(Object.entries(tokenMap).map(([symbol, amount]) => ({ symbol, amount })));
 
-        setFailedTransactionsValue(totalValue);
-      } catch (error) {
-        console.error("Error calculating failed transactions value:", error);
-        setFailedTransactionsValue(0);
-        setFailedTransactionCount(0);
+    // Calculate USD value if tokenBalances available
+    if (!tokenBalances?.length) {
+      setFailedTransactionsValue(0);
+      return;
+    }
+
+    let totalValue = 0;
+    for (const [symbol, amount] of Object.entries(tokenMap)) {
+      const balance = tokenBalances.find(
+        (b: any) =>
+          b.symbol?.toUpperCase() === symbol ||
+          b.name?.toUpperCase() === symbol
+      );
+      if (balance) {
+        const pricePerToken =
+          balance.price ||
+          (balance.marketValue && balance.balance > 0
+            ? balance.marketValue / balance.balance
+            : 0);
+        totalValue += amount * pricePerToken;
       }
-    };
+    }
 
-    calculateFailedTransactionsValue();
-  }, [
-    isWasmInitialized,
-    exportStorageData,
-    tokenBalances,
-    calculateTransactionValue,
-  ]);
+    setFailedTransactionsValue(totalValue);
+  }, [metricsTxList, tokenBalances]);
 
   return (
     <motion.div
@@ -319,10 +285,28 @@ export default function Transfer() {
                   These funds could have been lost due to transactional
                   mistakes.
                 </p>
-                <div className="mt-2 flex items-center justify-between">
-                  <p className="text-lg font-light text-gray-300">
-                    ${failedTransactionsValue.toFixed(4)}
-                  </p>
+                {revertedTokens.length > 0 && (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {(tokensExpanded ? revertedTokens : revertedTokens.slice(0, 3)).map(({ symbol, amount }) => (
+                      <span
+                        key={symbol}
+                        className="text-xs bg-[#1a2628] text-gray-300 px-2 py-1 rounded"
+                      >
+                        {Math.ceil(amount)} {symbol}
+                      </span>
+                    ))}
+                    {revertedTokens.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={() => setTokensExpanded(!tokensExpanded)}
+                        className="text-xs text-[#7EDFCD]"
+                      >
+                        {tokensExpanded ? "Show less" : `+${revertedTokens.length - 3} more`}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="mt-2 flex items-center justify-end">
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-gray-400">Safe Reverts</p>
                     <p className="text-lg font-light text-gray-300">

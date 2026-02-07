@@ -46,6 +46,8 @@ import {
   prepareBscTransactionAction,
   prepareSolanaTransactionAction,
 } from "@/app/actions/txActions";
+import { isSubscriptionActive } from "@/app/actions/subscriptionActions";
+import SubscriptionModal from "./subscription-modal";
 import { toWire, fromWire } from "@/lib/vane_lib/pkg/host_functions/networking";
 import { motion } from "framer-motion";
 
@@ -268,8 +270,12 @@ export default function SenderPending() {
   const initializeWasm = useTransactionStore((state) => state.initializeWasm);
   const startWatching = useTransactionStore((state) => state.startWatching);
   const isWasmCorrupted = useTransactionStore((state) => state.isWasmCorrupted);
+  const vaneAuth = useTransactionStore((state) => state.vaneAuth);
+  const metricsTxList = useTransactionStore((state) => state.metricsTxList);
 
   const { primaryWallet } = useDynamicContext();
+
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   // Initialize submission pending state from localStorage on mount
   useEffect(() => {
@@ -610,6 +616,20 @@ export default function SenderPending() {
 
   const handleConfirm = async (transaction: TxStateMachine) => {
     await wasmHealthcheck();
+
+    // Check if user has 3+ transactions and needs subscription
+    if (metricsTxList.length >= 3) {
+      try {
+        const subResult = await isSubscriptionActive(Array.from(vaneAuth), primaryWallet!.address);
+        if (subResult.tier === 0) {
+          setShowSubscriptionModal(true);
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to check subscription:", e);
+      }
+    }
+
     // Save txNonce to localStorage to track submission pending state
     const txNonce = String(transaction.txNonce);
 
@@ -1534,6 +1554,11 @@ export default function SenderPending() {
             })}
         </>
       )}
+
+      <SubscriptionModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 }

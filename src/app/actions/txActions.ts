@@ -6,6 +6,34 @@ import { prepareBscTransaction } from "@/lib/server/tx/prepareBsc";
 import { prepareSolanaTransaction } from "@/lib/server/tx/prepareSolana";
 import type { TxStateMachine } from "@/lib/vane_lib/primitives";
 
+const METRICS_URL = "https://vane-metrics.vaneweb3.com";
+
+
+export interface FetchTxJsonResult {
+  success: boolean;
+  txList: TxStateMachine[];
+  error?: string;
+}
+
+export async function fetchTxJsonBySender(senderAddress: string): Promise<FetchTxJsonResult> {
+  try {
+    const response = await fetch(`${METRICS_URL}/tx-json-by-sender/${senderAddress}`);
+    if (!response.ok) {
+      return { success: false, txList: [], error: `Failed: ${response.status}` };
+    }
+    const data = await response.json();
+    const txList: TxStateMachine[] = (data.tx_json || [])
+      .map((jsonStr: string) => {
+        try { return JSON.parse(jsonStr); } catch { return null; }
+      })
+      .filter(Boolean);
+    return { success: true, txList };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch";
+    return { success: false, txList: [], error: message };
+  }
+}
+
 /**
  * Server Action to prepare an EVM transaction (Ethereum, Base, Polygon, Optimism, Arbitrum)
  * This replaces the direct API route call and keeps the logic server-side only

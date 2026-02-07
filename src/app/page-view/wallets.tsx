@@ -19,6 +19,7 @@ import { useTransactionStore } from "@/app/lib/useStore";
 import { Copy, Plus, X, MoreVertical } from "lucide-react";
 import Image from "next/image";
 import { signClientAuth } from "../actions/verificationAction";
+import { fetchTxJsonBySender } from "../actions/txActions";
 
 export default function Wallets() {
   const { primaryWallet, handleLogOut, removeWallet, setShowAuthFlow } =
@@ -38,6 +39,7 @@ export default function Wallets() {
   const addAccount = useTransactionStore((s) => s.addAccount);
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const setVaneAuth = useTransactionStore((s) => s.setVaneAuth);
+  const setMetricsTxList = useTransactionStore((s) => s.setMetricsTxList);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const exportStorageData = useTransactionStore((s) => s.exportStorageData);
 
@@ -397,6 +399,10 @@ export default function Wallets() {
         const vaneAuth = await signClientAuth(primaryWallet.address);
         setVaneAuth(vaneAuth);
 
+        // Fetch metrics tx list
+        const txResult = await fetchTxJsonBySender(primaryWallet.address);
+        if (txResult.success) setMetricsTxList(txResult.txList);
+
         await initializeWasm(
           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
           primaryWallet.address,
@@ -423,7 +429,8 @@ export default function Wallets() {
     initializeWasm,
     startWatching,
     isInitializing,
-    setVaneAuth
+    setVaneAuth,
+    setMetricsTxList
   ]);
 
   return (
