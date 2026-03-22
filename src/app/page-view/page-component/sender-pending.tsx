@@ -618,17 +618,17 @@ export default function SenderPending() {
     await wasmHealthcheck();
 
     // Check if user has 3+ transactions and needs subscription
-    if (metricsTxList.length >= 3) {
-      try {
-        const subResult = await isSubscriptionActive(Array.from(vaneAuth), primaryWallet!.address);
-        if (subResult.tier === 0) {
-          setShowSubscriptionModal(true);
-          return;
-        }
-      } catch (e) {
-        console.error("Failed to check subscription:", e);
-      }
-    }
+    // if (metricsTxList.length >= 3) {
+    //   try {
+    //     const subResult = await isSubscriptionActive(Array.from(vaneAuth), primaryWallet!.address);
+    //     if (subResult.tier === 0) {
+    //       setShowSubscriptionModal(true);
+    //       return;
+    //     }
+    //   } catch (e) {
+    //     console.error("Failed to check subscription:", e);
+    //   }
+    // }
 
     // Save txNonce to localStorage to track submission pending state
     const txNonce = String(transaction.txNonce);

@@ -32,16 +32,16 @@ export const viewport: Viewport = {
 export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL("https://vaneweb3.com"),
-    title: "vaneweb3",
+    title: "Vane",
     description: "Your safety net for crypto transactions",
     appleWebApp: {
       capable: true,
-      title: "Vane Web3",
+      title: "Vane",
       statusBarStyle: "black-translucent",
       startupImage: "/vane-logo.png",
     },
     openGraph: {
-      title: "vaneweb3",
+      title: "Vane",
       description: "Your safety net for crypto transactions",
       images: [
         {
@@ -55,7 +55,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     twitter: {
       card: "summary_large_image",
-      title: "vaneweb3",
+      title: "Vane",
       description: "Your safety net for crypto transactions",
       images: ["/vane-safety-net.png"],
     },
@@ -67,7 +67,7 @@ export async function generateMetadata(): Promise<Metadata> {
           title: `Protect your next transaction`,
           action: {
             type: "launch_miniapp",
-            name: "Vane Web3",
+            name: "Vane",
             url: "https://vaneweb3.com",
             splashImageUrl: "https://vaneweb3.com/vane-logo.png",
             splashBackgroundColor: "#0A1919",

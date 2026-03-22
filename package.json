@@ -1,5 +1,5 @@
 {
-  "name": "vaneweb3",
+  "name": "vane network",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,8 @@
     "lint": "next lint",
     "update_vane_lib": "rm -rf ./src/lib/vane_lib && cp -R /Users/mrisholukamba/Desktop/subzero/vane_web3/node/wasm/vane_lib ./src/lib/vane_lib",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "postinstall": "cp node_modules/gif.js/dist/gif.worker.js public/gif.worker.js 2>/dev/null || true"
   },
   "overrides": {
     "@noble/hashes": "1.8.0"
@@ -37,6 +38,8 @@
     "clsx": "^2.1.1",
     "dotenv": "^16.4.7",
     "framer-motion": "^12.23.22",
+    "gif.js": "^0.2.0",
+    "html-to-image": "^1.11.11",
     "lucide-react": "^0.475.0",
     "next": "^15.5.7",
     "pino-pretty": "^13.0.0",

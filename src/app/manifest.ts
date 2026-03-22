@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Vane Web3",
+    name: "Vane",
     short_name: "Vane",
     description: "Safety net for your crypto transfers",
     start_url: "/",
