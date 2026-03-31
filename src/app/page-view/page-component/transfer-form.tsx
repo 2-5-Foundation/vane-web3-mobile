@@ -282,8 +282,13 @@ export default function TransferForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
 
-  // Check if amount + fee exceeds balance
+  // Check if amount + fee exceeds balance (skipped on EVM — `selectedEVMNetwork` is set only when chain id matches EVM_NETWORKS)
   useEffect(() => {
+    if (selectedEVMNetwork !== "") {
+      setExceedsBalanceWithFees(false);
+      return;
+    }
+
     if (!formData.asset || !formData.amount) {
       setExceedsBalanceWithFees(false);
       return;
@@ -346,7 +351,14 @@ export default function TransferForm({
       // Silently handle errors
       setExceedsBalanceWithFees(false);
     }
-  }, [formData.amount, formData.asset, tokenList, getUsdPriceFromToken, senderNetwork]);
+  }, [
+    formData.amount,
+    formData.asset,
+    tokenList,
+    getUsdPriceFromToken,
+    senderNetwork,
+    selectedEVMNetwork,
+  ]);
 
   const updateSenderNetwork = useCallback(async () => {
     if (!primaryWallet) {

@@ -365,12 +365,12 @@ export default function SenderPending() {
     });
   };
 
-  const wasmHealthcheck = async () => {
+  const wasmHealthcheck = async (): Promise<boolean> => {
     if (!isWasmInitialized()) {
       try {
         if (!primaryWallet) {
           toast.error("Please connect your wallet first");
-          return;
+          return true;
         }
         await initializeWasm(
           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
@@ -386,15 +386,16 @@ export default function SenderPending() {
         await new Promise((resolve) => setTimeout(resolve, 3000));
       } catch (error) {
         toast.error("Failed to start app. Refreshing should fix it.");
-        console.error("Failed to start app on receiver pending:", error);
+        console.error("Failed to start app on sender pending:", error);
       }
     }
 
     const isCorrupted = await isWasmCorrupted();
     if (isCorrupted) {
       setShowCorruptedModal(true);
-      return;
+      return false;
     }
+    return true;
   };
 
   const handleFailure = (message?: string, txNonce?: string) => {
@@ -615,7 +616,10 @@ export default function SenderPending() {
   };
 
   const handleConfirm = async (transaction: TxStateMachine) => {
-    await wasmHealthcheck();
+    const wasmOk = await wasmHealthcheck();
+    if (!wasmOk) {
+      return;
+    }
 
     // Check if user has 3+ transactions and needs subscription
     // if (metricsTxList.length >= 3) {
@@ -744,6 +748,11 @@ export default function SenderPending() {
     setShowSkeleton(true);
 
     try {
+      const wasmOk = await wasmHealthcheck();
+      if (!wasmOk) {
+        return;
+      }
+
       // Show skeleton for 1 second minimum
       await Promise.all([
         fetchPendingUpdates(),

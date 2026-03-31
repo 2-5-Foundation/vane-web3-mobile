@@ -181,31 +181,12 @@ export default function ReceiverPending() {
     });
   };
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setShowSkeleton(true);
-
-    try {
-      // Show skeleton for 1 second minimum
-      await Promise.all([
-        fetchPendingUpdates(),
-        new Promise((resolve) => setTimeout(resolve, 1000)),
-      ]);
-    } catch (e) {
-      console.error("Error refreshing transactions:", e);
-      toast.error("Failed to refresh transactions");
-    } finally {
-      setIsRefreshing(false);
-      setShowSkeleton(false);
-    }
-  };
-
-  const handleApprove = async (transaction: TxStateMachine) => {
+  const wasmHealthcheck = async (): Promise<boolean> => {
     if (!isWasmInitialized()) {
       try {
         if (!primaryWallet) {
           toast.error("Please connect your wallet first");
-          return;
+          return true;
         }
         await initializeWasm(
           process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL!,
@@ -224,10 +205,42 @@ export default function ReceiverPending() {
         console.error("Failed to start app on receiver pending:", error);
       }
     }
-    // check if wasm is not corrupted
+
     const isCorrupted = await isWasmCorrupted();
     if (isCorrupted) {
       setShowCorruptedModal(true);
+      return false;
+    }
+    return true;
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setShowSkeleton(true);
+
+    try {
+      const wasmOk = await wasmHealthcheck();
+      if (!wasmOk) {
+        return;
+      }
+
+      // Show skeleton for 1 second minimum
+      await Promise.all([
+        fetchPendingUpdates(),
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+    } catch (e) {
+      console.error("Error refreshing transactions:", e);
+      toast.error("Failed to refresh transactions");
+    } finally {
+      setIsRefreshing(false);
+      setShowSkeleton(false);
+    }
+  };
+
+  const handleApprove = async (transaction: TxStateMachine) => {
+    const wasmOk = await wasmHealthcheck();
+    if (!wasmOk) {
       return;
     }
 

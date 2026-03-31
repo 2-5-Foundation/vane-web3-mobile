@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { toWire } from "@/lib/vane_lib/pkg/host_functions/networking";
 
 config();
+
 export interface TransferFormData {
   recipient: string;
   amount: number | string;
@@ -84,8 +85,10 @@ export interface TransactionState {
 
   // WASM state
   isWatchingUpdates: boolean;
+  backendConnected: boolean;
 
   // Methods
+  setBackendConnected: (connected: boolean) => void;
   setVaneAuth: (vaneAuth: Uint8Array) => void;
   setMetricsTxList: (txList: TxStateMachine[]) => void;
   setUserProfile: (userProfile: UserProfile) => void;
@@ -198,8 +201,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   recvTransactions: [],
   status: "Genesis",
   isWatchingUpdates: false,
+  backendConnected: false,
 
   // method
+  setBackendConnected: (connected: boolean) => set({ backendConnected: connected }),
   setVaneAuth: (vaneAuth: Uint8Array) => set({ vaneAuth }),
   setMetricsTxList: (txList: TxStateMachine[]) => set({ metricsTxList: txList }),
   setUserProfile: (userProfile: UserProfile) => {
@@ -328,6 +333,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     })),
 
   removeRecvTransaction: (txNonce: number) => {
+    if (!isInitialized()) {
+      throw new Error("WASM node not initialized");
+    }
+    const toRemove = get().recvTransactions.find((t) => t.txNonce === txNonce);
+    if (toRemove) {
+      deleteTxInCache(toRemove);
+    }
     set((state) => ({
       recvTransactions: state.recvTransactions.filter(
         (tx) => tx.txNonce !== txNonce,
@@ -363,14 +375,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       console.log("WASM is corrupted");
       const msg = String((e as any)?.message ?? e);
 
-      return (
-        msg.includes("WASM_HEALTHCHECK_TIMEOUT") ||
-        msg.includes("unreachable") ||
-        msg.includes("RuntimeError") ||
-        msg.includes("memory") ||
-        msg.includes("out of bounds") ||
-        msg.includes("memory access out of bounds")
-      );
+      // Not initialized is handled explicitly by UI checks and should not be
+      // classified as corruption here.
+      if (msg.includes("WASM node not initialized")) {
+        return false;
+      }
+
+      // Fail closed: unknown WASM health-check errors are treated as corrupted
+      // to avoid false healthy status in the UI.
+      return true;
     }
   },
 
@@ -597,6 +610,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     try {
       const updates = await fetchPendingTxUpdates(vaneAuth);
       console.log("Fetched pending updates:", updates);
+
+      const updateCount = updates?.length ?? 0;
+      toast.info(`${updateCount} pending updates`, {
+        description:
+          "If you can't see the update, unlink and link your wallet to refresh.",
+      });
 
       // If updates is empty, clear all transactions
       if (!updates || updates.length === 0) {

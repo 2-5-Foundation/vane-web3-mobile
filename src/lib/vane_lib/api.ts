@@ -9,10 +9,7 @@ import type {
 } from "./primitives";
 
 // WASM bindings (ESM)
-import initWasm, {
-  start_vane_web3,
-  PublicInterfaceWorkerJs,
-} from "./pkg/vane_wasm_node.js";
+import initWasm, { start_vane_web3, PublicInterfaceWorkerJs } from "./pkg/vane_wasm_node.js";
 
 // Logging host helpers exposed to WASM
 import { hostLogging, LogLevel } from "./pkg/host_functions/logging";
@@ -43,19 +40,8 @@ async function ensureWasmInitialized(): Promise<void> {
  * @param options - Configuration options for the node
  * @returns Promise that resolves to the initialized worker interface
  */
-export async function initializeNode(
-  options: InitOptions,
-): Promise<PublicInterfaceWorkerJs> {
-  const {
-    sig,
-    relayMultiAddr,
-    account,
-    network,
-    live = false,
-    self_node,
-    logLevel,
-    storage,
-  } = options;
+export async function initializeNode(options: InitOptions): Promise<PublicInterfaceWorkerJs> {
+  const { sig, relayMultiAddr, account, network, live = false, self_node, logLevel, storage } = options;
 
   await ensureWasmInitialized();
 
@@ -63,15 +49,7 @@ export async function initializeNode(
     hostLogging.setLogLevel(Number(logLevel));
   }
 
-  nodeWorker = await start_vane_web3(
-    sig,
-    relayMultiAddr,
-    account,
-    network,
-    self_node,
-    live,
-    storage,
-  );
+  nodeWorker = await start_vane_web3(sig, relayMultiAddr, account, network, self_node, live, storage);
   return nodeWorker;
 }
 
@@ -99,12 +77,10 @@ export type Amount = number | bigint;
 export { LogLevel };
 
 function requireWorker(): PublicInterfaceWorkerJs {
-  if (!nodeWorker)
-    throw new Error(
-      "Vane WASM node is not initialized. Call initializeNode() first.",
-    );
+  if (!nodeWorker) throw new Error("Vane WASM node is not initialized. Call initializeNode() first.");
   return nodeWorker;
 }
+
 
 export function isInitialized(): boolean {
   return nodeWorker !== null;
@@ -113,7 +89,7 @@ export function isInitialized(): boolean {
 /**
  * Initiate a new transaction between sender and receiver
  * @param sender - Sender's address
- * @param receiver - Receiver's address
+ * @param receiver - Receiver's address  
  * @param amount - Amount to send (number or bigint)
  * @param token - Token type to send
  * @param codeWord - Unique code word for the transaction
@@ -130,7 +106,7 @@ export async function initiateTransaction(
   codeWord: string,
   sender_network: ChainSupported,
   receiver_network: ChainSupported,
-  vaneFeesAmount: bigint,
+  vane_fees_amount: bigint,
 ): Promise<TxStateMachine> {
   const amt = typeof amount === "bigint" ? amount : BigInt(amount);
   const res = await requireWorker().initiateTransaction(
@@ -142,23 +118,17 @@ export async function initiateTransaction(
     codeWord,
     sender_network,
     receiver_network,
-    vaneFeesAmount,
+    vane_fees_amount,
   );
   return res as TxStateMachine;
 }
 
-export async function senderConfirm(
-  sig: Uint8Array,
-  tx: TxStateMachine,
-): Promise<void> {
-  await requireWorker().senderConfirm(sig, tx);
+export async function senderConfirm(sig: Uint8Array, tx: TxStateMachine): Promise<void> {
+  await requireWorker().senderConfirm(sig,tx);
 }
 
-export async function receiverConfirm(
-  sig: Uint8Array,
-  tx: TxStateMachine,
-): Promise<void> {
-  await requireWorker().receiverConfirm(sig, tx);
+export async function receiverConfirm(sig: Uint8Array, tx: TxStateMachine): Promise<void> {
+  await requireWorker().receiverConfirm(sig,tx);
 }
 
 /**
@@ -170,23 +140,15 @@ export async function verifyTxCallPayload(tx: TxStateMachine): Promise<void> {
   await requireWorker().verifyTxCallPayload(tx);
 }
 
-export async function revertTransaction(
-  sig: Uint8Array,
-  tx: TxStateMachine,
-  reason?: RevertReason,
-): Promise<void> {
+export async function revertTransaction(sig: Uint8Array, tx: TxStateMachine, reason?: RevertReason): Promise<void> {
   await requireWorker().revertTransaction(sig, tx, reason ?? null);
 }
 
-export async function watchTxUpdates(
-  callback: TxUpdateCallback,
-): Promise<void> {
+export async function watchTxUpdates(callback: TxUpdateCallback): Promise<void> {
   await requireWorker().watchTxUpdates(callback);
 }
 
-export async function watchP2pNotifications(
-  callback: BackendEventCallback,
-): Promise<void> {
+export async function watchP2pNotifications(callback: BackendEventCallback): Promise<void> {
   await requireWorker().watchP2pNotifications(callback);
 }
 
@@ -198,9 +160,7 @@ export async function unsubscribeWatchP2pNotifications(): Promise<void> {
   await requireWorker().unsubscribeWatchP2pNotifications();
 }
 
-export async function fetchPendingTxUpdates(
-  sig: Uint8Array,
-): Promise<TxStateMachine[]> {
+export async function fetchPendingTxUpdates(sig: Uint8Array): Promise<TxStateMachine[]> {
   const res = await requireWorker().fetchPendingTxUpdates(sig);
   return res as TxStateMachine[];
 }
@@ -216,10 +176,7 @@ export async function exportStorage(): Promise<StorageExport> {
  * @param network - Network/chain the account belongs to
  * @returns Promise that resolves when the account is added
  */
-export async function addAccount(
-  accountId: string,
-  network: ChainSupported,
-): Promise<void> {
+export async function addAccount(accountId: string, network: ChainSupported): Promise<void> {
   await requireWorker().addAccount(accountId, network);
 }
 
@@ -246,15 +203,9 @@ export async function resetNode(): Promise<void> {
   if (!w) return;
 
   // Best-effort cleanup — MUST NOT throw
-  try {
-    await w.unsubscribeWatchTxUpdates();
-  } catch {}
-  try {
-    await w.unsubscribeWatchP2pNotifications();
-  } catch {}
-  try {
-    await w.clearCache();
-  } catch {}
+  try { await w.unsubscribeWatchTxUpdates(); } catch {}
+  try { await w.unsubscribeWatchP2pNotifications(); } catch {}
+  try { await w.clearCache(); } catch {}
 }
 export function getWorker(): PublicInterfaceWorkerJs | null {
   return nodeWorker;

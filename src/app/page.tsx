@@ -14,6 +14,7 @@ import {
   isInitialized,
   BackendEvent,
   decodeTxStateMachine,
+  onLog,
 } from "@/lib/vane_lib/main";
 import { toast } from "sonner";
 import {
@@ -32,6 +33,9 @@ const normalizeChainAddress = (value?: string | null): string => {
 // get the connected address from dynamic wallet
 export default function Home() {
   const { removeWallet, primaryWallet } = useDynamicContext();
+  const setBackendConnected = useTransactionStore(
+    (state) => state.setBackendConnected,
+  );
   const userWallets = useUserWallets();
   const userWalletsRef = useRef(userWallets);
   const removeWalletRef = useRef(removeWallet);
@@ -46,6 +50,32 @@ export default function Home() {
   useEffect(() => {
     sdk.actions.ready();
   }, []);
+
+  useEffect(() => {
+    onLog((entry) => {
+      const text = `${entry.target ?? ""} ${entry.message ?? ""}`.toLowerCase();
+      const textWithoutAddress = text.split("for address:")[0]?.trim() ?? text;
+
+      if (textWithoutAddress.includes("subscribed to backend events")) {
+        setBackendConnected(true);
+        return;
+      }
+
+      const disconnected =
+        text.includes("failed to subscribe to events") ||
+        (text.includes("websocket connection") && text.includes("failed")) ||
+        text.includes("closing or closed state") ||
+        text.includes("restart required");
+
+      if (disconnected) {
+        setBackendConnected(false);
+      }
+    });
+
+    return () => {
+      onLog(() => {});
+    };
+  }, [setBackendConnected]);
 
   // One-time cleanup of all app-related localStorage items
   useEffect(() => {
@@ -222,6 +252,7 @@ export default function Home() {
       // Start watching P2P notifications
       watchP2pNotifications(handleBackendEvent)
         .then(() => {
+          setBackendConnected(true);
           // Clear polling interval once subscribed
           if (pollInterval) {
             clearInterval(pollInterval);
@@ -230,6 +261,7 @@ export default function Home() {
         })
         .catch((error) => {
           isSubscribed = false;
+          setBackendConnected(false);
         });
 
       return true;
@@ -264,7 +296,7 @@ export default function Home() {
       }
       isSubscribed = false;
     };
-  }, []);
+  }, [setBackendConnected]);
 
   const currentView = useStore((state) => state.currentView);
 
