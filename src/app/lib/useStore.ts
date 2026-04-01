@@ -809,17 +809,20 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     try {
       const updates = await fetchPendingTxUpdates(vaneAuth);
       console.log("Fetched pending updates:", updates);
-      get().recordTrackerEvent("fetch_pending_updates", {
-        stage: "fetch result",
-        details: `useStore.fetchPendingUpdates returned ${updates.length}`,
-      });
-      updates.forEach((tx) => {
+      if (!updates || updates.length === 0) {
         get().recordTrackerEvent("fetch_pending_updates", {
           stage: "fetch result",
-          details: "fetch returned txStateMachine",
-          log: tx,
+          details: "useStore.fetchPendingUpdates returned 0",
         });
-      });
+      } else {
+        updates.forEach((tx, index) => {
+          get().recordTrackerEvent("fetch_pending_updates", {
+            stage: "fetch result",
+            details: `useStore.fetchPendingUpdates returned tx ${index + 1}/${updates.length}`,
+            log: tx,
+          });
+        });
+      }
 
       // If updates is empty, clear all transactions
       if (!updates || updates.length === 0) {
