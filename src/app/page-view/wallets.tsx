@@ -548,8 +548,19 @@ export default function Wallets() {
     setDiagnoseSending(true);
     try {
       const tracker = useTransactionStore.getState().txTracker;
+      const sessionPayload = {
+        context: {
+          connectionStatus: getConnectionIsOn() ? "On" : "Off",
+          wasmStatus: combinedStatus?.wasm?.variant
+            ? combinedStatus.wasm.variant
+            : isWasmInitialized()
+              ? "healthy"
+              : "not_init",
+        },
+        sessions: tracker.byMultiId,
+      };
       const result = await sendDiagnoseToTelegram({
-        sessionLogs: tracker.byMultiId,
+        sessionLogs: sessionPayload,
         contact: diagnoseContact.trim(),
         walletAddress: primaryWallet?.address,
       });

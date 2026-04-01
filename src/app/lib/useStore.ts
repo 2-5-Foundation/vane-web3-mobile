@@ -278,6 +278,31 @@ const cloneTxSnapshot = (tx?: TxStateMachine): TxStateMachine | undefined => {
   }
 };
 
+const toPlainObjectDeep = (value: unknown): unknown => {
+  if (value instanceof Map) {
+    const obj: Record<string, unknown> = {};
+    value.forEach((mapValue, mapKey) => {
+      obj[String(mapKey)] = toPlainObjectDeep(mapValue);
+    });
+    return obj;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toPlainObjectDeep(item));
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const obj: Record<string, unknown> = {};
+    Object.entries(record).forEach(([key, nestedValue]) => {
+      obj[key] = toPlainObjectDeep(nestedValue);
+    });
+    return obj;
+  }
+
+  return value;
+};
+
 const deriveRoleFromTx = (
   tx: TxStateMachine | undefined,
   currentAccount: string,
@@ -1130,22 +1155,26 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (vaneAuth.length === 0) {
       throw new Error("vane auth is not set");
     }
-    console.log("[fetchTxSessionLogsByMultiId] vaneAuth", vaneAuth);
 
+
+    const multiIdFromSessionKey = multiId;
+    if (!multiIdFromSessionKey) {
+      return [];
+    }
 
     try {
       const sessionLogs = await fetchTxSessionLogs(
         vaneAuth,
         address,
-        multiId?.trim() ? multiId : null,
+        null,
       );
       const normalizedLogs = Array.isArray(sessionLogs)
-        ? (sessionLogs as TxSessionLogEntry[])
+        ? (toPlainObjectDeep(sessionLogs) as TxSessionLogEntry[])
         : [];
 
       set((state) => {
-        const existing = state.txTracker.byMultiId[multiId] ?? {
-          multiId,
+        const existing = state.txTracker.byMultiId[multiIdFromSessionKey] ?? {
+          multiId: multiIdFromSessionKey,
           events: [],
         };
         return {
@@ -1153,7 +1182,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             ...state.txTracker,
             byMultiId: {
               ...state.txTracker.byMultiId,
-              [multiId]: {
+              [multiIdFromSessionKey]: {
                 ...existing,
                 backend: normalizedLogs,
               },
@@ -1164,7 +1193,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
       return normalizedLogs;
     } catch (error) {
-      console.error(`Error fetching tx session logs for ${multiId}:`, error);
+      console.error(
+        `Error fetching tx session logs for ${multiIdFromSessionKey}:`,
+        error,
+      );
       return [];
     }
   },
