@@ -117,6 +117,8 @@ export default function ReceiverPending() {
     messageErrorCode,
     messageErrorMessage,
   } = usePhantomSignTransaction();
+  const recordTrackerEvent = useTransactionStore((state) => state.recordTrackerEvent);
+  const uiLoggedRef = useRef<Set<string>>(new Set());
 
   // console.log('ReceiverPending - recvTransactions:', recvTransactions);
   const [approvedTransactions, setApprovedTransactions] = useState<Set<string>>(
@@ -239,6 +241,16 @@ export default function ReceiverPending() {
   };
 
   const handleApprove = async (transaction: TxStateMachine) => {
+    recordTrackerEvent("tx_lifecycle_event", {
+      stage: "receiver confirm clicked",
+      details: `receiver_confirm_clicked:${transaction.txNonce}`,
+    });
+    recordTrackerEvent("tx_lifecycle_event", {
+      role: "receiver",
+      stage: "receiver response",
+      log: transaction,
+      details: "receiver clicked confirm",
+    });
     const wasmOk = await wasmHealthcheck();
     if (!wasmOk) {
       return;
@@ -455,12 +467,27 @@ export default function ReceiverPending() {
 
       const updatedTx = txManager.getTx();
       await receiverConfirmTransaction(updatedTx);
+      recordTrackerEvent("backend_send_result", {
+        role: "receiver",
+        stage: "receiver response",
+        success: true,
+        backendSent: true,
+        log: updatedTx,
+      });
 
       setApprovedTransactions((prev) =>
         new Set(prev).add(String(transaction.txNonce)),
       );
     } catch (error) {
       console.error("Error approving transaction:", error);
+      recordTrackerEvent("backend_send_result", {
+        role: "receiver",
+        stage: "receiver response",
+        success: false,
+        backendSent: false,
+        log: transaction,
+        details: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorName = error instanceof Error ? error.name : "";
@@ -491,6 +518,35 @@ export default function ReceiverPending() {
       setPendingTxNonce((prev) => (prev === currentTxNonce ? null : prev));
     }
   };
+
+  const handleDone = (transaction: TxStateMachine) => {
+    recordTrackerEvent("tx_lifecycle_event", {
+      role: "receiver",
+      stage: "receiver done",
+      log: transaction,
+      details: "receiver removed transaction from UI",
+    });
+    removeRecvTransaction(transaction.txNonce);
+  };
+
+  useEffect(() => {
+    recvTransactions.forEach((tx) => {
+      const statusType =
+        typeof tx.status === "string" ? tx.status : tx.status?.type || "Unknown";
+      const key = `${tx.txNonce}-${statusType}`;
+      if (uiLoggedRef.current.has(key)) {
+        return;
+      }
+      uiLoggedRef.current.add(key);
+      recordTrackerEvent("tx_lifecycle_event", {
+        role: "receiver",
+        stage: "ui visible receiver",
+        shownInUi: true,
+        log: tx,
+        details: `receiver transaction visible in UI (${statusType})`,
+      });
+    });
+  }, [recvTransactions, recordTrackerEvent]);
 
   // Show empty state when no pending transactions
   if (!recvTransactions || recvTransactions.length === 0) {
@@ -701,7 +757,7 @@ export default function ReceiverPending() {
               {approvedTransactions.has(String(transaction.txNonce)) && (
                 <div className="mt-4 flex flex-col items-center">
                   <Button
-                    onClick={() => removeRecvTransaction(transaction.txNonce)}
+                    onClick={() => handleDone(transaction)}
                     className="w-full h-10 bg-[#4A5853]/20 text-[#7EDFCD] hover:bg-[#4A5853]/30 text-xs font-medium"
                   >
                     Done

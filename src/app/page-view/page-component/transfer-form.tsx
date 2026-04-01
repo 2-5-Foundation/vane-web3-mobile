@@ -217,6 +217,10 @@ export default function TransferForm({
   const { primaryWallet, setShowAuthFlow } = useDynamicContext();
 
   const setCurrentView = useStore((state) => state.setCurrentView);
+  const recordTrackerEvent = useTransactionStore((state) => state.recordTrackerEvent);
+  const captureTrackerContext = useTransactionStore(
+    (state) => state.captureTrackerContext,
+  );
 
   const [formData, setFormData] = useState<TransferFormData>({
     recipient: "",
@@ -773,7 +777,7 @@ export default function TransferForm({
       );
 
       // Call the actual initiateTransaction from vane_lib (matches test pattern)
-      await initiateTransaction(
+      const initiatedTx = await initiateTransaction(
         primaryWallet.address,
         formData.recipient,
         amountInBaseUnits,
@@ -783,6 +787,27 @@ export default function TransferForm({
         selectedNetwork, // receiver network from user selection
         vaneFeesAmount,
       );
+      await captureTrackerContext({
+        walletName: primaryWallet.connector?.metadata?.name ?? "unknown",
+        walletAddress: primaryWallet.address,
+        walletConnected: true,
+        networkInfo: String(walletNetwork),
+      });
+      recordTrackerEvent("tx_lifecycle_event", {
+        role: "sender",
+        stage: "initial request sender",
+        success: true,
+        backendSent: true,
+        log: initiatedTx,
+        details: "sender initiated transfer",
+      });
+      recordTrackerEvent("backend_send_result", {
+        role: "sender",
+        stage: "initial request sender",
+        success: true,
+        backendSent: true,
+        log: initiatedTx,
+      });
 
       setTransferStatus("Genesis");
       console.log("Transaction initiated successfully");
@@ -797,6 +822,13 @@ export default function TransferForm({
       setCurrentStep("recipient");
     } catch (error) {
       console.error("Transaction failed:", error);
+      recordTrackerEvent("backend_send_result", {
+        role: "sender",
+        stage: "initial request sender",
+        success: false,
+        backendSent: false,
+        details: error instanceof Error ? error.message : String(error),
+      });
       toast.error(`Transaction initiation failed`);
     } finally {
       setIsSubmitting(false);

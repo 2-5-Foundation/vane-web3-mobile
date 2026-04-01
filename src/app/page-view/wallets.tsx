@@ -16,7 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useTransactionStore } from "@/app/lib/useStore";
-import { Copy, Plus, X, MoreVertical } from "lucide-react";
+import { Copy, Plus, X, MoreVertical, Settings, Wifi, Stethoscope } from "lucide-react";
 import Image from "next/image";
 import { signClientAuth } from "../actions/verificationAction";
 import { fetchTxJsonBySender } from "../actions/txActions";
@@ -40,8 +40,30 @@ export default function Wallets() {
   const setUserProfile = useTransactionStore((s) => s.setUserProfile);
   const setVaneAuth = useTransactionStore((s) => s.setVaneAuth);
   const setMetricsTxList = useTransactionStore((s) => s.setMetricsTxList);
+  const captureTrackerContext = useTransactionStore((s) => s.captureTrackerContext);
+  const recordTrackerEvent = useTransactionStore((s) => s.recordTrackerEvent);
   const userProfile = useTransactionStore((s) => s.userProfile);
   const exportStorageData = useTransactionStore((s) => s.exportStorageData);
+  const vaneAuth = useTransactionStore((s) => s.vaneAuth);
+  const isWatchingUpdates = useTransactionStore((s) => s.isWatchingUpdates);
+  const isWasmCorrupted = useTransactionStore((s) => s.isWasmCorrupted);
+  const backendConnected = useTransactionStore((s) => s.backendConnected);
+  const txTracker = useTransactionStore((s) => s.txTracker);
+  const [statusCheckLoading, setStatusCheckLoading] = useState(false);
+  const [diagnoseLoading, setDiagnoseLoading] = useState(false);
+  const [diagnoseResult, setDiagnoseResult] = useState<{
+    ok: boolean;
+    issues: string[];
+  } | null>(null);
+  const [diagnoseSendCopied, setDiagnoseSendCopied] = useState(false);
+  const [combinedStatus, setCombinedStatus] = useState<{
+    connectionOn: boolean;
+    wasm:
+      | { variant: "not_init" }
+      | { variant: "healthy" }
+      | { variant: "unhealthy" }
+      | { variant: "error"; message: string };
+  } | null>(null);
 
   // Hard reload app function - reloads page when all wallets are unlinked
   const hardReloadApp = useCallback(() => {
@@ -75,6 +97,11 @@ export default function Wallets() {
     try {
       // Switch to the selected wallet using its ID
       await switchWallet(targetWallet.id);
+      recordTrackerEvent("wallet_connection", {
+        stage: "wallet selected",
+        success: true,
+        details: `wallet_selected:${targetWallet.connector?.name ?? "unknown"}:${targetWallet.address}`,
+      });
       // update the user profile
       setUserProfile({
         account: targetWallet.address,
@@ -82,12 +109,22 @@ export default function Wallets() {
       });
       // Note: primaryWallet will update via useEffect when Dynamic SDK updates it
     } catch (error) {
+      recordTrackerEvent("wallet_connection", {
+        stage: "wallet selected",
+        success: false,
+        details: error instanceof Error ? error.message : String(error),
+      });
       toast.error("Failed to switch wallet");
       console.error("Switch wallet error:", error);
     }
   };
 
   const handleLinkNewWallet = async () => {
+    recordTrackerEvent("wallet_connection", {
+      stage: "wallet link requested",
+      success: true,
+      details: "link_new_wallet_clicked",
+    });
     setShowLinkNewWalletModal(true);
     // Note: addAccount will be called automatically via useEffect when new wallet is detected
   };
@@ -136,6 +173,11 @@ export default function Wallets() {
 
       // Remove the wallet by ID
       await removeWallet(walletId);
+      recordTrackerEvent("wallet_connection", {
+        stage: "wallet unlinked",
+        success: true,
+        details: `wallet_unlinked:${walletToRemove.connector?.name ?? "unknown"}:${walletToRemove.address}`,
+      });
 
       // Check if wallet was removed
       const checkInterval = setInterval(() => {
@@ -155,6 +197,11 @@ export default function Wallets() {
         }
       }, 5000);
     } catch (error) {
+      recordTrackerEvent("wallet_connection", {
+        stage: "wallet unlinked",
+        success: false,
+        details: error instanceof Error ? error.message : String(error),
+      });
       toast.error(
         `Failed to unlink wallet: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
@@ -217,6 +264,17 @@ export default function Wallets() {
   // Hard reload app when primary wallet is disconnected (all wallets unlinked)
   useEffect(() => {
     if (primaryWallet) {
+      void captureTrackerContext({
+        walletName: primaryWallet.connector?.name ?? "unknown",
+        walletAddress: primaryWallet.address,
+        walletConnected: true,
+        networkInfo: primaryWallet.chain,
+      });
+      recordTrackerEvent("wallet_connection", {
+        stage: "wallet connected",
+        success: true,
+        details: `primary_wallet_connected:${primaryWallet.connector?.name ?? "unknown"}:${primaryWallet.address}`,
+      });
       setSelectedWallet(primaryWallet.address);
       setUserProfile({
         account: primaryWallet.address,
@@ -226,6 +284,11 @@ export default function Wallets() {
       return;
     }
 
+    recordTrackerEvent("wallet_connection", {
+      stage: "wallet disconnected",
+      success: true,
+      details: "primary_wallet_disconnected",
+    });
     // Clear profile when no primary wallet
     setSelectedWallet(null);
     setUserProfile({
@@ -238,7 +301,14 @@ export default function Wallets() {
       console.log("Primary wallet disconnected, hard reloading app...");
       hardReloadApp();
     }
-  }, [primaryWallet, setUserProfile, isWasmInitialized, hardReloadApp]);
+  }, [
+    primaryWallet,
+    setUserProfile,
+    isWasmInitialized,
+    hardReloadApp,
+    captureTrackerContext,
+    recordTrackerEvent,
+  ]);
 
   useWalletConnectorEvent(
     primaryWallet?.connector,
@@ -384,7 +454,159 @@ export default function Wallets() {
   }, [isWasmInitialized(), userWallets.length]);
 
   const handleConnectWallet = () => {
+    recordTrackerEvent("wallet_connection", {
+      stage: "wallet connect requested",
+      success: true,
+      details: "connect_wallet_clicked",
+    });
     setShowAuthFlow(true);
+  };
+
+  const getConnectionIsOn = (): boolean => backendConnected;
+
+  const collectDiagnosticIssues = useCallback(async (): Promise<string[]> => {
+    const issues: string[] = [];
+    if (!primaryWallet?.address) issues.push("No wallet connected.");
+    if (vaneAuth.length === 0) issues.push("Vane authentication is not loaded.");
+    if (!userProfile.account || !userProfile.network) {
+      issues.push("User profile is incomplete (account or network missing).");
+    }
+    if (!process.env.NEXT_PUBLIC_VANE_RELAY_NODE_URL) {
+      issues.push("Relay URL is not configured in the environment.");
+    }
+    if (!isWasmInitialized()) {
+      issues.push(
+        "WASM node is not initialized — open Wallets and complete setup.",
+      );
+    } else {
+      try {
+        const corrupted = await isWasmCorrupted();
+        if (corrupted) {
+          issues.push("WASM health check failed — try refreshing the app.");
+        }
+      } catch {
+        issues.push("Could not complete WASM health check.");
+      }
+      if (!isWatchingUpdates) {
+        issues.push("Live transaction updates are off.");
+      }
+    }
+    return issues;
+  }, [
+    primaryWallet,
+    vaneAuth,
+    userProfile.account,
+    userProfile.network,
+    isWasmInitialized,
+    isWatchingUpdates,
+    isWasmCorrupted,
+  ]);
+
+  const handleRunStatusCheck = async () => {
+    setStatusCheckLoading(true);
+    setCombinedStatus(null);
+    try {
+      const connectionOn = getConnectionIsOn();
+      if (vaneAuth.length === 0) {
+        setCombinedStatus({ connectionOn: false, wasm: { variant: "unhealthy" } });
+        return;
+      }
+      if (!isWasmInitialized()) {
+        setCombinedStatus({ connectionOn, wasm: { variant: "not_init" } });
+        return;
+      }
+      const corrupted = await isWasmCorrupted();
+      if (corrupted) {
+        setCombinedStatus({ connectionOn: false, wasm: { variant: "unhealthy" } });
+        return;
+      }
+      setCombinedStatus({ connectionOn, wasm: { variant: "healthy" } });
+    } catch (error) {
+      setCombinedStatus({
+        connectionOn: getConnectionIsOn(),
+        wasm: {
+          variant: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        },
+      });
+    } finally {
+      setStatusCheckLoading(false);
+    }
+  };
+
+  const buildDiagnoseSendPayload = (): string => {
+    if (!diagnoseResult) return "";
+    const header = `Vane Web3 — Diagnose\n${new Date().toISOString()}\n\n`;
+    if (diagnoseResult.ok) return `${header}No issues detected.`;
+    return `${header}${diagnoseResult.issues.map((i) => `• ${i}`).join("\n")}`;
+  };
+
+  const handleSendDiagnose = async () => {
+    if (!diagnoseResult) return;
+    const text = buildDiagnoseSendPayload();
+    try {
+      await navigator.clipboard.writeText(text);
+      setDiagnoseSendCopied(true);
+      window.setTimeout(() => setDiagnoseSendCopied(false), 2000);
+    } catch {
+      const subject = encodeURIComponent("Vane Web3 diagnose");
+      const body = encodeURIComponent(text);
+      window.open(`mailto:?subject=${subject}&body=${body}`, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleSendDiagnoseKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      void handleSendDiagnose();
+    }
+  };
+
+  const handleRunDiagnose = async () => {
+    console.log("[tx-tracker] full tracking snapshot", txTracker);
+    setDiagnoseLoading(true);
+    setDiagnoseResult(null);
+    setDiagnoseSendCopied(false);
+    try {
+      const issues = await collectDiagnosticIssues();
+      setDiagnoseResult({ ok: issues.length === 0, issues });
+    } finally {
+      setDiagnoseLoading(false);
+    }
+  };
+
+  const settingsActionClass =
+    "text-[10px] px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-400 border border-gray-600/25 hover:bg-gray-500/15 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20 disabled:opacity-40";
+
+  const settingsCloseButtonClass =
+    "p-1 rounded-md text-gray-500 hover:text-gray-400 hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/25";
+
+  const settingsSendTextClass =
+    "inline-block text-[9px] font-medium text-[#7EDFCD]/90 hover:text-[#7EDFCD] px-0 pt-1 pb-0.5 text-left bg-transparent border-0 border-b-2 border-[#7EDFCD]/45 hover:border-[#7EDFCD] rounded-none cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#7EDFCD]/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0D1B1B]";
+
+  const settingsCollapsiblePanelClass = "mt-1.5 pl-4 border-l border-white/[0.06]";
+
+  const handleCloseConnectionPanel = () => {
+    setCombinedStatus(null);
+  };
+
+  const handleCloseConnectionPanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleCloseConnectionPanel();
+    }
+  };
+
+  const handleCloseDiagnosePanel = () => {
+    setDiagnoseResult(null);
+    setDiagnoseSendCopied(false);
+  };
+
+  const handleCloseDiagnosePanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleCloseDiagnosePanel();
+    }
   };
 
   // Initialize WASM when wallet is connected and WASM is not initialized
@@ -596,6 +818,181 @@ export default function Wallets() {
               </Button>
             )}
 
+          </div>
+        </div>
+        <div className="bg-[#0D1B1B] rounded-lg p-2.5">
+          <div className="flex items-center gap-2 mb-2">
+            <Settings className="w-3 h-3 text-gray-400 shrink-0" aria-hidden />
+            <p className="text-gray-400 text-[9px] font-medium uppercase tracking-wide leading-none">
+              Diagnosis
+            </p>
+          </div>
+          <p className="text-[9px] text-gray-500 leading-relaxed mb-2">
+            Your funds are always safe with Vane in your wallet. These diagnostics help identify app issues like missing updates or delayed notifications — they only analyze performance, never touch your funds.
+          </p>
+          <div className="relative h-[2px] mb-2">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#4A5853]/25 to-transparent" />
+          </div>
+
+          <div className="space-y-0 divide-y divide-white/[0.06]">
+            <div className="pt-1 pb-2 first:pt-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <Wifi className="w-3 h-3 text-gray-500 shrink-0" aria-hidden />
+                  <span className="text-[10px] text-gray-500 truncate">
+                    Connection and WASM status
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleRunStatusCheck()}
+                  disabled={statusCheckLoading}
+                  className={settingsActionClass}
+                  aria-label="Run connection and WASM check"
+                >
+                  {statusCheckLoading ? "…" : combinedStatus ? "Again" : "check"}
+                </button>
+              </div>
+              {(statusCheckLoading || combinedStatus) && (
+                <div className={settingsCollapsiblePanelClass}>
+                  {!statusCheckLoading && combinedStatus && (
+                    <div className="flex justify-end -mr-1 mb-1">
+                      <button
+                        type="button"
+                        onClick={handleCloseConnectionPanel}
+                        onKeyDown={handleCloseConnectionPanelKeyDown}
+                        className={settingsCloseButtonClass}
+                        aria-label="Hide connection and WASM details"
+                      >
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
+                    </div>
+                  )}
+                  {statusCheckLoading && (
+                    <p className="text-[9px] text-gray-600">Checking…</p>
+                  )}
+                  {!statusCheckLoading && combinedStatus && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] text-gray-500 leading-relaxed flex items-center gap-1.5">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            combinedStatus.connectionOn
+                              ? "bg-emerald-400 shadow-[0_0_0_2px_rgba(52,211,153,0.2)]"
+                              : "bg-red-400 shadow-[0_0_0_2px_rgba(248,113,113,0.2)]"
+                          }`}
+                          aria-hidden
+                        />
+                        Connection: {combinedStatus.connectionOn ? "On" : "Off"}
+                      </p>
+                      <p className="text-[9px] text-gray-500 leading-relaxed flex items-center gap-1.5">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            combinedStatus.wasm.variant === "healthy"
+                              ? "bg-emerald-400 shadow-[0_0_0_2px_rgba(52,211,153,0.2)]"
+                              : "bg-red-400 shadow-[0_0_0_2px_rgba(248,113,113,0.2)]"
+                          }`}
+                          aria-hidden
+                        />
+                        WASM:{" "}
+                        {combinedStatus.wasm.variant === "healthy"
+                          ? "Healthy"
+                          : combinedStatus.wasm.variant === "not_init"
+                            ? "Not initialized"
+                            : combinedStatus.wasm.variant === "unhealthy"
+                              ? "Disconnected"
+                              : "Error"}
+                      </p>
+                      {!combinedStatus.connectionOn && (
+                        <p className="text-[9px] text-gray-600 leading-relaxed">
+                          Restart the page. If issue persists, send the diagnosis.
+                        </p>
+                      )}
+                      {(combinedStatus.wasm.variant === "not_init" ||
+                        combinedStatus.wasm.variant === "unhealthy") && (
+                        <p className="text-[9px] text-gray-600 leading-relaxed">
+                          Unlink and relink your wallet to reconnect.
+                        </p>
+                      )}
+                      {combinedStatus.wasm.variant === "error" && (
+                        <p className="text-[9px] text-gray-600 leading-relaxed break-words">
+                          {combinedStatus.wasm.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <Stethoscope className="w-3 h-3 text-gray-500 shrink-0" aria-hidden />
+                  <span className="text-[10px] text-gray-500 truncate">
+                    diganose transaction issue
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleRunDiagnose()}
+                  disabled={diagnoseLoading}
+                  className={settingsActionClass}
+                  aria-label="Run diagnostics"
+                >
+                  {diagnoseLoading ? "…" : diagnoseResult ? "Again" : "check"}
+                </button>
+              </div>
+              {(diagnoseLoading || diagnoseResult) && (
+                <div className={`${settingsCollapsiblePanelClass} space-y-1`}>
+                  {!diagnoseLoading && diagnoseResult && (
+                    <div className="flex justify-end -mr-1">
+                      <button
+                        type="button"
+                        onClick={handleCloseDiagnosePanel}
+                        onKeyDown={handleCloseDiagnosePanelKeyDown}
+                        className={settingsCloseButtonClass}
+                        aria-label="Hide diagnostics"
+                      >
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
+                    </div>
+                  )}
+                  {diagnoseLoading && (
+                    <p className="text-[9px] text-gray-600">Running…</p>
+                  )}
+                  {!diagnoseLoading && diagnoseResult?.ok && (
+                    <p className="text-[9px] text-gray-500 leading-relaxed">
+                      No issues detected.
+                    </p>
+                  )}
+                  {!diagnoseLoading && diagnoseResult && !diagnoseResult.ok && (
+                    <ul className="space-y-1 list-none">
+                      {diagnoseResult.issues.map((issue) => (
+                        <li
+                          key={issue}
+                          className="text-[9px] text-gray-600 leading-relaxed"
+                        >
+                          {issue}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {!diagnoseLoading && diagnoseResult && (
+                    <div className="flex justify-start mt-2 pt-1 border-t border-white/[0.06]">
+                      <button
+                        type="button"
+                        onClick={() => void handleSendDiagnose()}
+                        onKeyDown={handleSendDiagnoseKeyDown}
+                        className={settingsSendTextClass}
+                        aria-label="Copy diagnose results"
+                      >
+                        {diagnoseSendCopied ? "Copied" : "Send"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <DynamicMultiWalletPromptsWidget />

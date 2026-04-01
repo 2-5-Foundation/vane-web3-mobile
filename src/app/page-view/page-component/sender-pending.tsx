@@ -9,7 +9,7 @@ import {
   ChevronUp,
   Shield,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useDynamicContext,
   WalletConnector,
@@ -272,6 +272,8 @@ export default function SenderPending() {
   const isWasmCorrupted = useTransactionStore((state) => state.isWasmCorrupted);
   const vaneAuth = useTransactionStore((state) => state.vaneAuth);
   const metricsTxList = useTransactionStore((state) => state.metricsTxList);
+  const recordTrackerEvent = useTransactionStore((state) => state.recordTrackerEvent);
+  const uiLoggedRef = useRef<Set<string>>(new Set());
 
   const { primaryWallet } = useDynamicContext();
 
@@ -352,8 +354,33 @@ export default function SenderPending() {
 
   const handleRevert = async (transaction: TxStateMachine) => {
     console.log("transaction", transaction);
-    await revertTransaction(transaction, "User requested revert");
-    removeTransaction(transaction);
+    recordTrackerEvent("tx_lifecycle_event", {
+      role: "sender",
+      stage: "sender revertation",
+      log: transaction,
+      details: "sender clicked revert",
+    });
+    try {
+      await revertTransaction(transaction, "User requested revert");
+      recordTrackerEvent("backend_send_result", {
+        role: "sender",
+        stage: "sender revertation",
+        success: true,
+        backendSent: true,
+        log: transaction,
+      });
+      removeTransaction(transaction);
+    } catch (error) {
+      recordTrackerEvent("backend_send_result", {
+        role: "sender",
+        stage: "sender revertation",
+        success: false,
+        backendSent: false,
+        log: transaction,
+        details: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   };
 
   const clearSubmissionPendingFlag = (txNonce: string) => {
@@ -616,6 +643,12 @@ export default function SenderPending() {
   };
 
   const handleConfirm = async (transaction: TxStateMachine) => {
+    recordTrackerEvent("tx_lifecycle_event", {
+      role: "sender",
+      stage: "sender confirmation",
+      log: transaction,
+      details: "sender clicked submit transaction",
+    });
     const wasmOk = await wasmHealthcheck();
     if (!wasmOk) {
       return;
@@ -704,8 +737,23 @@ export default function SenderPending() {
       console.log("updatedTransaction", updatedTransaction);
       try {
         await senderConfirmTransaction(updatedTransaction);
+        recordTrackerEvent("backend_send_result", {
+          role: "sender",
+          stage: "sender confirmation",
+          success: true,
+          backendSent: true,
+          log: updatedTransaction,
+        });
       } catch (error) {
         console.error("Error confirming transaction:", error);
+        recordTrackerEvent("backend_send_result", {
+          role: "sender",
+          stage: "sender confirmation",
+          success: false,
+          backendSent: false,
+          log: updatedTransaction,
+          details: error instanceof Error ? error.message : String(error),
+        });
         return handleFailure(
           "Failed to submit transaction. Please cancel or retry.",
         );
@@ -739,6 +787,12 @@ export default function SenderPending() {
   };
 
   const handleComplete = (transaction: TxStateMachine) => {
+    recordTrackerEvent("tx_lifecycle_event", {
+      role: "sender",
+      stage: "sender done",
+      log: transaction,
+      details: "sender marked transaction as completed in UI",
+    });
     // Remove the transaction from the store
     removeTransaction(transaction);
   };
@@ -772,10 +826,26 @@ export default function SenderPending() {
   // WASM is initialized in transfer-form.tsx when wallet connects
 
   const handleShowActionConfirm = (txKey: string, show: boolean) => {
+    const tx = senderPendingTransactions.find((item) => String(item.txNonce) === String(txKey));
+    if (tx) {
+      recordTrackerEvent("tx_lifecycle_event", {
+        role: "sender",
+        stage: show ? "sender revert confirmation opened" : "sender revert confirmation cancelled",
+        log: tx,
+      });
+    }
     setShowActionConfirmMap((prev) => ({ ...prev, [txKey]: show }));
   };
 
   const handleCommunicationConfirm = (txKey: string) => {
+    const tx = senderPendingTransactions.find((item) => String(item.txNonce) === String(txKey));
+    if (tx) {
+      recordTrackerEvent("tx_lifecycle_event", {
+        role: "sender",
+        stage: "communication confirmed",
+        log: tx,
+      });
+    }
     console.log("handleCommunicationConfirm called with txKey:", txKey);
     setCommunicationConfirmed((prev) => {
       const newState = { ...prev, [txKey]: true };
@@ -795,6 +865,25 @@ export default function SenderPending() {
       return newSet;
     });
   };
+
+  useEffect(() => {
+    senderPendingTransactions.forEach((tx) => {
+      const statusType =
+        typeof tx.status === "string" ? tx.status : tx.status?.type || "Unknown";
+      const key = `${tx.txNonce}-${statusType}`;
+      if (uiLoggedRef.current.has(key)) {
+        return;
+      }
+      uiLoggedRef.current.add(key);
+      recordTrackerEvent("tx_lifecycle_event", {
+        role: "sender",
+        stage: "ui visible sender",
+        shownInUi: true,
+        log: tx,
+        details: `sender transaction visible in UI (${statusType})`,
+      });
+    });
+  }, [senderPendingTransactions, recordTrackerEvent]);
 
   const renderActionButtons = (transaction) => {
     // Fix: handle both string and object status

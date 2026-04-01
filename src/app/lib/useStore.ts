@@ -61,6 +61,50 @@ export interface UserProfile {
   network: string;
 }
 
+export type TxLifecycleRole = "sender" | "receiver";
+export type TrackerType =
+  | "context_capture"
+  | "tx_lifecycle_event"
+  | "backend_send_result"
+  | "fetch_pending_updates"
+  | "wallet_connection";
+
+export interface TxTrackerContext {
+  browserName?: string;
+  userAgent?: string;
+  networkInfo?: string;
+  walletName?: string;
+  walletAddress?: string;
+  walletConnected?: boolean;
+  ipAddress?: string;
+  ipFetchSuccess?: boolean;
+  ipFetchError?: string;
+}
+
+export interface TxTrackerEvent {
+  timestamp: number;
+  trackerType: TrackerType;
+  stage: string;
+  role?: TxLifecycleRole;
+  success?: boolean;
+  backendSent?: boolean;
+  shownInUi?: boolean;
+  details?: string;
+  log?: TxStateMachine;
+  contextSnapshot?: TxTrackerContext;
+}
+
+export interface TxTrackerRecord {
+  multiId: string;
+  events: TxTrackerEvent[];
+}
+
+export interface TxTrackerState {
+  context: TxTrackerContext;
+  byMultiId: Record<string, TxTrackerRecord>;
+  globalEvents: TxTrackerEvent[];
+}
+
 export interface TransactionState {
   userProfile: UserProfile;
   transferFormData: TransferFormData;
@@ -86,6 +130,7 @@ export interface TransactionState {
   // WASM state
   isWatchingUpdates: boolean;
   backendConnected: boolean;
+  txTracker: TxTrackerState;
 
   // Methods
   setBackendConnected: (connected: boolean) => void;
@@ -150,6 +195,20 @@ export interface TransactionState {
   fetchPendingUpdates: () => Promise<TxStateMachine[]>;
   exportStorageData: () => Promise<StorageExport>;
   loadStorageData: () => StorageExport | null;
+  recordTrackerEvent: (
+    trackerType: TrackerType,
+    params: Partial<TxTrackerEvent>,
+  ) => void;
+  captureTrackerContext: (
+    params?: Partial<
+      Pick<
+        TxTrackerContext,
+        "walletName" | "walletAddress" | "walletConnected" | "networkInfo"
+      >
+    >,
+  ) => Promise<void>;
+  getTxLifecycle: (multiId: string) => TxTrackerRecord | null;
+  clearTxLifecycle: (multiId?: string) => void;
 
   // Utility methods
   isTransactionReverted: (tx: TxStateMachine) => boolean;
@@ -182,6 +241,119 @@ const stringToChainSupported = (network: string): ChainSupported => {
   return chain;
 };
 
+const getBrowserName = (ua: string): string => {
+  if (ua.includes("Edg/")) return "Edge";
+  if (ua.includes("OPR/") || ua.includes("Opera")) return "Opera";
+  if (ua.includes("Chrome/")) return "Chrome";
+  if (ua.includes("Safari/") && !ua.includes("Chrome/")) return "Safari";
+  if (ua.includes("Firefox/")) return "Firefox";
+  return "Unknown";
+};
+
+const resolveMultiIdFromTx = (tx?: TxStateMachine): string | null => {
+  if (!tx?.multiId || tx.multiId.length === 0) {
+    return null;
+  }
+  return bytesToHex(Uint8Array.from(tx.multiId));
+};
+
+const cloneTxSnapshot = (tx?: TxStateMachine): TxStateMachine | undefined => {
+  if (!tx) return undefined;
+  try {
+    return structuredClone(tx);
+  } catch {
+    return tx;
+  }
+};
+
+const deriveRoleFromTx = (
+  tx: TxStateMachine | undefined,
+  currentAccount: string,
+): TxLifecycleRole | undefined => {
+  if (!tx) {
+    return undefined;
+  }
+
+  const normalizedCurrent = normalizeChainAddress(currentAccount);
+  if (!normalizedCurrent) {
+    return undefined;
+  }
+
+  const normalizedSender = normalizeChainAddress(tx.senderAddress);
+  const normalizedReceiver = normalizeChainAddress(tx.receiverAddress);
+
+  if (normalizedSender === normalizedCurrent) {
+    return "sender";
+  }
+  if (normalizedReceiver === normalizedCurrent) {
+    return "receiver";
+  }
+
+  return undefined;
+};
+
+const isDuplicateTrackerEvent = (
+  prev: TxTrackerEvent | undefined,
+  next: TxTrackerEvent,
+): boolean => {
+  if (!prev) {
+    return false;
+  }
+
+  return (
+    prev.trackerType === next.trackerType &&
+    prev.stage === next.stage &&
+    (prev.details ?? "") === (next.details ?? "") &&
+    (prev.success ?? null) === (next.success ?? null) &&
+    (prev.backendSent ?? null) === (next.backendSent ?? null) &&
+    (prev.shownInUi ?? null) === (next.shownInUi ?? null)
+  );
+};
+
+const lifecycleStageFromStatus = (status: string): string => {
+  switch (status) {
+    case "Genesis":
+      return "initial request sender";
+    case "RecvAddrConfirmed":
+    case "RecvAddrConfirmationPassed":
+      return "receiver response";
+    case "NetConfirmed":
+      return "receiver response";
+    case "SenderConfirmed":
+      return "sender confirmation";
+    case "TxSubmissionPassed":
+    case "FailedToSubmitTxn":
+      return "tx submission";
+    case "Reverted":
+      return "sender revertation";
+    case "ReceiverNotRegistered":
+      return "receiver not registered";
+    case "RecvAddrFailed":
+      return "receiver response failed";
+    case "SenderConfirmationfailed":
+      return "sender confirmation failed";
+    default:
+      return `tx status ${status}`;
+  }
+};
+
+const defaultStageByTrackerType = (trackerType: TrackerType): string => {
+  switch (trackerType) {
+    case "context_capture":
+      return "context captured";
+    case "wallet_connection":
+      return "wallet event";
+    case "fetch_pending_updates":
+      return "pending updates";
+    case "backend_send_result":
+      return "backend send result";
+    case "tx_lifecycle_event":
+      return "tx lifecycle";
+    default:
+      return "tracker event";
+  }
+};
+
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   // state
   vaneAuth: new Uint8Array(),
@@ -202,6 +374,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   status: "Genesis",
   isWatchingUpdates: false,
   backendConnected: false,
+  txTracker: {
+    context: {},
+    byMultiId: {},
+    globalEvents: [],
+  },
 
   // method
   setBackendConnected: (connected: boolean) => set({ backendConnected: connected }),
@@ -234,27 +411,39 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   ) => set({ status }),
 
   txStatusSorter: (update: TxStateMachine) => {
+    const statusString = get().getTransactionStatus(update);
+    const normalizedCurrentAccount = normalizeChainAddress(get().userProfile.account);
+    const normalizedSenderAddress = normalizeChainAddress(update.senderAddress);
+    const normalizedReceiverAddress = normalizeChainAddress(update.receiverAddress);
+    const isSender =
+      normalizedCurrentAccount !== "" &&
+      normalizedSenderAddress === normalizedCurrentAccount;
+    const isReceiver =
+      normalizedCurrentAccount !== "" &&
+      normalizedReceiverAddress === normalizedCurrentAccount;
+    const lifecycleStage = lifecycleStageFromStatus(statusString);
+
+    if (isSender) {
+      get().recordTrackerEvent("tx_lifecycle_event", {
+        role: "sender",
+        stage: lifecycleStage,
+        shownInUi: true,
+        log: update,
+        details: `sender tx update (${statusString})`,
+      });
+    }
+
+    if (isReceiver) {
+      get().recordTrackerEvent("tx_lifecycle_event", {
+        role: "receiver",
+        stage: lifecycleStage,
+        shownInUi: true,
+        log: update,
+        details: `receiver tx update (${statusString})`,
+      });
+    }
+
     set((state) => {
-      // Use the utility method to get consistent status string
-      const statusString = get().getTransactionStatus(update);
-
-      const normalizedCurrentAccount = normalizeChainAddress(
-        get().userProfile.account,
-      );
-      const normalizedSenderAddress = normalizeChainAddress(
-        update.senderAddress,
-      );
-      const normalizedReceiverAddress = normalizeChainAddress(
-        update.receiverAddress,
-      );
-
-      const isSender =
-        normalizedCurrentAccount !== "" &&
-        normalizedSenderAddress === normalizedCurrentAccount;
-      const isReceiver =
-        normalizedCurrentAccount !== "" &&
-        normalizedReceiverAddress === normalizedCurrentAccount;
-
       switch (statusString) {
         case "Genesis":
           if (isSender) {
@@ -357,6 +546,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   isWasmCorrupted: async () => {
     const TIMEOUT_MS = 1500;
+    const vaneAuth = get().vaneAuth;
+
+    // Missing auth makes WASM operations unusable for tx flow.
+    if (vaneAuth.length === 0) {
+      return true;
+    }
 
     try {
       await Promise.race([
@@ -596,6 +791,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   fetchPendingUpdates: async () => {
     const state = get();
+    get().recordTrackerEvent("fetch_pending_updates", {
+      stage: "fetch called",
+      details: "useStore.fetchPendingUpdates invoked",
+    });
 
     if (!state.isWasmInitialized()) {
       console.warn("WASM node not initialized - cannot fetch updates");
@@ -610,11 +809,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     try {
       const updates = await fetchPendingTxUpdates(vaneAuth);
       console.log("Fetched pending updates:", updates);
-
-      const updateCount = updates?.length ?? 0;
-      toast.info(`${updateCount} pending updates`, {
-        description:
-          "If you can't see the update, unlink and link your wallet to refresh.",
+      get().recordTrackerEvent("fetch_pending_updates", {
+        stage: "fetch result",
+        details: `useStore.fetchPendingUpdates returned ${updates.length}`,
+      });
+      updates.forEach((tx) => {
+        get().recordTrackerEvent("fetch_pending_updates", {
+          stage: "fetch result",
+          details: "fetch returned txStateMachine",
+          log: tx,
+        });
       });
 
       // If updates is empty, clear all transactions
@@ -802,6 +1006,132 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       console.error("Error loading storage data from localStorage:", error);
       return null;
     }
+  },
+
+  recordTrackerEvent: (
+    trackerType: TrackerType,
+    params: Partial<TxTrackerEvent>,
+  ) => {
+    const nowMs = Date.now();
+    const normalizedStage = (params.stage ?? "").trim();
+    const resolvedLog = cloneTxSnapshot(params.log);
+    const resolvedRole =
+      deriveRoleFromTx(resolvedLog, get().userProfile.account) ?? params.role;
+    const baseEvent: TxTrackerEvent = {
+      timestamp: nowMs,
+      trackerType,
+      ...params,
+      stage:
+        normalizedStage.length > 0
+          ? normalizedStage
+          : defaultStageByTrackerType(trackerType),
+      role: resolvedRole,
+      log: resolvedLog,
+      contextSnapshot: {
+        ...get().txTracker.context,
+        ...(params.contextSnapshot ?? {}),
+      },
+    };
+
+    const isTxSpecific =
+      trackerType === "tx_lifecycle_event" ||
+      trackerType === "backend_send_result" ||
+      (trackerType === "fetch_pending_updates" && !!params.log);
+    const derivedMultiId = resolveMultiIdFromTx(params.log);
+
+    if (isTxSpecific && !derivedMultiId) {
+      return;
+    }
+
+    set((state) => {
+      const nextTracker: TxTrackerState = {
+        ...state.txTracker,
+        context: baseEvent.contextSnapshot ?? state.txTracker.context,
+        byMultiId: { ...state.txTracker.byMultiId },
+        globalEvents: [...state.txTracker.globalEvents],
+      };
+
+      if (derivedMultiId) {
+        const record = nextTracker.byMultiId[derivedMultiId] ?? {
+          multiId: derivedMultiId,
+          events: [],
+        };
+
+        const lastEvent = record.events[record.events.length - 1];
+        if (isDuplicateTrackerEvent(lastEvent, baseEvent)) {
+          return state;
+        }
+
+        nextTracker.byMultiId[derivedMultiId] = {
+          ...record,
+          events: [...record.events, baseEvent],
+        };
+      } else {
+        const lastGlobalEvent =
+          nextTracker.globalEvents[nextTracker.globalEvents.length - 1];
+        if (isDuplicateTrackerEvent(lastGlobalEvent, baseEvent)) {
+          return state;
+        }
+        nextTracker.globalEvents.push(baseEvent);
+      }
+
+      return { txTracker: nextTracker };
+    });
+  },
+
+  captureTrackerContext: async (params) => {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const context: TxTrackerContext = {
+      browserName: getBrowserName(ua),
+      userAgent: ua,
+      networkInfo: params?.networkInfo ?? get().userProfile.network,
+      walletName: params?.walletName,
+      walletAddress: params?.walletAddress,
+      walletConnected: params?.walletConnected,
+    };
+
+    try {
+      const response = await fetch("https://api.ipify.org?format=json");
+      if (!response.ok) {
+        throw new Error(`ip_fetch_failed_${response.status}`);
+      }
+      const data = (await response.json()) as { ip?: string };
+      context.ipAddress = data.ip;
+      context.ipFetchSuccess = true;
+    } catch (error) {
+      context.ipFetchSuccess = false;
+      context.ipFetchError = error instanceof Error ? error.message : String(error);
+    }
+
+    get().recordTrackerEvent("context_capture", { contextSnapshot: context });
+  },
+
+  getTxLifecycle: (multiId: string) => {
+    return get().txTracker.byMultiId[multiId] ?? null;
+  },
+
+  clearTxLifecycle: (multiId?: string) => {
+    if (multiId) {
+      set((state) => {
+        const nextByMultiId = { ...state.txTracker.byMultiId };
+        delete nextByMultiId[multiId];
+        return {
+          txTracker: {
+            ...state.txTracker,
+            byMultiId: nextByMultiId,
+          },
+        };
+      });
+      return;
+    }
+
+    set((state) => ({
+      txTracker: {
+        ...state.txTracker,
+        byMultiId: {},
+        globalEvents: [],
+      },
+    }));
   },
 
   // Utility methods
