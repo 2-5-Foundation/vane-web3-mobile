@@ -165,6 +165,14 @@ export async function fetchPendingTxUpdates(sig: Uint8Array): Promise<TxStateMac
   return res as TxStateMachine[];
 }
 
+export async function fetchTxSessionLogs(
+  sig: Uint8Array,
+  address: string,
+  tx_reference?: string | null,
+): Promise<any> {
+  return await requireWorker().fetchTxSessionLogs(sig, address, tx_reference);
+}
+
 export async function exportStorage(): Promise<StorageExport> {
   const res = await requireWorker().exportStorage();
   return res as StorageExport;
@@ -228,6 +236,7 @@ const VaneWeb3 = {
   unsubscribeWatchTxUpdates,
   unsubscribeWatchP2pNotifications,
   fetchPendingTxUpdates,
+  fetchTxSessionLogs,
   exportStorage,
   addAccount,
   clearRevertedFromCache,

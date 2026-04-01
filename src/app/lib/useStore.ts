@@ -30,6 +30,7 @@ import {
   receiverConfirm,
   revertTransaction,
   fetchPendingTxUpdates,
+  fetchTxSessionLogs,
   watchTxUpdates,
   exportStorage,
   StorageExport,
@@ -97,12 +98,19 @@ export interface TxTrackerEvent {
 export interface TxTrackerRecord {
   multiId: string;
   events: TxTrackerEvent[];
+  backend?: TxSessionLogEntry[];
 }
 
 export interface TxTrackerState {
   context: TxTrackerContext;
   byMultiId: Record<string, TxTrackerRecord>;
   globalEvents: TxTrackerEvent[];
+}
+
+export interface TxSessionLogEntry {
+  timestamp: number;
+  stage: string;
+  log: TxStateMachine;
 }
 
 export interface TransactionState {
@@ -207,6 +215,10 @@ export interface TransactionState {
       >
     >,
   ) => Promise<void>;
+  fetchTxSessionLogsByMultiId: (
+    address: string,
+    multiId?: string,
+  ) => Promise<TxSessionLogEntry[]>;
   getTxLifecycle: (multiId: string) => TxTrackerRecord | null;
   clearTxLifecycle: (multiId?: string) => void;
 
@@ -1107,6 +1119,54 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
 
     get().recordTrackerEvent("context_capture", { contextSnapshot: context });
+  },
+
+  fetchTxSessionLogsByMultiId: async (address: string, multiId?: string) => {
+    if (!isInitialized()) {
+      throw new Error("WASM node not initialized");
+    }
+
+    const vaneAuth = get().vaneAuth;
+    if (vaneAuth.length === 0) {
+      throw new Error("vane auth is not set");
+    }
+    console.log("[fetchTxSessionLogsByMultiId] vaneAuth", vaneAuth);
+
+
+    try {
+      const sessionLogs = await fetchTxSessionLogs(
+        vaneAuth,
+        address,
+        multiId?.trim() ? multiId : null,
+      );
+      const normalizedLogs = Array.isArray(sessionLogs)
+        ? (sessionLogs as TxSessionLogEntry[])
+        : [];
+
+      set((state) => {
+        const existing = state.txTracker.byMultiId[multiId] ?? {
+          multiId,
+          events: [],
+        };
+        return {
+          txTracker: {
+            ...state.txTracker,
+            byMultiId: {
+              ...state.txTracker.byMultiId,
+              [multiId]: {
+                ...existing,
+                backend: normalizedLogs,
+              },
+            },
+          },
+        };
+      });
+
+      return normalizedLogs;
+    } catch (error) {
+      console.error(`Error fetching tx session logs for ${multiId}:`, error);
+      return [];
+    }
   },
 
   getTxLifecycle: (multiId: string) => {

@@ -19,7 +19,7 @@ import { useTransactionStore } from "@/app/lib/useStore";
 import { Copy, Plus, X, MoreVertical, Settings, Wifi, Stethoscope } from "lucide-react";
 import Image from "next/image";
 import { signClientAuth } from "../actions/verificationAction";
-import { fetchTxJsonBySender } from "../actions/txActions";
+import { fetchTxJsonBySender, sendDiagnoseToTelegram } from "../actions/txActions";
 
 export default function Wallets() {
   const { primaryWallet, handleLogOut, removeWallet, setShowAuthFlow } =
@@ -49,6 +49,9 @@ export default function Wallets() {
   const isWasmCorrupted = useTransactionStore((s) => s.isWasmCorrupted);
   const backendConnected = useTransactionStore((s) => s.backendConnected);
   const txTracker = useTransactionStore((s) => s.txTracker);
+  const fetchTxSessionLogsByMultiId = useTransactionStore(
+    (s) => s.fetchTxSessionLogsByMultiId,
+  );
   const [statusCheckLoading, setStatusCheckLoading] = useState(false);
   const [diagnoseLoading, setDiagnoseLoading] = useState(false);
   const [diagnoseResult, setDiagnoseResult] = useState<{
@@ -56,6 +59,8 @@ export default function Wallets() {
     issues: string[];
   } | null>(null);
   const [diagnoseSendCopied, setDiagnoseSendCopied] = useState(false);
+  const [diagnoseContact, setDiagnoseContact] = useState("");
+  const [diagnoseSending, setDiagnoseSending] = useState(false);
   const [combinedStatus, setCombinedStatus] = useState<{
     connectionOn: boolean;
     wasm:
@@ -534,24 +539,29 @@ export default function Wallets() {
     }
   };
 
-  const buildDiagnoseSendPayload = (): string => {
-    if (!diagnoseResult) return "";
-    const header = `Vane Web3 — Diagnose\n${new Date().toISOString()}\n\n`;
-    if (diagnoseResult.ok) return `${header}No issues detected.`;
-    return `${header}${diagnoseResult.issues.map((i) => `• ${i}`).join("\n")}`;
-  };
-
   const handleSendDiagnose = async () => {
     if (!diagnoseResult) return;
-    const text = buildDiagnoseSendPayload();
+    if (!diagnoseContact.trim()) {
+      toast.error("Enter your email or X account");
+      return;
+    }
+    setDiagnoseSending(true);
     try {
-      await navigator.clipboard.writeText(text);
+      const tracker = useTransactionStore.getState().txTracker;
+      const result = await sendDiagnoseToTelegram({
+        sessionLogs: tracker.byMultiId,
+        contact: diagnoseContact.trim(),
+        walletAddress: primaryWallet?.address,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to send diagnose report");
+        return;
+      }
       setDiagnoseSendCopied(true);
       window.setTimeout(() => setDiagnoseSendCopied(false), 2000);
-    } catch {
-      const subject = encodeURIComponent("Vane Web3 diagnose");
-      const body = encodeURIComponent(text);
-      window.open(`mailto:?subject=${subject}&body=${body}`, "_blank", "noopener,noreferrer");
+      toast.success("Diagnose report sent");
+    } finally {
+      setDiagnoseSending(false);
     }
   };
 
@@ -563,11 +573,20 @@ export default function Wallets() {
   };
 
   const handleRunDiagnose = async () => {
-    console.log("[tx-tracker] full tracking snapshot", txTracker);
     setDiagnoseLoading(true);
     setDiagnoseResult(null);
     setDiagnoseSendCopied(false);
     try {
+      const multiIds = Object.keys(txTracker.byMultiId);
+      if (multiIds.length > 0) {
+        await Promise.all(
+          multiIds.map((multiId) =>
+            fetchTxSessionLogsByMultiId(primaryWallet?.address ?? "", multiId),
+          ),
+        );
+      }
+
+      console.log("[tx-tracker] full tracking snapshot", useTransactionStore.getState().txTracker);
       const issues = await collectDiagnosticIssues();
       setDiagnoseResult({ ok: issues.length === 0, issues });
     } finally {
@@ -962,7 +981,7 @@ export default function Wallets() {
                   )}
                   {!diagnoseLoading && diagnoseResult?.ok && (
                     <p className="text-[9px] text-gray-500 leading-relaxed">
-                      No issues detected.
+                      Our team will review this shortly. Diagnostics are only used to improve app performance, your funds remain completely safe and under your control.
                     </p>
                   )}
                   {!diagnoseLoading && diagnoseResult && !diagnoseResult.ok && (
@@ -979,14 +998,27 @@ export default function Wallets() {
                   )}
                   {!diagnoseLoading && diagnoseResult && (
                     <div className="flex justify-start mt-2 pt-1 border-t border-white/[0.06]">
+                      <input
+                        type="text"
+                        value={diagnoseContact}
+                        onChange={(e) => setDiagnoseContact(e.target.value)}
+                        placeholder="email or @x_handle"
+                        className="mr-2 h-6 px-2 text-[9px] rounded bg-black/20 border border-white/10 text-gray-300 placeholder:text-gray-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#7EDFCD]/40"
+                        aria-label="Email or X handle for updates"
+                      />
                       <button
                         type="button"
                         onClick={() => void handleSendDiagnose()}
                         onKeyDown={handleSendDiagnoseKeyDown}
                         className={settingsSendTextClass}
                         aria-label="Copy diagnose results"
+                        disabled={diagnoseSending}
                       >
-                        {diagnoseSendCopied ? "Copied" : "Send"}
+                        {diagnoseSending
+                          ? "Sending..."
+                          : diagnoseSendCopied
+                            ? "Sent"
+                            : "Send"}
                       </button>
                     </div>
                   )}
